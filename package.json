@@ -1,0 +1,100 @@
+{
+  "name": "vkspot",
+  "version": "0.1.29",
+  "description": "Local VK Music archive and reviewed Spotify migration",
+  "main": "out/main/index.js",
+  "author": "VKSpot contributors",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "pack": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win nsis",
+    "rebuild": "electron-builder install-app-deps",
+    "postinstall": "electron-builder install-app-deps",
+    "lint": "eslint src tests",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"tools/**/*.cjs\" \"*.{md,json,ts,mjs}\" \"docs/**/*.md\" \"resources/**/*.{md,js}\" \"tools/**/*.md\" \".impeccable/surfaces/**/*.md\" \".github/**/*.yml\" \".impeccable/design.json\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"tools/**/*.cjs\" \"*.{md,json,ts,mjs}\" \"docs/**/*.md\" \"resources/**/*.{md,js}\" \"tools/**/*.md\" \".impeccable/surfaces/**/*.md\" \".github/**/*.yml\" \".impeccable/design.json\"",
+    "audit": "npm audit --omit=dev"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.12",
+    "csv-parse": "^7.0.3",
+    "csv-stringify": "^6.6.0",
+    "lucide-react": "^0.468.0",
+    "music-metadata": "^11.10.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "^44.7.2",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^5.0.0",
+    "eslint": "^10.12.0",
+    "fast-check": "^4.3.0",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.0"
+  },
+  "build": {
+    "appId": "org.vkspot.desktop",
+    "productName": "VKSpot",
+    "icon": "resources/icon.png",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/scripts",
+        "to": "scripts",
+        "filter": [
+          "**/*.js",
+          "**/*.ps1",
+          "**/*.md"
+        ]
+      },
+      {
+        "from": "resources/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "npmRebuild": true
+  },
+  "allowScripts": {
+    "electron@44.7.2": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
+  }
+}

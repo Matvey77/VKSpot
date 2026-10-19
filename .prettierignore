@@ -1,0 +1,9 @@
+node_modules
+out
+release
+.local
+package-lock.json
+resources/*.png
+resources/scripts/windows/*.ps1
+test-results
+playwright-report

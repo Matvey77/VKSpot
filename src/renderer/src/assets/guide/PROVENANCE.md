@@ -1,0 +1,1 @@
+Screenshots captured from actual VKSpot Electron UI by tools/guide/capture.cjs. Separate synthetic six-record profile and mocked Spotify responses. No real account, audio file or user collection was used. All controls are rendered by production components.
