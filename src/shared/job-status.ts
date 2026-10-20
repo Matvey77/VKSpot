@@ -1,7 +1,9 @@
 import type { Job } from './model'
 
-export function waitingJob(jobs: Job[], now: number): Job | undefined {
-  return jobs.reduce<Job | undefined>(
+export type JobStatus = Omit<Job, 'rowIds' | 'plan'>
+
+export function waitingJob<T extends JobStatus>(jobs: T[], now: number): T | undefined {
+  return jobs.reduce<T | undefined>(
     (latest, job) =>
       job.searchProvider !== 'browser' &&
       (job.state === 'paused' || job.state === 'failed') &&
@@ -14,7 +16,7 @@ export function waitingJob(jobs: Job[], now: number): Job | undefined {
   )
 }
 
-export function retryDeadline(jobs: Job[]): number {
+export function retryDeadline(jobs: JobStatus[]): number {
   return jobs.reduce(
     (latest, job) =>
       (job.state === 'paused' || job.state === 'failed') && Number.isFinite(job.retryAt)
@@ -45,7 +47,7 @@ export function retryTime(timestamp: number): string {
   })
 }
 
-export function autoSearch(job: Job, enabled: boolean): boolean {
+export function autoSearch(job: JobStatus, enabled: boolean): boolean {
   return (
     enabled &&
     job.kind === 'search' &&
@@ -55,7 +57,7 @@ export function autoSearch(job: Job, enabled: boolean): boolean {
   )
 }
 
-export function jobMessage(job: Job, now: number, autoResumeSearch = false): string {
+export function jobMessage(job: JobStatus, now: number, autoResumeSearch = false): string {
   if (job.state === 'paused' && !Number.isFinite(job.retryAt) && autoSearch(job, autoResumeSearch))
     return 'Прогресс сохранён. Фоновый поиск продолжится автоматически при подключённом Spotify, когда освободится очередь.'
   if (!Number.isFinite(job.retryAt) || (job.state !== 'paused' && job.state !== 'failed'))
@@ -70,8 +72,8 @@ export function jobMessage(job: Job, now: number, autoResumeSearch = false): str
 }
 
 export function resumeDisabledReason(
-  job: Job,
-  jobs: Job[],
+  job: JobStatus,
+  jobs: JobStatus[],
   now: number,
   busy: boolean,
   connected: boolean,

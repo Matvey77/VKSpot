@@ -8,7 +8,10 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts', 'src/**/*.tsx', 'tests/**/*.ts'],
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', ignoreRestSiblings: true },
+      ],
     },
   },
 )

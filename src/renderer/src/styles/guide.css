@@ -1,0 +1,718 @@
+.retained-match {
+  background: var(--hover);
+  color: var(--muted);
+}
+.chosen-match small {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+.chosen-match button {
+  height: 28px;
+  font-size: 11px;
+  margin-top: 8px;
+}
+.local-info small {
+  color: var(--accent);
+}
+.recovery-form {
+  margin-top: 18px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.recovery-form .field {
+  flex: 1;
+  margin: 0;
+  max-width: 540px;
+}
+
+.welcome-page {
+  scroll-behavior: smooth;
+}
+.welcome-intro,
+.welcome-explainer,
+.welcome-roadmap,
+.welcome-status {
+  max-width: 1120px;
+}
+.welcome-intro h1 {
+  font-size: 28px;
+}
+.welcome-lead {
+  max-width: 65ch;
+  margin-top: 14px;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.welcome-annotation {
+  max-width: 74ch;
+  margin-top: 14px;
+  font-size: 13px;
+}
+.welcome-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 26px;
+  margin-top: 22px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.welcome-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.welcome-detailed .welcome-intro,
+.welcome-detailed .welcome-explainer,
+.welcome-detailed .welcome-roadmap {
+  max-width: 1320px;
+}
+.welcome-identity {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.welcome-identity h1 {
+  font-size: 29px;
+}
+.welcome-identity .welcome-lead {
+  font-size: 17px;
+  margin-top: 9px;
+}
+.welcome-detailed .welcome-annotation {
+  max-width: 82ch;
+  font-size: 14px;
+  margin-top: 20px;
+}
+.welcome-detailed .welcome-section-heading h2 {
+  font-size: 21px;
+}
+.welcome-detailed .welcome-section-heading p {
+  max-width: 85ch;
+  font-size: 13px;
+}
+.workflow-track {
+  display: grid;
+  grid-template-columns:
+    minmax(110px, 1fr) 22px minmax(110px, 1fr) 22px minmax(120px, 1fr)
+    22px minmax(180px, 1.3fr) 22px minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 25px;
+}
+.workflow-node {
+  height: auto;
+  min-height: 126px;
+  padding: 16px 12px;
+  flex-direction: column;
+  white-space: normal;
+  border-radius: 10px;
+  gap: 9px;
+  text-align: center;
+}
+.workflow-node strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.workflow-node span:not(.spotify-icon-pair) {
+  font-size: 11px;
+  color: var(--muted);
+}
+.workflow-node > svg,
+.workflow-arrow {
+  color: var(--accent);
+}
+.workflow-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.workflow-branches .workflow-node {
+  min-height: 74px;
+  flex-direction: row;
+  gap: 10px;
+  padding: 12px 10px;
+  text-align: left;
+  justify-content: flex-start;
+}
+.workflow-branches .workflow-node div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.workflow-branches .spotify-node {
+  background: var(--selected);
+}
+.workflow-footnote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 15px;
+  font-size: 12px;
+}
+.workflow-footnote svg {
+  color: var(--accent);
+}
+.welcome-detailed .welcome-steps.route-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 22px;
+  padding-bottom: 20px;
+}
+.welcome-detailed .welcome-steps.route-tabs > li {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.route-tabs button {
+  gap: 9px;
+  height: 42px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.route-tabs button > span {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.route-tabs button[aria-current='step'] {
+  background: var(--selected);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.route-tabs button[aria-current='step'] > span {
+  color: var(--accent);
+}
+.guide-step {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.guide-step-heading {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.guide-step-heading > div {
+  max-width: 80ch;
+}
+.guide-step-heading h3 {
+  margin-top: 10px;
+  font-size: 21px;
+}
+.guide-step-heading p {
+  margin-top: 13px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.guide-location {
+  color: var(--accent);
+  font-size: 12px;
+  margin-top: 11px;
+}
+.guide-step-heading > button {
+  flex: none;
+  margin-top: 22px;
+  font-size: 12px;
+}
+.guide-detail {
+  font-size: 12px;
+  max-width: 95ch;
+  margin-top: 14px;
+}
+.guide-scenes {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+}
+.guide-scenes button {
+  font-size: 12px;
+}
+.guide-scenes button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--selected);
+}
+.guide-capture {
+  margin: 22px 0 0;
+}
+.guide-canvas {
+  position: relative;
+  max-width: 1184px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.guide-canvas > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 9px;
+}
+.guide-highlight {
+  position: absolute;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  border-radius: 5px;
+  opacity: 0.65;
+}
+.guide-highlight.selected {
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--selected);
+}
+.guide-marker {
+  position: absolute;
+  top: -13px;
+  left: -13px;
+  height: 27px;
+  width: 27px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: auto;
+  font-variant-numeric: tabular-nums;
+}
+.guide-marker:hover {
+  background: var(--accent-hover);
+}
+[data-theme='dark'] .guide-marker {
+  color: #102b28;
+}
+.guide-capture figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.guide-capture figcaption button {
+  font-size: 12px;
+  height: 32px;
+}
+.guide-instructions {
+  list-style: none;
+  padding: 0;
+  margin: 22px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.guide-instructions li {
+  display: flex;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 7px;
+}
+.guide-instructions li.selected {
+  background: var(--selected);
+}
+.guide-instructions li > button {
+  flex: none;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--accent);
+  border-color: var(--accent);
+  font-size: 12px;
+}
+.guide-instructions p {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.guide-instructions strong {
+  display: block;
+  color: var(--ink);
+  margin-bottom: 5px;
+  font-weight: 600;
+}
+.guide-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.guide-pagination span {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.guide-lightbox {
+  width: min(1400px, calc(100vw - 40px));
+}
+.guide-lightbox > img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin-top: 20px;
+}
+.guide-bubble {
+  position: fixed;
+  z-index: 40;
+  width: 310px;
+  padding: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px #102a3633;
+}
+.guide-bubble > button {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+}
+.guide-bubble strong {
+  display: block;
+  font-size: 14px;
+  padding-right: 22px;
+}
+.guide-bubble p {
+  font-size: 13px;
+  margin-top: 10px;
+  line-height: 1.65;
+}
+@media (max-width: 1250px) {
+  .workflow-track {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .workflow-track > .workflow-arrow {
+    display: none;
+  }
+  .workflow-node {
+    min-height: 104px;
+  }
+  .workflow-branches {
+    grid-column: span 2;
+    flex-direction: row;
+  }
+  .workflow-branches .workflow-node {
+    flex: 1;
+    min-width: 0;
+  }
+  .guide-step-heading {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .guide-step-heading > button {
+    margin-top: 0;
+  }
+  .guide-instructions {
+    grid-template-columns: 1fr;
+  }
+}
+.welcome-facts svg {
+  color: var(--accent);
+}
+.welcome-actions {
+  align-items: center;
+  margin-top: 24px;
+}
+.welcome-actions a {
+  margin-left: 8px;
+  font-size: 12px;
+  text-underline-offset: 4px;
+}
+.welcome-explainer {
+  margin-top: 36px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+.welcome-section-heading h2,
+.welcome-status h2 {
+  font-size: 19px;
+}
+.welcome-section-heading p {
+  margin-top: 8px;
+  font-size: 12px;
+  max-width: 74ch;
+}
+.welcome-flow {
+  margin: 18px 0 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.flow-diagram {
+  display: block;
+  width: 100%;
+  min-width: 920px;
+}
+.flow-compact {
+  display: none;
+  min-width: 0;
+}
+@media (max-width: 1280px) {
+  .flow-wide {
+    display: none;
+  }
+  .flow-compact {
+    display: block;
+  }
+}
+.flow-box {
+  fill: var(--surface);
+  stroke: var(--line);
+}
+.flow-box.accent {
+  fill: var(--selected);
+}
+.flow-title {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.flow-subtitle,
+.flow-caption {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.flow-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+}
+.flow-arrow {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4px;
+}
+.welcome-flow figcaption {
+  max-width: 78ch;
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.welcome-roadmap {
+  margin-top: 34px;
+  scroll-margin-top: 20px;
+}
+.welcome-steps {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
+.welcome-steps > li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 330px;
+  align-items: start;
+  gap: 20px;
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+}
+.welcome-step-number {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--selected);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.welcome-step-copy h3 {
+  margin-top: 3px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.welcome-step-copy > p {
+  margin-top: 12px;
+  max-width: 70ch;
+  font-size: 13px;
+}
+.welcome-step-copy > .welcome-step-detail {
+  font-size: 12px;
+}
+.welcome-step-copy > button {
+  margin-top: 17px;
+  font-size: 12px;
+}
+.welcome-step-copy > .text-button {
+  display: flex;
+  margin-top: 6px;
+}
+.welcome-step-picture {
+  margin: 0;
+  min-width: 0;
+}
+.welcome-step-picture svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.welcome-step-picture figcaption {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.picture-surface {
+  fill: var(--surface);
+  stroke: var(--line);
+}
+.picture-rail {
+  fill: #162d3b;
+}
+.picture-rail-mark {
+  fill: #d6eee6;
+}
+.picture-rail-rule {
+  fill: #a5becb;
+}
+.picture-heading,
+.picture-title,
+.picture-body {
+  fill: var(--ink);
+}
+.picture-heading {
+  font-size: 14px;
+  font-weight: 650;
+}
+.picture-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+.picture-body {
+  font-size: 12px;
+}
+.picture-muted {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.picture-rule {
+  stroke: var(--line);
+  stroke-width: 1px;
+}
+.picture-field {
+  fill: var(--control);
+  stroke: var(--line);
+}
+.picture-accent {
+  fill: var(--accent);
+}
+.picture-button {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+[data-theme='dark'] .picture-button {
+  fill: #102b28;
+}
+.picture-selected {
+  fill: var(--selected);
+}
+.picture-check {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.picture-icon {
+  color: var(--accent);
+}
+.welcome-status {
+  padding: 26px 0 20px;
+  border-top: 1px solid var(--line);
+}
+.welcome-status > div {
+  margin-top: 14px;
+  max-width: 76ch;
+}
+.welcome-status p {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.welcome-status strong {
+  color: var(--ink);
+}
+.service-logo {
+  display: inline-block;
+  flex: none;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.spotify-icon-pair {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+.spotify-white {
+  display: none;
+}
+[data-theme='dark'] .spotify-green,
+.sidebar .spotify-green {
+  display: none;
+}
+[data-theme='dark'] .spotify-white,
+.sidebar .spotify-white {
+  display: inline-block;
+}
+.primary .spotify-green {
+  display: none;
+}
+.primary .spotify-white {
+  display: inline-block;
+}
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  background: transparent;
+  border-radius: 0;
+}
+.project-logo {
+  flex: none;
+  display: block;
+  object-fit: contain;
+}
+.connection-line > span:not(.line) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.source-icon,
+.destination-icon,
+.vk-symbol,
+.spotify-symbol {
+  background: transparent;
+}
+.candidates h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 1150px) {
+  .welcome-steps > li {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 12px 16px;
+  }
+  .welcome-step-picture {
+    grid-column: 2;
+    max-width: 380px;
+  }
+  .welcome-intro h1 {
+    font-size: 25px;
+  }
+  .welcome-lead {
+    font-size: 17px;
+  }
+}

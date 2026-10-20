@@ -1,0 +1,95 @@
+/* Proxy testing & matching rules in settings */
+.proxy-field-block {
+  margin-bottom: 14px;
+}
+.proxy-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.proxy-input-group input {
+  flex: 1;
+  min-width: 0;
+}
+.proxy-test-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  transition: all 0.15s ease;
+}
+.proxy-test-button:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--muted);
+}
+.proxy-test-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.proxy-result-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 7px 11px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.proxy-result-hint.success {
+  background: #edf7ed;
+  color: #1e4620;
+  border: 1px solid #c8e6c9;
+}
+.proxy-result-hint.error {
+  background: #fde8e8;
+  color: #9b1c1c;
+  border: 1px solid #f8b4b4;
+}
+[data-theme='dark'] .proxy-result-hint.success {
+  background: #142e18;
+  color: #79e091;
+  border-color: #2e663a;
+}
+[data-theme='dark'] .proxy-result-hint.error {
+  background: #381b1b;
+  color: #f87171;
+  border-color: #7f1d1d;
+}
+.settings-subsection {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.settings-subsection h2 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.matching-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.matching-rules-list .check-field {
+  margin-top: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+.matching-rules-list .check-field input {
+  margin-top: 2px;
+  flex: none;
+}

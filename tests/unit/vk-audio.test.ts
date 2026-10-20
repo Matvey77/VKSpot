@@ -34,7 +34,7 @@ vi.mock('electron', () => ({
   session: mockSession,
 }))
 
-import { VKAudioPlayer } from '../../src/main/vk-audio'
+import { VKAudioPlayer } from '../../src/main/integrations/vk/audio'
 import type { BrowserWindow } from 'electron'
 
 describe('VKAudioPlayer', () => {

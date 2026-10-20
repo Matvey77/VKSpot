@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyVKPage } from '../../src/main/vk-status'
+import { classifyVKPage } from '../../src/main/integrations/vk/status'
 
 describe('VK visible-page status', () => {
   it('recognizes a rendered modern or classic personal library', () => {

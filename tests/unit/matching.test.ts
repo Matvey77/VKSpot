@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCollection, makePlan, parseImport } from '../../src/core/collection'
 import { metadataMatch, reviewGroup, searchText, spotifyTrackId } from '../../src/core/matching'
-import { Store } from '../../src/main/store'
+import { Store } from '../../src/main/storage'
 import type { SpotifyTrack, TrackRow } from '../../src/shared/model'
 import { defaultMatchingRules } from '../../src/shared/model'
 

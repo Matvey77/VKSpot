@@ -1,6 +1,6 @@
 {
   "name": "vkspot",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "Local VK Music archive and reviewed Spotify migration",
   "main": "out/main/index.js",
   "author": "VKSpot contributors",
@@ -20,11 +20,11 @@
     "lint": "eslint src tests",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"tools/**/*.cjs\" \"*.{md,json,ts,mjs}\" \"docs/**/*.md\" \"resources/**/*.{md,js}\" \"tools/**/*.md\" \".impeccable/surfaces/**/*.md\" \".github/**/*.yml\" \".impeccable/design.json\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"tools/**/*.cjs\" \"*.{md,json,ts,mjs}\" \"docs/**/*.md\" \"resources/**/*.{md,js}\" \"tools/**/*.md\" \".impeccable/surfaces/**/*.md\" \".github/**/*.yml\" \".impeccable/design.json\"",
-    "audit": "npm audit --omit=dev"
+    "audit": "npm audit --omit=dev",
+    "perf": "node tools/performance/benchmark.cjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
-    "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.12",
     "csv-parse": "^7.0.3",
     "csv-stringify": "^6.6.0",

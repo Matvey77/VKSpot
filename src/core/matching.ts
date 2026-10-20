@@ -1,10 +1,5 @@
-import {
-  defaultMatchingRules,
-  type MatchingRules,
-  type SpotifyTrack,
-  type TrackRow,
-  type Working,
-} from '../shared/model'
+import { defaultMatchingRules } from '../shared/defaults'
+import { type MatchingRules, type SpotifyTrack, type TrackRow, type Working } from '../shared/model'
 
 export type ReviewGroup =
   'pending' | 'exact' | 'review' | 'missing' | 'local-pending' | 'deferred' | 'ready'

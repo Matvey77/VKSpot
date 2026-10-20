@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 vi.mock('electron', () => ({ safeStorage: {}, shell: {} }))
-import { Jobs } from '../../src/main/jobs'
-import { Store } from '../../src/main/store'
-import { Spotify, SpotifyError } from '../../src/main/spotify'
+import { Jobs } from '../../src/main/jobs/runner'
+import { Store } from '../../src/main/storage'
+import { Spotify, SpotifyError } from '../../src/main/integrations/spotify/api'
 import { parseImport, makePlan, mixedOrder } from '../../src/core/collection'
 import { reviewGroup } from '../../src/core/matching'
 

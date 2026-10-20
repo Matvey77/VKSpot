@@ -1,0 +1,208 @@
+:root {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  color: #172e3a;
+  background: #f4f6f5;
+  --canvas: #f4f6f5;
+  --surface: #fff;
+  --ink: #172e3a;
+  --muted: #536570;
+  --line: #d8e1e3;
+  --accent: #087f73;
+  --accent-hover: #06665e;
+  --selected: #e6f3ef;
+  --warning-bg: #fff2d8;
+  --warning-ink: #8b570c;
+  --error-bg: #fff0f1;
+  --error-ink: #a72d3a;
+  --control: #fff;
+  --hover: #f0f5f3;
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --canvas: #14232a;
+  --surface: #1c2e37;
+  --ink: #edf5f5;
+  --muted: #b0c2ca;
+  --line: #3a505a;
+  --accent: #54cbb2;
+  --accent-hover: #84dec9;
+  --selected: #244b45;
+  --warning-bg: #47381e;
+  --warning-ink: #ffdc99;
+  --error-bg: #472d35;
+  --error-ink: #ffb8c0;
+  --control: #233842;
+  --hover: #293e46;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a,
+input,
+select {
+  outline-offset: 3px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+}
+button {
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--control);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+button:hover {
+  background: var(--hover);
+}
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+button.primary:hover {
+  background: var(--accent-hover);
+}
+[data-theme='dark'] button.primary {
+  color: #102b28;
+}
+button.text-button {
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+  color: var(--accent);
+}
+button.icon-button {
+  width: 34px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  flex: none;
+}
+button.icon-button:hover {
+  background: var(--hover);
+}
+button.full-width {
+  width: 100%;
+}
+.explained-button {
+  display: inline-flex;
+  max-width: 100%;
+  border-radius: 6px;
+}
+.explained-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.explained-button > button:disabled {
+  pointer-events: none;
+}
+.button-tooltip {
+  position: fixed;
+  z-index: 60;
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 24px #102a3626;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+input,
+select {
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--ink);
+  padding: 0 10px;
+  min-width: 0;
+}
+input::placeholder {
+  color: var(--muted);
+}
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex: none;
+}
+::selection {
+  background: #b9e7db;
+  color: #12392e;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+h2 {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+h3 {
+  font-size: 13px;
+  font-weight: 650;
+}
+h4 {
+  font-size: 12px;
+  font-weight: 600;
+}
+p {
+  line-height: 1.6;
+  color: var(--muted);
+}
+svg {
+  flex: none;
+}
+code {
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+a {
+  color: var(--accent);
+}

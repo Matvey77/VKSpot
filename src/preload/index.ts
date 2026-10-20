@@ -4,6 +4,7 @@ const invoke = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('vkspot:' + method, ...args)
 const bridge: Bridge = {
   state: () => invoke('state'),
+  syncState: (cursor) => invoke('syncState', cursor),
   previewImport: () => invoke('previewImport'),
   importCollection: (p) => invoke('importCollection', p),
   renameCollection: (id, name) => invoke('renameCollection', id, name),

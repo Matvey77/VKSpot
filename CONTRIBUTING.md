@@ -41,7 +41,7 @@
 - **Тестирование готового собранного дистрибутива:**
   Укажите переменную окружения `VKSPOT_TEST_EXECUTABLE` с полным путем к исполняемому файлу:
   ```sh
-  $env:VKSPOT_TEST_EXECUTABLE = "D:\Projects\VKSpot\release\0.1.30\win-unpacked\VKSpot.exe"
+  $env:VKSPOT_TEST_EXECUTABLE = "D:\Projects\VKSpot\release\0.1.31\win-unpacked\VKSpot.exe"
   npx playwright test tests/e2e/review.spec.ts tests/e2e/welcome.spec.ts
   ```
 
@@ -61,10 +61,10 @@ npm run lint
 # 3. Проверка форматирования кода
 npm run format:check
 
-# 4. Прогон всех 65 модульных тестов
+# 4. Прогон всех 75 модульных тестов
 npm test
 
-# 5. Прогон всех 41 сквозных тестов
+# 5. Прогон всех 42 сквозных тестов
 npm run test:e2e
 
 # 6. Пробная сборка приложения

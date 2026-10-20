@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Store } from '../../src/main/store'
+import { Store } from '../../src/main/storage'
 import { parseImport, exportText } from '../../src/core/collection'
 import { workingPatchSchema } from '../../src/shared/model'
 

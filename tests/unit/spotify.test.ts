@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
   },
   shell: {},
 }))
-import { Spotify, SpotifyError } from '../../src/main/spotify'
+import { Spotify, SpotifyError } from '../../src/main/integrations/spotify/api'
 import { settingsSchema } from '../../src/shared/model'
 
 const directories: string[] = []

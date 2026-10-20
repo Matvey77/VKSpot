@@ -1,0 +1,29 @@
+/* VK metadata collection stays next to its source controls. */
+.vk-export-count {
+  max-width: 290px;
+  margin-bottom: 16px;
+}
+.vk-extraction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.vk-extraction p {
+  margin: 6px 0 0;
+}
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  line-height: 1.5;
+}
+.checkbox-field input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}

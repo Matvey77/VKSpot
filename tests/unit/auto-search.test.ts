@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 vi.mock('electron', () => ({ safeStorage: {}, shell: {} }))
-import { Jobs } from '../../src/main/jobs'
-import { Store } from '../../src/main/store'
-import { Spotify, SpotifyError } from '../../src/main/spotify'
+import { Jobs } from '../../src/main/jobs/runner'
+import { Store } from '../../src/main/storage'
+import { Spotify, SpotifyError } from '../../src/main/integrations/spotify/api'
 import { parseImport } from '../../src/core/collection'
 
 function cleanup(directory: string): void {

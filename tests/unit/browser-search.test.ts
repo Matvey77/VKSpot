@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ safeStorage: {}, shell: {} }))
-import { Store } from '../../src/main/store'
-import { Jobs } from '../../src/main/jobs'
-import { Spotify } from '../../src/main/spotify'
+import { Store } from '../../src/main/storage'
+import { Jobs } from '../../src/main/jobs/runner'
+import { Spotify } from '../../src/main/integrations/spotify/api'
 import { parseImport } from '../../src/core/collection'
-import { readSpotifySearch } from '../../src/main/spotify-browser'
+import { readSpotifySearch } from '../../src/main/integrations/spotify/browser'
 
 describe('search providers and independent API cooldown', () => {
   it('runs a restored browser search while an older API search is waiting for quota', async () => {

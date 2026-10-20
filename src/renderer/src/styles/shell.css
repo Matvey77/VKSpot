@@ -1,0 +1,222 @@
+.app {
+  display: flex;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+}
+.sidebar {
+  width: 226px;
+  flex: none;
+  background: #162d3b;
+  color: #c6d7df;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 16px 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 8px;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  text-decoration: none;
+}
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  background: #d6eee6;
+  color: #175346;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+}
+.brand-light {
+  font-weight: 400;
+}
+.connection-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 10px 32px;
+  font-size: 11px;
+  color: #b3c8d2;
+  letter-spacing: 0.025em;
+}
+.connection-line .line {
+  height: 1px;
+  background: #627e8c;
+  flex: 1;
+}
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nav-button {
+  border: 0;
+  background: transparent;
+  color: #bdcfd8;
+  justify-content: flex-start;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 7px;
+  gap: 11px;
+}
+.nav-button:hover {
+  background: #264655;
+}
+.nav-button.active {
+  background: #315467;
+  color: #fff;
+}
+.nav-dot {
+  width: 7px;
+  height: 7px;
+  background: #84dcc0;
+  border-radius: 50%;
+  margin-left: auto;
+}
+.collection-nav {
+  margin-top: 32px;
+  overflow: auto;
+  flex: 1;
+}
+.sidebar-label {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #a5becb;
+}
+.collection-nav > button {
+  width: 100%;
+  height: auto;
+  min-height: 36px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: #bdcfd8;
+  justify-content: flex-start;
+  font-size: 12px;
+}
+.collection-nav > button:hover,
+.collection-nav > button.current {
+  background: #264655;
+  color: #fff;
+}
+.collection-nav > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.collection-nav small {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.collection-nav > button.add-collection {
+  margin-top: 8px;
+  color: #a3e2d1;
+}
+.workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+.page-heading {
+  padding: 28px 32px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex: none;
+}
+.page-heading p {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.heading-actions,
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.summary-strip {
+  display: flex;
+  align-items: center;
+  margin: 0 32px 18px;
+  padding: 17px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  gap: 30px;
+  flex: none;
+}
+.summary-strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.summary-strip strong {
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.summary-strip span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.summary-strip .summary-end {
+  margin-left: auto;
+}
+.inline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.workspace > .inline-warning {
+  margin: 0 32px 16px;
+  flex: none;
+}
+.inline-warning svg {
+  margin-top: 1px;
+}
+.library-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 32px 16px;
+  flex: none;
+}
+.search-input {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  flex: 1;
+  min-width: 120px;
+  padding: 0 12px;
+  color: var(--muted);
+}
+.search-input input {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  padding: 0;
+  outline-offset: 0;
+}

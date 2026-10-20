@@ -147,10 +147,14 @@ test('review confirms repeated metadata matches, advances through versions and p
     await page.locator('.candidate').getByRole('button', { name: 'Выбрать', exact: true }).click()
     await expect(page.locator('.destination-state')).toContainText('Spotify')
     await page.getByRole('button', { name: 'Закрыть запись', exact: true }).click()
-    await page.getByLabel('Результат поиска', { exact: true }).selectOption('missing')
+    await page
+      .getByRole('combobox', { name: 'Результат поиска', exact: true })
+      .selectOption('missing')
     await page.getByRole('button', { name: /Выделить выборку/ }).click()
     await page.getByLabel('Действие с выбранными').selectOption('local')
-    await page.getByLabel('Результат поиска', { exact: true }).selectOption('local-pending')
+    await page
+      .getByRole('combobox', { name: 'Результат поиска', exact: true })
+      .selectOption('local-pending')
     await expect(page.getByRole('row')).toHaveCount(3)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760))
     await page.screenshot({ path: '.local/evidence/e2e/review-files-compact.png' })
@@ -644,7 +648,9 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
         page.getByRole('row', { name: `Запись ${position}: ${title}`, exact: true }),
       ).toContainText(status)
     }
-    await page.getByLabel('Результат поиска', { exact: true }).selectOption('exact')
+    await page
+      .getByRole('combobox', { name: 'Результат поиска', exact: true })
+      .selectOption('exact')
     await page.getByRole('button', { name: /Выделить выборку/ }).click()
     await expect(page.locator('.selection-bar')).toContainText(/Выбрано 1\s502/)
     await expect(page.getByRole('button', { name: /Подтвердить выбранные/ })).toBeEnabled()
@@ -674,16 +680,22 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
     await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
     await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
     await page.getByLabel('Статус записей', { exact: true }).selectOption('excluded')
-    await page.getByLabel('Результат поиска', { exact: true }).selectOption('ready')
+    await page
+      .getByRole('combobox', { name: 'Результат поиска', exact: true })
+      .selectOption('ready')
     await page.getByLabel('Найти запись', { exact: true }).fill('Excluded')
     await expect(page.getByRole('row')).toHaveCount(2)
     await page.getByRole('button', { name: /Выделить выборку/ }).click()
-    await page.getByLabel('Результат поиска', { exact: true }).selectOption('pending')
+    await page
+      .getByRole('combobox', { name: 'Результат поиска', exact: true })
+      .selectOption('pending')
     await expect(page.locator('.selection-bar')).toContainText('вне выборки 1')
     await expect(page.getByRole('button', { name: /Подтвердить выбранные/ })).toBeDisabled()
     await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
     await page.getByRole('button', { name: /Выделить совпадения/ }).click()
-    await expect(page.getByLabel('Результат поиска', { exact: true })).toHaveValue('exact')
+    await expect(page.getByRole('combobox', { name: 'Результат поиска', exact: true })).toHaveValue(
+      'exact',
+    )
     await expect(page.locator('.selection-bar')).toContainText(/Выбрано 1\s502/)
     await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
     await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()

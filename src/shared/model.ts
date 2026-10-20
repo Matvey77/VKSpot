@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { defaultMatchingRules } from './defaults'
+export { defaultMatchingRules } from './defaults'
 
 export const rawTrackSchema = z.object({
   id: z.string().default(''),
@@ -104,14 +106,6 @@ export const matchingRulesSchema = z.object({
   extendedDurationTolerance: z.boolean().default(true),
 })
 export type MatchingRules = z.infer<typeof matchingRulesSchema>
-export const defaultMatchingRules: MatchingRules = {
-  diacritics: true,
-  homoglyphs: true,
-  featDeduplication: true,
-  identicalVersions: true,
-  remixPunctuation: true,
-  extendedDurationTolerance: true,
-}
 
 export type Settings = {
   clientId: string
@@ -250,6 +244,9 @@ export type VKExportProgress = {
 }
 export type Bridge = {
   state(): Promise<Result<AppState>>
+  syncState(
+    cursor: import('./sync').StateCursor | null,
+  ): Promise<Result<import('./sync').StateSync>>
   previewImport(): Promise<Result<ImportPreview | null>>
   importCollection(preview: ImportPreview): Promise<Result<string>>
   renameCollection(id: string, name: string): Promise<Result<void>>

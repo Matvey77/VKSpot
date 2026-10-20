@@ -1,0 +1,208 @@
+/* Guided workflow: one primary action; detail stays available on request. */
+.start-page {
+  max-width: 1000px;
+  padding-top: 54px;
+}
+.journey {
+  display: flex;
+  padding: 0;
+  margin: 0 0 56px;
+  list-style: none;
+  gap: 30px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.journey li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+.journey li > span {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.journey [aria-current='step'] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.journey [aria-current='step'] > span,
+.journey .done > span {
+  background: var(--selected);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.start-next {
+  padding-bottom: 42px;
+  border-bottom: 1px solid var(--line);
+}
+.start-next h1 {
+  font-size: clamp(26px, 3vw, 38px);
+  max-width: 22ch;
+  text-wrap: balance;
+}
+.start-next p {
+  margin: 18px 0 26px;
+  max-width: 65ch;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.start-next .next-action {
+  height: 42px;
+}
+.start-collection {
+  width: 100%;
+  height: auto;
+  min-height: 88px;
+  padding: 18px 0;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  margin-bottom: 20px;
+  background: transparent;
+  text-align: left;
+}
+.start-collection span {
+  display: grid;
+  gap: 6px;
+}
+.start-collection small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.start-page > .text-button {
+  margin-top: 18px;
+}
+.advanced-options {
+  margin-top: 16px;
+}
+.advanced-options > summary,
+.search-options > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 0;
+}
+.advanced-options[open] > summary {
+  margin-bottom: 12px;
+}
+.search-options {
+  position: relative;
+  margin-left: auto;
+  font-weight: 400;
+}
+.search-options[open] {
+  z-index: 3;
+}
+.search-options[open] > :not(summary) {
+  margin: 12px 0;
+}
+.search-options small {
+  display: block;
+  color: var(--muted);
+}
+.collection-search .review-heading {
+  align-items: flex-start;
+}
+.collection-search.compact .review-progress {
+  flex: 1 1 450px;
+}
+.next-step-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  background: var(--selected);
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+.next-step-hint button {
+  height: 30px;
+  font-size: 12px;
+}
+.context-help {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 12px 30px 0;
+  padding: 12px 14px;
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+.context-help span {
+  flex: 1;
+}
+.spotify-panel {
+  position: fixed;
+  inset: 12px;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.spotify-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  flex-wrap: wrap;
+}
+.spotify-panel .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spotify-panel h2 {
+  font-size: 16px;
+}
+.spotify-panel header p {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.spotify-native-area {
+  flex: 1;
+  min-height: 160px;
+  margin: 0 1px 1px;
+  background: #121212;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spotify-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #a7a7a7;
+  font-size: 13px;
+  pointer-events: none;
+  user-select: none;
+}
+@media (max-width: 1100px) {
+  .start-page {
+    padding-top: 30px;
+  }
+  .journey {
+    gap: 14px;
+    margin-bottom: 36px;
+  }
+  .context-help {
+    margin-inline: 20px;
+  }
+}
