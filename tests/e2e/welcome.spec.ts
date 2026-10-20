@@ -121,18 +121,19 @@ test('welcome is the first view, explains the flow and links to working sections
         tracks: [{ artist: 'Artist', title: 'Song' }],
       } as never),
     )
+    await expect(page.locator('.collection-nav')).toContainText('Guide navigation fixture')
     await page.locator('.route-tabs button').nth(2).click()
     await page
       .locator('.guide-step-heading')
       .getByRole('button', { name: 'Открыть коллекцию', exact: true })
       .click()
-    await expect(page.getByRole('tabpanel', { name: 'Таблица', exact: true })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
     await page.getByRole('button', { name: 'Начало', exact: true }).click()
     await page.getByRole('button', { name: 'Нужна помощь? Открыть инструкцию' }).click()
     await page.locator('.route-tabs button').nth(3).click()
     await page.getByRole('button', { name: 'Фоновый поиск', exact: true }).click()
     await page.getByRole('button', { name: 'Открыть фоновый поиск', exact: true }).click()
-    await expect(page.getByRole('tabpanel', { name: 'Таблица', exact: true })).toBeVisible()
+    await expect(page.getByRole('table')).toBeVisible()
   } finally {
     await app.close()
     await cleanup(directory)

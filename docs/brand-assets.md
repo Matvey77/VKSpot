@@ -1,14 +1,35 @@
-# Branding assets
+# Графические ресурсы и товарные знаки
 
-- VK icon: original SVG served by VK's corporate site:
-  https://corp.vkcdn.ru/media/projects/logos/projects-logo-1_OFwexq4.svg
-- Spotify green/white icons: original RGB SVG assets from the developer brand package:
-  https://developer.spotify.com/images/guidelines/design/2024-spotify-logo-icon.zip
-- Reference: https://developer.spotify.com/documentation/design
-- Service glyphs and their proportions are preserved. The VKSpot project mark
-  combines the two icons in one composition as requested by the owner.
-- The application is an independent project. This does not imply endorsement by
-  VK or Spotify. Brand trademarks remain their owners' property; the source-code
-  MIT license does not grant rights to these trademarks.
-- Guide images are captured from the real VKSpot UI with an isolated synthetic
-  collection, never from the owner's account or current running application.
+Документ фиксирует происхождение официальных графических знаков, используемых в приложении VKSpot, и правовые границы их применения.
+
+---
+
+## 1. Источники векторных знаков
+
+- **Логотип VK:** Оригинальный векторный SVG-знак из официального бренд-пакета корпоративного портала VK:
+  `https://corp.vkcdn.ru/media/projects/logos/projects-logo-1_OFwexq4.svg`
+- **Логотип Spotify (зеленый и белый варианты):** Оригинальные векторные RGB SVG-ассеты из официального руководства Spotify for Developers:
+  `https://developer.spotify.com/images/guidelines/design/2024-spotify-logo-icon.zip`
+- **Справочное руководство:** `https://developer.spotify.com/documentation/design`
+
+---
+
+## 2. Фирменный знак VKSpot
+
+- Фирменный знак VKSpot объединяет глифы обоих сервисов на закругленной плитке цвета глубокой морской волны (`#162d3b`), визуально символизируя мост переноса музыки между двумя экосистемами.
+- Пропорции, геометрия и исходные векторные контуры сервисных знаков строго сохранены в модуле `src/renderer/src/BrandIcons.tsx`.
+
+---
+
+## 3. Правовой статус и товарные знаки
+
+- Приложение VKSpot является независимым локальным проектом с открытым исходным кодом.
+- Использование графических знаков носит исключительно информационно-указательный характер для удобства идентификации сервисов пользователем и не означает официальной связи с компаниями VK или Spotify, а также их одобрения проекта.
+- Все товарные знаки, логотипы и наименования сервисов принадлежат их законным правообладателям. Лицензия MIT исходного кода приложения не распространяется на сторонние товарные знаки.
+
+---
+
+## 4. Снимки интерфейса руководства
+
+- Все 24 снимка экрана, используемые в интерактивном руководстве (`Welcome.tsx`), получены с помощью автоматизированного инструмента `tools/guide/capture.cjs` на базе чистого Electron-профиля с изолированной синтетической демонстрационной коллекцией.
+- В снимках интерфейса никогда не используются реальные пользовательские аккаунты, приватные ключи или персональные медиатеки.

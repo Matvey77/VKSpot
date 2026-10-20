@@ -30,25 +30,55 @@ export function readVKPageSignals(): Promise<VKPageSignals> {
       )
     }
     const rowSelector =
-      '.audio_row[data-full-id], .audio_row[data-audio], .audio_item[data-audio], [data-audio-id], [data-testid="MusicTrackRow"]'
+      '.audio_row, .audio_item, [data-testid*="MusicTrack"], [data-full-id], [data-audio-id], [data-audio]'
     const hasVisibleRows = (container: Element): boolean => {
       for (const candidate of container.querySelectorAll(rowSelector)) {
         const row =
-          candidate.closest('.audio_row, .audio_item, [data-testid="MusicTrackRow"]') ?? candidate
+          candidate.closest(
+            '.audio_row, .audio_item, [data-testid*="MusicTrack"], [data-full-id], [data-audio-id]',
+          ) ?? candidate
         if (visible(row)) return true
       }
       return false
     }
+
+    const isAudioPath =
+      location.pathname.startsWith('/audio') ||
+      location.pathname.startsWith('/music') ||
+      location.pathname.includes('/audios')
+
     const modernLibrary = [
-      ...document.querySelectorAll('[data-testid="AudioCatalog_SectionMyTracks"]'),
+      ...document.querySelectorAll(
+        '[data-testid*="AudioCatalog"], [data-testid*="MusicTrack"], [data-testid="AudioCatalog_SectionMyTracks"]',
+      ),
     ].some((section) => visible(section) && hasVisibleRows(section))
-    const libraryHeading = [...document.querySelectorAll('h1, h2, [role="heading"]')].some(
-      (heading) => {
-        if (!visible(heading)) return false
-        const text = heading.textContent?.replace(/\s+/g, ' ').trim().toLocaleLowerCase() ?? ''
-        return ['моя музыка', 'мои аудиозаписи', 'my music', 'my audio'].includes(text)
-      },
-    )
+
+    const libraryTab = [
+      ...document.querySelectorAll(
+        '[role="tab"], .ui_tab, .vkuiTabsItem, a[href*="/audio"], [data-testid*="Tab"]',
+      ),
+    ].some((tab) => {
+      if (!visible(tab)) return false
+      const text = tab.textContent?.trim().toLocaleLowerCase() ?? ''
+      return ['моя музыка', 'мои аудиозаписи', 'my music', 'my audio'].includes(text)
+    })
+
+    const libraryHeading = [
+      ...document.querySelectorAll('h1, h2, h3, [role="heading"], .audio_page__header'),
+    ].some((heading) => {
+      if (!visible(heading)) return false
+      const text = heading.textContent?.replace(/\s+/g, ' ').trim().toLocaleLowerCase() ?? ''
+      return [
+        'моя музыка',
+        'мои аудиозаписи',
+        'my music',
+        'my audio',
+        'треки',
+        'плейлисты',
+        'недавно прослушанные',
+      ].includes(text)
+    })
+
     const allTracksTab = document.querySelector('[data-testid="AudioCatalog_Tabs_Tab_all"]')
     const allTracksSelected = !allTracksTab || allTracksTab.getAttribute('aria-selected') === 'true'
     const classicContainer =
@@ -61,6 +91,13 @@ export function readVKPageSignals(): Promise<VKPageSignals> {
         '[data-testid="MusicTracksList"], [data-testid="MusicTrackList"]',
       ),
     ].some((container) => visible(container) && hasVisibleRows(container))
+
+    const shuffleButton = [...document.querySelectorAll('button, a, [role="button"]')].some(
+      (el) => visible(el) && /перемешать/i.test(el.textContent ?? ''),
+    )
+
+    const visibleRowsFound = hasVisibleRows(document.body)
+
     const signInForm =
       [...document.querySelectorAll('input[type="password"]')].some(visible) ||
       [...document.querySelectorAll('form[action]')].some((form) => {
@@ -76,8 +113,18 @@ export function readVKPageSignals(): Promise<VKPageSignals> {
           element.textContent ?? '',
         ),
       )
+
+    const personalLibrary =
+      !signInForm &&
+      (modernLibrary ||
+        classicContainer ||
+        (libraryHeading && genericLibraryList) ||
+        (isAudioPath && visibleRowsFound) ||
+        (libraryTab && visibleRowsFound) ||
+        (shuffleButton && visibleRowsFound))
+
     return {
-      personalLibrary: modernLibrary || classicContainer || (libraryHeading && genericLibraryList),
+      personalLibrary,
       signInForm,
       pageError,
     }

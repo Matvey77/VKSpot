@@ -9,6 +9,7 @@ import {
   type PlanItem,
   type RawTrack,
   type TrackRow,
+  type Working,
 } from '../shared/model'
 
 export function sourceHash(rows: Pick<TrackRow, 'position' | 'source'>[]): string {
@@ -60,6 +61,207 @@ export function createCollection(preview: ImportPreview): Collection {
     sourceHash: sourceHash(rows),
     rows,
   }
+}
+
+export function mergeRepairedCollection(
+  existing: Collection,
+  preview: ImportPreview,
+): { rows: TrackRow[]; preservedCount: number; addedCount: number } {
+  // If preview specifies a partial range (e.g. { from: 1, to: 100 }), replace only that range
+  // and preserve the rest of the existing collection in place.
+  if (preview.range && preview.range.to >= preview.range.from) {
+    const fromIdx = Math.max(0, preview.range.from - 1)
+    const toIdx = Math.min(existing.rows.length, preview.range.to)
+
+    const beforeRows = existing.rows.slice(0, fromIdx)
+    const targetSlice = existing.rows.slice(fromIdx, toIdx)
+    const afterRows = existing.rows.slice(toIdx)
+
+    const byVkId = new Map<string, Working>()
+    const byRawText = new Map<string, Working>()
+    const byArtistTitle = new Map<string, Working[]>()
+
+    for (const row of targetSlice) {
+      if (row.source.id) byVkId.set(row.source.id, row.working)
+      if (row.source.rawText) byRawText.set(row.source.rawText, row.working)
+      const key = `${row.source.artist.trim().toLowerCase()}:::${row.source.title.trim().toLowerCase()}`
+      if (!byArtistTitle.has(key)) byArtistTitle.set(key, [])
+      byArtistTitle.get(key)!.push(row.working)
+    }
+
+    let preservedCount = 0
+    let addedCount = 0
+
+    const repairedSlice: TrackRow[] = preview.tracks.map((track, i) => {
+      const source = rawTrackSchema.parse(track)
+      let matchedWorking: Working | undefined
+
+      if (source.id && byVkId.has(source.id)) {
+        matchedWorking = byVkId.get(source.id)
+      }
+      if (!matchedWorking && source.rawText && byRawText.has(source.rawText)) {
+        matchedWorking = byRawText.get(source.rawText)
+      }
+      if (!matchedWorking) {
+        const key = `${source.artist.trim().toLowerCase()}:::${source.title.trim().toLowerCase()}`
+        const queue = byArtistTitle.get(key)
+        if (queue && queue.length > 0) {
+          const matchIdx = queue.findIndex(
+            (w) =>
+              source.duration !== null &&
+              w.spotify &&
+              Math.abs((w.spotify.duration ?? 0) - source.duration) <= 5,
+          )
+          matchedWorking = matchIdx >= 0 ? queue.splice(matchIdx, 1)[0] : queue.shift()
+        }
+      }
+
+      if (matchedWorking) {
+        preservedCount++
+        return {
+          id: randomUUID(),
+          position: fromIdx + i + 1,
+          source,
+          working: {
+            ...matchedWorking,
+            artist: matchedWorking.artist || source.artist,
+            title: matchedWorking.title || source.title,
+          },
+        }
+      }
+
+      addedCount++
+      return {
+        id: randomUUID(),
+        position: fromIdx + i + 1,
+        source,
+        working: {
+          artist: source.artist,
+          title: source.title,
+          version: '',
+          excluded: source.availability === 'blocked',
+          note: '',
+          destination: 'unresolved' as const,
+          spotify: null,
+          local: null,
+          candidates: [],
+          searchedQuery: null,
+          localPending: false,
+          reviewDeferred: false,
+        },
+      }
+    })
+
+    const combined = [...beforeRows, ...repairedSlice, ...afterRows]
+    const rows = combined.map((r, idx) => ({ ...r, position: idx + 1 }))
+    return {
+      rows,
+      preservedCount: preservedCount + beforeRows.length + afterRows.length,
+      addedCount,
+    }
+  }
+
+  const byVkId = new Map<string, Working>()
+  const byRawText = new Map<string, Working>()
+  const byArtistTitle = new Map<string, Working[]>()
+
+  for (const row of existing.rows) {
+    if (row.source.id) {
+      byVkId.set(row.source.id, row.working)
+    }
+    if (row.source.rawText) {
+      byRawText.set(row.source.rawText, row.working)
+    }
+    const key = `${row.source.artist.trim().toLowerCase()}:::${row.source.title.trim().toLowerCase()}`
+    if (!byArtistTitle.has(key)) byArtistTitle.set(key, [])
+    byArtistTitle.get(key)!.push(row.working)
+  }
+
+  let preservedCount = 0
+  let addedCount = 0
+  const matchedWorkingsSet = new Set<Working>()
+
+  const rows: TrackRow[] = preview.tracks.map((track, i) => {
+    const source = rawTrackSchema.parse(track)
+    let matchedWorking: Working | undefined
+
+    if (source.id && byVkId.has(source.id)) {
+      matchedWorking = byVkId.get(source.id)
+    }
+    if (!matchedWorking && source.rawText && byRawText.has(source.rawText)) {
+      matchedWorking = byRawText.get(source.rawText)
+    }
+    if (!matchedWorking) {
+      const key = `${source.artist.trim().toLowerCase()}:::${source.title.trim().toLowerCase()}`
+      const queue = byArtistTitle.get(key)
+      if (queue && queue.length > 0) {
+        const matchIdx = queue.findIndex(
+          (w) =>
+            source.duration !== null &&
+            w.spotify &&
+            Math.abs((w.spotify.duration ?? 0) - source.duration) <= 5,
+        )
+        matchedWorking = matchIdx >= 0 ? queue.splice(matchIdx, 1)[0] : queue.shift()
+      }
+    }
+
+    if (matchedWorking) {
+      preservedCount++
+      matchedWorkingsSet.add(matchedWorking)
+      return {
+        id: randomUUID(),
+        position: i + 1,
+        source,
+        working: {
+          ...matchedWorking,
+          artist: matchedWorking.artist || source.artist,
+          title: matchedWorking.title || source.title,
+        },
+      }
+    }
+
+    addedCount++
+    return {
+      id: randomUUID(),
+      position: i + 1,
+      source,
+      working: {
+        artist: source.artist,
+        title: source.title,
+        version: '',
+        excluded: source.availability === 'blocked',
+        note: '',
+        destination: 'unresolved' as const,
+        spotify: null,
+        local: null,
+        candidates: [],
+        searchedQuery: null,
+        localPending: false,
+        reviewDeferred: false,
+      },
+    }
+  })
+
+  const unmatchedWithWork = existing.rows.filter(
+    (r) =>
+      !matchedWorkingsSet.has(r.working) &&
+      (r.working.destination !== 'unresolved' ||
+        r.working.localPending ||
+        Boolean(r.working.note) ||
+        r.working.excluded),
+  )
+
+  for (const orphan of unmatchedWithWork) {
+    preservedCount++
+    rows.push({
+      id: randomUUID(),
+      position: rows.length + 1,
+      source: orphan.source,
+      working: orphan.working,
+    })
+  }
+
+  return { rows, preservedCount, addedCount }
 }
 function duration(value: unknown): number | null {
   if (value === undefined || value === null || value === '') return null

@@ -75,6 +75,36 @@ function IconButton({
 }
 
 const column = createColumnHelper<TrackRow>()
+function SelectAllHeader({
+  rows,
+  selected,
+  onSelect,
+}: {
+  rows: TrackRow[]
+  selected: Set<string>
+  onSelect: (set: Set<string>) => void
+}) {
+  const allSelected = rows.length > 0 && selected.size >= rows.length
+  const someSelected = selected.size > 0 && !allSelected
+  return (
+    <input
+      type="checkbox"
+      aria-label="Выделить все записи выборки"
+      checked={allSelected}
+      ref={(element) => {
+        if (element) element.indeterminate = someSelected
+      }}
+      onChange={(e) => {
+        if (e.target.checked) {
+          onSelect(new Set(rows.map((r) => r.id)))
+        } else {
+          onSelect(new Set())
+        }
+      }}
+    />
+  )
+}
+
 export function TrackTable({
   rows,
   selected,
@@ -96,6 +126,14 @@ export function TrackTable({
 }) {
   const container = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
+  const selectedRef = useRef(selected)
+  selectedRef.current = selected
+  const rowsRef = useRef(rows)
+  rowsRef.current = rows
+  const onSelectRef = useRef(onSelect)
+  onSelectRef.current = onSelect
+  const onReviewRef = useRef(onReview)
+  onReviewRef.current = onReview
 
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() => {
     try {
@@ -122,37 +160,19 @@ export function TrackTable({
         minSize: 38,
         maxSize: 50,
         enableResizing: false,
-        header: () => (
-          <input
-            type="checkbox"
-            aria-label="Выделить все записи выборки"
-            checked={rows.length > 0 && rows.every((r) => selected.has(r.id))}
-            ref={(element) => {
-              if (element)
-                element.indeterminate =
-                  rows.some((row) => selected.has(row.id)) &&
-                  !rows.every((row) => selected.has(row.id))
-            }}
-            onChange={(e) =>
-              onSelect(
-                e.target.checked
-                  ? new Set([...selected, ...rows.map((r) => r.id)])
-                  : new Set([...selected].filter((id) => !rows.some((r) => r.id === id))),
-              )
-            }
-          />
-        ),
+        header: () => null,
         cell: (info) => (
           <input
             type="checkbox"
             aria-label={`Выбрать запись ${info.row.original.position}`}
-            checked={selected.has(info.row.original.id)}
+            checked={selectedRef.current.has(info.row.original.id)}
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => {
-              const next = new Set(selected)
-              if (e.target.checked) next.add(info.row.original.id)
-              else next.delete(info.row.original.id)
-              onSelect(next)
+              const id = info.row.original.id
+              const next = new Set(selectedRef.current)
+              if (e.target.checked) next.add(id)
+              else next.delete(id)
+              onSelectRef.current(next)
             }}
           />
         ),
@@ -247,7 +267,7 @@ export function TrackTable({
           ),
       }),
     ],
-    [rows, selected, onSelect, onReview, matchingRules],
+    [matchingRules],
   )
   const table = useReactTable({
     data: rows,
@@ -312,7 +332,11 @@ export function TrackTable({
                 position: 'relative',
               }}
             >
-              {flexRender(h.column.columnDef.header, h.getContext())}
+              {h.id === 'select' ? (
+                <SelectAllHeader rows={rows} selected={selected} onSelect={onSelect} />
+              ) : (
+                flexRender(h.column.columnDef.header, h.getContext())
+              )}
               {h.column.getCanResize() && (
                 <div
                   onMouseDown={h.getResizeHandler()}

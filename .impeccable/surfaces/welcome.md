@@ -1,4 +1,4 @@
-# Welcome
+# Welcome Surface Specification
 
 Mode: Read, inside the existing desktop Operate shell.
 
@@ -28,9 +28,9 @@ captures and real navigation actions. Preserve existing typography, palette and 
 - FINISH: inspect desktop/compact/dark views, test navigation and retain honest
   manual-action and integration limits.
 
-## 0.1.11: начало и дополнительная инструкция
+## Режим работы: Начало и интерактивная инструкция
 
-Начальный экран теперь использует режим Operate: три этапа, одно следующее
-действие по фактическому состоянию и отдельная кнопка инструкции. Описанная выше
-иллюстрированная Read-поверхность сохранена по запросу, с живыми переходами.
-Существующие шрифты, палитра и плотность таблицы сохранены.
+Начальный экран использует режим Operate (`StartPage.tsx`): три этапа, одно следующее
+действие по фактическому состоянию библиотеки и отдельная кнопка вызова интерактивной инструкции.
+Иллюстрированная Read-поверхность руководства (`Welcome.tsx`) доступна по запросу с бесшовными
+переходами в рабочие разделы приложения.

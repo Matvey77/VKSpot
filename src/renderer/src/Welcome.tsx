@@ -22,7 +22,7 @@ type Props = {
   hasCollection: boolean
   busy: boolean
   theme: 'light' | 'dark'
-  navigate: (view: Destination, mode?: 'review' | 'table') => void
+  navigate: (view: Destination) => void
   importFile: () => void
 }
 type Scene = { key: string; name: string; instructions: string[] }
@@ -34,7 +34,6 @@ const steps: {
   detail: string
   action: string
   destination: Destination
-  mode?: 'review' | 'table'
   scenes: Scene[]
 }[] = [
   {
@@ -83,20 +82,19 @@ const steps: {
   {
     short: 'Правки',
     title: 'Приведи рабочую копию в порядок',
-    location: 'Коллекция → Таблица → выбери запись → панель справа',
+    location: 'Коллекция → выбери запись → панель справа',
     description:
       'Оригинал виден отдельно. Правь название, исполнителя и версию в рабочей копии, а ненужные записи отмечай «исключить».',
     detail:
       'Сохраняй cover, mashup, remix и авторские теги. Неясную запись можно оставить без решения. Изменения можно отменить.',
     action: 'Открыть коллекцию',
     destination: 'library',
-    mode: 'table',
     scenes: [
       {
         key: 'edit-original',
         name: 'Где оригинал',
         instructions: [
-          'Открой «Коллекция», выбери вкладку «Таблица» и нажми нужную строку. Справа появится панель записи.',
+          'Открой «Коллекция», выбери коллекцию и нажми нужную строку. Справа появится панель записи.',
           'Раздел «Оригинал из VK» показывает исходные данные. Поля здесь не редактируются.',
         ],
       },
@@ -247,13 +245,11 @@ export default function Welcome({ hasCollection, busy, theme, navigate, importFi
   const step = steps[stepIndex],
     scene = step.scenes[sceneIndex],
     capture = guideCapture(scene.key, theme)
-  const sceneAction: Partial<
-    Record<string, { destination: Destination; action: string; mode?: 'review' | 'table' }>
-  > = {
-    'spotify-search': { destination: 'library', action: 'Открыть фоновый поиск', mode: 'table' },
-    'spotify-bulk': { destination: 'library', action: 'Открыть разбор совпадений', mode: 'table' },
-    'spotify-match': { destination: 'library', action: 'Открыть сравнение версий', mode: 'review' },
-    'local-link': { destination: 'library', action: 'Открыть коллекцию для файла', mode: 'table' },
+  const sceneAction: Partial<Record<string, { destination: Destination; action: string }>> = {
+    'spotify-search': { destination: 'library', action: 'Открыть фоновый поиск' },
+    'spotify-bulk': { destination: 'library', action: 'Открыть разбор совпадений' },
+    'spotify-match': { destination: 'library', action: 'Открыть сравнение версий' },
+    'local-link': { destination: 'library', action: 'Открыть коллекцию для файла' },
     transfer: { destination: 'jobs', action: 'Открыть задания' },
   }
   const target = sceneAction[scene.key] ?? step
@@ -398,7 +394,7 @@ export default function Welcome({ hasCollection, busy, theme, navigate, importFi
               <div className="guide-location">Где: {step.location}</div>
               <p>{step.description}</p>
             </div>
-            <button onClick={() => navigate(target.destination, target.mode)}>
+            <button onClick={() => navigate(target.destination)}>
               {target.action}
               <ArrowRight size={16} aria-hidden="true" />
             </button>

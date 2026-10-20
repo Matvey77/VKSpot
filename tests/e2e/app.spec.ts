@@ -1,3 +1,4 @@
+import { openLibrary } from './navigation'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises'
 import { join, resolve, dirname, basename } from 'node:path'
@@ -29,8 +30,8 @@ test('archive, corrections, repeats, exclusion, undo, restart and settings', asy
   })
   try {
     let page = await app.firstWindow()
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Твоя музыка, целиком' })).toBeVisible()
+    await openLibrary(page)
+    await expect(page.getByRole('heading', { name: 'Коллекции' })).toBeVisible()
     const preview = {
       name: 'Проверочная коллекция',
       origin: 'Test fixture',
@@ -70,15 +71,15 @@ test('archive, corrections, repeats, exclusion, undo, restart and settings', asy
       preview,
     )
     expect(imported.ok).toBe(true)
+    await openLibrary(page)
     await expect(page.getByRole('heading', { name: 'Проверочная коллекция' })).toBeVisible()
-    await page.getByRole('tab', { name: 'Таблица', exact: true }).click()
     await page.getByRole('row', { name: 'Запись 1: Песня (Remix)', exact: true }).click()
     await page.getByLabel('Название', { exact: true }).fill('Исправленная песня')
     await page.getByRole('row', { name: 'Запись 2: Песня (Remix)', exact: true }).click()
     await page.getByRole('row', { name: 'Запись 1: Песня (Remix)', exact: true }).click()
     await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Исправленная песня')
     await page.getByRole('button', { name: 'Настройки', exact: true }).click()
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+    await openLibrary(page)
     await expect(page.getByLabel('Название', { exact: true })).toHaveValue('Исправленная песня')
     await page.getByRole('button', { name: 'Сохранить правки' }).click()
     await expect(
@@ -99,9 +100,8 @@ test('archive, corrections, repeats, exclusion, undo, restart and settings', asy
       env,
     })
     page = await app.firstWindow()
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+    await openLibrary(page)
     await expect(page.getByRole('heading', { name: 'Проверочная коллекция' })).toBeVisible()
-    await page.getByRole('tab', { name: 'Таблица', exact: true }).click()
     await expect(
       page.getByRole('row', { name: 'Запись 1: Исправленная песня', exact: true }),
     ).toBeVisible()
@@ -151,14 +151,13 @@ test('native file import and export, local audio checksum and copying', async ()
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
     }, input)
     const page = await app.firstWindow()
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
-    await page.getByRole('button', { name: 'Выбрать файл', exact: true }).click()
+    await openLibrary(page)
+    await page.getByRole('button', { name: 'Импорт списка', exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await page
       .getByRole('checkbox', { name: 'Начать поиск после сохранения', exact: true })
       .uncheck()
     await page.getByRole('button', { name: 'Сохранить 2 записей' }).click()
-    await page.getByRole('tab', { name: 'Таблица', exact: true }).click()
     await expect(page.getByRole('row', { name: 'Запись 1: Silence', exact: true })).toBeVisible()
     await app.evaluate(({ dialog }, path) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: path })
@@ -254,7 +253,7 @@ test('9000 occurrence collection stays complete and renders bounded rows', async
   })
   try {
     const page = await app.firstWindow()
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+    await openLibrary(page)
     await page.evaluate(() =>
       window.vkspot.importCollection({
         name: 'Демонстрационная коллекция · 9000',
@@ -275,10 +274,10 @@ test('9000 occurrence collection stays complete and renders bounded rows', async
         })),
       }),
     )
+    await openLibrary(page)
     await expect(
       page.getByRole('heading', { name: 'Демонстрационная коллекция · 9000' }),
     ).toBeVisible()
-    await page.getByRole('tab', { name: 'Таблица', exact: true }).click()
     expect(await page.getByRole('row').count()).toBeLessThan(80)
     const state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)
@@ -330,7 +329,7 @@ test('exclude checkbox responds while the database is pending and rolls back a r
         tracks: [{ artist: 'Artist', title: 'Song' }],
       } as never),
     )
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+    await openLibrary(page)
     await page.getByRole('row', { name: 'Запись 1: Song', exact: true }).click()
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('vkspot:patchRows')

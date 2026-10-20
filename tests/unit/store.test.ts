@@ -93,4 +93,67 @@ describe('transactional collection storage', () => {
       store.close()
     }
   })
+  it('supports reordering, renaming, deleting, and repairing collections', () => {
+    const store = new Store(':memory:')
+    try {
+      const id1 = store.import(parseImport('Queen - Bohemian Rhapsody', '.txt', 'Collection 1'))
+      const id2 = store.import(parseImport('Daft Punk - One More Time', '.txt', 'Collection 2'))
+      const id3 = store.import(parseImport('Nirvana - In Bloom', '.txt', 'Collection 3'))
+
+      let collections = store.all()
+      expect(collections.map((c) => c.id)).toEqual([id3, id2, id1])
+
+      // Reorder collections: make Collection 2 primary (top)
+      store.reorderCollections([id2, id3, id1])
+      collections = store.all()
+      expect(collections.map((c) => c.id)).toEqual([id2, id3, id1])
+
+      // Rename collection
+      store.renameCollection(id2, 'Electro Classics')
+      expect(store.get(id2).name).toBe('Electro Classics')
+
+      // Make a decision on Collection 1
+      const queenUri = 'spotify:track:' + '1'.repeat(22)
+      const row1 = store.get(id1).rows[0]
+      store.patch(id1, [row1.id], {
+        spotify: {
+          uri: queenUri,
+          title: 'Bohemian Rhapsody',
+          artists: ['Queen'],
+          album: 'A Night at the Opera',
+          duration: 354,
+          url: '',
+        },
+        destination: 'spotify',
+        note: 'Original vinyl master',
+      })
+
+      // Repair Collection 1 with a new list containing Queen + a new track
+      const repairPreview = parseImport(
+        'Queen - Bohemian Rhapsody\nDavid Bowie - Heroes',
+        '.txt',
+        'Repaired List',
+      )
+      const repairResult = store.repairCollection(id1, repairPreview)
+      expect(repairResult.preservedCount).toBe(1)
+      expect(repairResult.addedCount).toBe(1)
+      expect(repairResult.totalCount).toBe(2)
+
+      const repaired = store.get(id1)
+      expect(repaired.rows).toHaveLength(2)
+      expect(repaired.rows[0].working.destination).toBe('spotify')
+      expect(repaired.rows[0].working.spotify?.uri).toBe(queenUri)
+      expect(repaired.rows[0].working.note).toBe('Original vinyl master')
+      expect(repaired.rows[1].working.destination).toBe('unresolved')
+      expect(repaired.rows[1].source.title).toBe('Heroes')
+
+      // Delete collection
+      store.deleteCollection(id3)
+      collections = store.all()
+      expect(collections.map((c) => c.id)).toEqual([id2, id1])
+      expect(() => store.get(id3)).toThrow()
+    } finally {
+      store.close()
+    }
+  })
 })

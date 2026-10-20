@@ -1,6 +1,11 @@
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
-import { createCollection, validateCollection } from '../core/collection'
+import {
+  createCollection,
+  validateCollection,
+  mergeRepairedCollection,
+  sourceHash,
+} from '../core/collection'
 import { metadataMatch, reviewGroup } from '../core/matching'
 import {
   workingSchema,
@@ -52,9 +57,114 @@ export class Store {
     }
   }
   all(): Collection[] {
-    return (
-      this.db.prepare('SELECT id FROM collections ORDER BY rowid DESC').all() as { id: string }[]
-    ).map((r) => this.get(r.id))
+    const records = this.db.prepare('SELECT id FROM collections ORDER BY rowid DESC').all() as {
+      id: string
+    }[]
+    const order = this.value<string[]>('collection_order', [])
+    const orderMap = new Map<string, number>()
+    order.forEach((id, index) => orderMap.set(id, index))
+
+    const sorted = [...records].sort((a, b) => {
+      const posA = orderMap.has(a.id) ? orderMap.get(a.id)! : 999999
+      const posB = orderMap.has(b.id) ? orderMap.get(b.id)! : 999999
+      if (posA !== posB) return posA - posB
+      return 0
+    })
+    return sorted.map((r) => this.get(r.id))
+  }
+  reorderCollections(ids: string[]): void {
+    this.setValue('collection_order', ids)
+  }
+  renameCollection(id: string, name: string): void {
+    const trimmed = name.trim()
+    if (!trimmed) throw new Error('Название коллекции не может быть пустым.')
+    const data = this.db.prepare('SELECT metadata FROM collections WHERE id=?').get(id) as
+      { metadata: string } | undefined
+    if (!data) throw new Error('Коллекция не найдена.')
+    const meta = JSON.parse(data.metadata)
+    meta.name = trimmed
+    this.db.prepare('UPDATE collections SET metadata=? WHERE id=?').run(JSON.stringify(meta), id)
+    this.collectionCache.delete(id)
+  }
+  deleteCollection(id: string): void {
+    this.transaction(() => {
+      this.db.prepare('DELETE FROM history WHERE collection_id=?').run(id)
+      this.db.prepare('DELETE FROM entries WHERE collection_id=?').run(id)
+      this.db.prepare('DELETE FROM collections WHERE id=?').run(id)
+      const order = this.value<string[]>('collection_order', [])
+      if (order.includes(id)) {
+        this.setValue(
+          'collection_order',
+          order.filter((x) => x !== id),
+        )
+      }
+    })
+    this.collectionCache.delete(id)
+  }
+  repairCollection(
+    collectionId: string,
+    preview: ImportPreview,
+  ): { preservedCount: number; addedCount: number; totalCount: number } {
+    return this.transaction(() => {
+      const existing = this.get(collectionId)
+      const {
+        rows: mergedRows,
+        preservedCount,
+        addedCount,
+      } = mergeRepairedCollection(existing, preview)
+
+      this.db.prepare('DELETE FROM entries WHERE collection_id=?').run(collectionId)
+
+      const insert = this.db.prepare(
+        'INSERT INTO entries(id,collection_id,position,source,working) VALUES(?,?,?,?,?)',
+      )
+      for (const row of mergedRows) {
+        insert.run(
+          row.id,
+          collectionId,
+          row.position,
+          JSON.stringify(row.source),
+          JSON.stringify(row.working),
+        )
+      }
+
+      const existingData = this.db
+        .prepare('SELECT metadata FROM collections WHERE id=?')
+        .get(collectionId) as { metadata: string } | undefined
+      if (!existingData) throw new Error('Коллекция не найдена.')
+
+      const existingMeta = JSON.parse(existingData.metadata)
+      const updatedMeta = {
+        ...existingMeta,
+        completeness: preview.completeness,
+        sourceHash: sourceHash(mergedRows),
+        importedAt: new Date().toISOString(),
+      }
+      this.db
+        .prepare('UPDATE collections SET metadata=? WHERE id=?')
+        .run(JSON.stringify(updatedMeta), collectionId)
+
+      this.db.prepare('INSERT INTO history(collection_id,changes,at) VALUES(?,?,?)').run(
+        collectionId,
+        JSON.stringify([
+          {
+            kind: 'repair',
+            total: mergedRows.length,
+            preserved: preservedCount,
+            added: addedCount,
+          },
+        ]),
+        new Date().toISOString(),
+      )
+
+      this.collectionCache.delete(collectionId)
+
+      return {
+        preservedCount,
+        addedCount,
+        totalCount: mergedRows.length,
+      }
+    })
   }
   get(id: string): Collection {
     const cached = this.collectionCache.get(id)
@@ -98,6 +208,11 @@ export class Store {
           JSON.stringify(row.source),
           JSON.stringify(row.working),
         )
+      const currentOrder = this.value<string[]>('collection_order', [])
+      this.setValue('collection_order', [
+        collection.id,
+        ...currentOrder.filter((x) => x !== collection.id),
+      ])
     })
     this.collectionCache.delete(collection.id)
     return collection.id

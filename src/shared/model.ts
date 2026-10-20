@@ -2,9 +2,14 @@ import { z } from 'zod'
 
 export const rawTrackSchema = z.object({
   id: z.string().default(''),
-  artist: z.string(),
-  title: z.string(),
-  duration: z.number().nonnegative().nullable().default(null),
+  artist: z.string().default(''),
+  title: z.string().default(''),
+  duration: z
+    .preprocess(
+      (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null),
+      z.number().nonnegative().nullable(),
+    )
+    .default(null),
   availability: z.enum(['available', 'blocked', 'unknown']).default('unknown'),
   url: z.string().default(''),
   rawText: z.string().default(''),
@@ -232,6 +237,10 @@ export type ImportPreview = {
   tracks: RawTrack[]
   completeness: Completeness
   restored?: Collection
+  range?: {
+    from: number
+    to: number
+  }
 }
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 export type VKExportProgress = {
@@ -243,6 +252,13 @@ export type Bridge = {
   state(): Promise<Result<AppState>>
   previewImport(): Promise<Result<ImportPreview | null>>
   importCollection(preview: ImportPreview): Promise<Result<string>>
+  renameCollection(id: string, name: string): Promise<Result<void>>
+  deleteCollection(id: string): Promise<Result<void>>
+  reorderCollections(ids: string[]): Promise<Result<void>>
+  repairCollection(
+    id: string,
+    preview: ImportPreview,
+  ): Promise<Result<{ preservedCount: number; addedCount: number; totalCount: number }>>
   exportCollection(
     id: string,
     format: 'archive' | 'raw-json' | 'csv' | 'm3u8' | 'plan',
@@ -268,7 +284,12 @@ export type Bridge = {
   reconcileMixed(id: string): Promise<Result<void>>
   recoverPlaylist(id: string, playlistId: string): Promise<Result<void>>
   openVK(): Promise<Result<void>>
-  extractVK(options?: { expectedCount: number | null }): Promise<Result<ImportPreview>>
+  extractVK(options?: {
+    expectedCount?: number | null
+    rangeFrom?: number | null
+    rangeTo?: number | null
+    limit?: number | null
+  }): Promise<Result<ImportPreview>>
   cancelVKExtraction(): Promise<Result<void>>
   onVKProgress(callback: (progress: VKExportProgress | null) => void): () => void
   clearVK(): Promise<Result<void>>

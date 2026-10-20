@@ -4,6 +4,7 @@ import {
   createCollection,
   exportText,
   makePlan,
+  mergeRepairedCollection,
   parseImport,
   reconcilePrefix,
   sourceHash,
@@ -99,5 +100,192 @@ describe('reviewed transfer plan', () => {
         expect(reconcilePrefix(items, prefix)).toBe(prefix.length)
       }),
     )
+  })
+})
+
+describe('mergeRepairedCollection', () => {
+  it('preserves existing decisions, spotify matches, and notes when updating collection', () => {
+    const existing = createCollection(
+      parseImport(
+        JSON.stringify([
+          { id: 'vk-1', artist: 'Queen', title: 'Bohemian Rhapsody' },
+          { id: 'vk-2', artist: 'Daft Punk', title: 'One More Time' },
+          { id: 'vk-3', artist: 'Nirvana', title: 'Smells Like Teen Spirit' },
+        ]),
+        '.json',
+        'VK',
+      ),
+    )
+
+    // User made decisions
+    existing.rows[0].working = {
+      ...existing.rows[0].working,
+      destination: 'spotify',
+      spotify: {
+        uri: 'spotify:track:123',
+        title: 'Bohemian Rhapsody',
+        artists: ['Queen'],
+        album: 'A Night at the Opera',
+        duration: 354,
+        url: '',
+      },
+      note: 'Verified original release',
+    }
+    existing.rows[1].working = {
+      ...existing.rows[1].working,
+      destination: 'local',
+      local: {
+        path: '/music/one_more_time.flac',
+        sha256: 'abc123',
+        artist: 'Daft Punk',
+        title: 'One More Time',
+        duration: 320,
+        codec: 'flac',
+        bitrate: 1000,
+        size: 30000000,
+      },
+    }
+    existing.rows[2].working = {
+      ...existing.rows[2].working,
+      excluded: true,
+    }
+
+    // New import with 4 tracks (including a new track in between, vk-4)
+    const newPreview = parseImport(
+      JSON.stringify([
+        { id: 'vk-1', artist: 'Queen', title: 'Bohemian Rhapsody' },
+        { id: 'vk-4', artist: 'The Beatles', title: 'Hey Jude' },
+        { id: 'vk-2', artist: 'Daft Punk', title: 'One More Time' },
+        { id: 'vk-3', artist: 'Nirvana', title: 'Smells Like Teen Spirit' },
+      ]),
+      '.json',
+      'VK',
+    )
+
+    const result = mergeRepairedCollection(existing, newPreview)
+    expect(result.preservedCount).toBe(3)
+    expect(result.addedCount).toBe(1)
+    expect(result.rows).toHaveLength(4)
+
+    // Verify Queen preserved
+    expect(result.rows[0].source.id).toBe('vk-1')
+    expect(result.rows[0].working.destination).toBe('spotify')
+    expect(result.rows[0].working.note).toBe('Verified original release')
+
+    // Verify Beatles added as unresolved
+    expect(result.rows[1].source.id).toBe('vk-4')
+    expect(result.rows[1].working.destination).toBe('unresolved')
+
+    // Verify Daft Punk preserved local
+    expect(result.rows[2].source.id).toBe('vk-2')
+    expect(result.rows[2].working.destination).toBe('local')
+
+    // Verify Nirvana preserved excluded
+    expect(result.rows[3].source.id).toBe('vk-3')
+    expect(result.rows[3].working.excluded).toBe(true)
+  })
+
+  it('matches by artist and title when VK ID is absent or changed', () => {
+    const existing = createCollection(
+      parseImport('Radiohead - Creep\nPink Floyd - Time', '.txt', 'File'),
+    )
+    existing.rows[0].working = {
+      ...existing.rows[0].working,
+      destination: 'spotify',
+      spotify: {
+        uri: 'spotify:track:creep',
+        title: 'Creep',
+        artists: ['Radiohead'],
+        album: 'Pablo Honey',
+        duration: 238,
+        url: '',
+      },
+    }
+
+    const newPreview = parseImport(
+      'Radiohead - Creep\nPink Floyd - Time\nOasis - Wonderwall',
+      '.txt',
+      'File',
+    )
+    const result = mergeRepairedCollection(existing, newPreview)
+    expect(result.preservedCount).toBe(2)
+    expect(result.addedCount).toBe(1)
+    expect(result.rows[0].working.destination).toBe('spotify')
+    expect(result.rows[0].working.spotify?.uri).toBe('spotify:track:creep')
+  })
+
+  it('appends resolved tracks that were missing in the new export to avoid data loss', () => {
+    const existing = createCollection(
+      parseImport('Artist A - Track 1\nArtist B - Track 2', '.txt', 'File'),
+    )
+    existing.rows[1].working = {
+      ...existing.rows[1].working,
+      destination: 'spotify',
+      spotify: {
+        uri: 'spotify:track:b',
+        title: 'Track 2',
+        artists: ['Artist B'],
+        album: '',
+        duration: 180,
+        url: '',
+      },
+    }
+
+    // New export completely missed Track 2, only has Track 1
+    const newPreview = parseImport('Artist A - Track 1', '.txt', 'File')
+    const result = mergeRepairedCollection(existing, newPreview)
+
+    expect(result.rows).toHaveLength(2)
+    expect(result.rows[0].working.title).toBe('Track 1')
+    expect(result.rows[1].working.title).toBe('Track 2')
+    expect(result.rows[1].working.destination).toBe('spotify')
+  })
+
+  it('repairs a partial range and preserves all remaining tracks in place', () => {
+    const existing = createCollection(
+      parseImport(
+        'Artist 1 - Track 1\nArtist 2 - Track 2\nArtist 3 - Track 3\nArtist 4 - Track 4\nArtist 5 - Track 5',
+        '.txt',
+        'File',
+      ),
+    )
+    // Mark track 1 with spotify decision, and track 4 with note
+    existing.rows[0].working = {
+      ...existing.rows[0].working,
+      destination: 'spotify',
+      spotify: {
+        uri: 'spotify:track:1',
+        title: 'Track 1',
+        artists: ['Artist 1'],
+        album: 'Album',
+        duration: 200,
+        url: '',
+      },
+    }
+    existing.rows[3].working = {
+      ...existing.rows[3].working,
+      note: 'Keep intact',
+    }
+
+    // Repair only range from 1 to 2 with corrected titles
+    const partialPreview = parseImport(
+      'Artist 1 - Track 1 (Fixed)\nArtist 2 - Track 2 (Fixed)',
+      '.txt',
+      'File',
+    )
+    partialPreview.range = { from: 1, to: 2 }
+
+    const result = mergeRepairedCollection(existing, partialPreview)
+    expect(result.rows).toHaveLength(5)
+    // Verify positions are consecutive
+    expect(result.rows.map((r) => r.position)).toEqual([1, 2, 3, 4, 5])
+    // Verify range 1..2 was updated
+    expect(result.rows[0].source.title).toBe('Track 1 (Fixed)')
+    expect(result.rows[1].source.title).toBe('Track 2 (Fixed)')
+    // Verify tracks 3, 4, 5 were kept intact
+    expect(result.rows[2].source.title).toBe('Track 3')
+    expect(result.rows[3].source.title).toBe('Track 4')
+    expect(result.rows[3].working.note).toBe('Keep intact')
+    expect(result.rows[4].source.title).toBe('Track 5')
   })
 })

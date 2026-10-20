@@ -2,16 +2,33 @@ import { z } from 'zod'
 import { rawTrackSchema, type ImportPreview } from '../shared/model'
 
 export const vkExportOptionsSchema = z.object({
-  expectedCount: z.number().int().positive().max(1_000_000).nullable().default(null),
+  expectedCount: z.number().int().nonnegative().max(1_000_000).nullish().default(null),
+  rangeFrom: z.number().int().positive().max(1_000_000).nullish().default(null),
+  rangeTo: z.number().int().positive().max(1_000_000).nullish().default(null),
+  limit: z.number().int().positive().max(1_000_000).nullish().default(null),
 })
+export type VKExportOptions = z.infer<typeof vkExportOptionsSchema>
+
 export const vkProgressSchema = z.object({
-  collected: z.number().int().nonnegative(),
-  expected: z.number().int().positive().nullable(),
-  message: z.string().max(500),
+  collected: z.number().int().nonnegative().default(0),
+  expected: z.number().int().nonnegative().nullish().default(null),
+  message: z.string().max(1000).default(''),
 })
 const resultSchema = z.object({
   tracks: z.array(rawTrackSchema).min(1),
-  expectedCount: z.number().int().positive().nullable(),
+  expectedCount: z.preprocess(
+    (v) => (v === undefined ? null : v),
+    z.number().int().nonnegative().nullable(),
+  ),
+  range: z.preprocess(
+    (v) => (v === null ? undefined : v),
+    z
+      .object({
+        from: z.number().int().positive(),
+        to: z.number().int().positive(),
+      })
+      .optional(),
+  ),
   extraction: z.object({
     reason: z.enum(['end', 'cancelled', 'gap', 'page-changed', 'timeout', 'limit']),
     missingMetadata: z.number().int().nonnegative(),
@@ -19,10 +36,24 @@ const resultSchema = z.object({
   }),
 })
 
-export function vkImportPreview(value: unknown, requestedCount: number | null): ImportPreview {
+export function vkImportPreview(
+  value: unknown,
+  requested?: VKExportOptions | number | null,
+): ImportPreview {
   const data = resultSchema.parse(value)
   if (data.tracks.every((track) => !track.artist.trim() && !track.title.trim()))
     throw new Error('VK вернул строки без названий и исполнителей. Пустая выгрузка не сохранена.')
+  const requestedCount =
+    typeof requested === 'number'
+      ? requested
+      : (requested?.expectedCount ??
+        (requested?.rangeTo && requested?.rangeFrom
+          ? requested.rangeTo - requested.rangeFrom + 1
+          : (requested?.limit ?? null)))
+  const isPartialRange = Boolean(
+    (requested && typeof requested === 'object' && (requested.rangeTo || requested.limit)) ||
+    data.range,
+  )
   const expected = requestedCount ?? data.expectedCount
   const missing = data.tracks.filter((track) => !track.artist.trim() || !track.title.trim()).length
   const countMatches = expected !== null && data.tracks.length === expected
@@ -31,7 +62,7 @@ export function vkImportPreview(value: unknown, requestedCount: number | null): 
   const verified =
     countMatches &&
     !conflictingCount &&
-    data.extraction.reason === 'end' &&
+    (data.extraction.reason === 'end' || (isPartialRange && data.extraction.reason === 'limit')) &&
     data.extraction.reachedEnd &&
     missing === 0
   const reasons = {
@@ -40,7 +71,9 @@ export function vkImportPreview(value: unknown, requestedCount: number | null): 
     gap: 'Не удалось подтвердить непрерывный порядок. Возможны пропущенные записи.',
     'page-changed': 'Во время сбора изменилась страница VK.',
     timeout: 'Достигнут предел времени сбора.',
-    limit: 'Достигнут предел проходов сбора.',
+    limit: isPartialRange
+      ? 'Достигнут заданный лимит выгрузки.'
+      : 'Достигнут предел проходов сбора.',
   }
   const details = [reasons[data.extraction.reason]]
   if (expected !== null)
@@ -55,15 +88,18 @@ export function vkImportPreview(value: unknown, requestedCount: number | null): 
   if (missing) details.push(`У ${missing} записей не прочитано название или исполнитель.`)
   details.push(
     verified
-      ? 'Количество совпало. Сверьте первые и последние записи с VK.'
+      ? isPartialRange
+        ? 'Выбранный диапазон успешно собран.'
+        : 'Количество совпало. Сверьте первые и последние записи с VK.'
       : 'Рекомендуем сверить количество с «Моя музыка» в VK.',
   )
   return {
     name: 'Моя музыка VK',
     origin: 'VK DOM',
     tracks: data.tracks,
+    range: data.range ?? undefined,
     completeness: {
-      expected,
+      expected: expected ?? null,
       status: verified ? 'verified-count' : 'unverified',
       message: details.join(' '),
     },

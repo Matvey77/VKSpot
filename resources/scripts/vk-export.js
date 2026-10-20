@@ -9,23 +9,61 @@
     message: 'Возвращаемся к началу списка…',
   }
   globalThis.__VKSPOT_EXPORT__ = state
+  const config = globalThis.__VKSPOT_EXPORT_CONFIG__ || {}
+  const rangeFrom =
+    Number.isInteger(config.rangeFrom) && config.rangeFrom > 0 ? config.rangeFrom : 1
+  const rangeTo =
+    Number.isInteger(config.rangeTo) && config.rangeTo >= rangeFrom ? config.rangeTo : null
+  const limit = Number.isInteger(config.limit) && config.limit > 0 ? config.limit : null
+  const maxCollectionCount = limit ? limit : rangeTo ? rangeTo : null
+
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   const rowSelector =
     '.audio_row[data-full-id], .audio_row[data-audio], .audio_item[data-audio], [data-audio-id], [data-testid="MusicTrackRow"]'
   const excluded =
-    '.audioPlaylistSnippet, [data-testid*="PlaylistSnippet"], [data-testid*="Recommendation"], aside'
+    '.audioPlaylistSnippet, [data-testid*="PlaylistSnippet"], [data-testid*="Recommendation"], aside, [data-testid*="Recent"], [data-testid*="History"], [data-testid*="Friends"], [data-testid*="Curator"]'
+
+  let cachedShuffleBtn = null
+  let shuffleChecked = false
+
+  function getShuffleButton() {
+    return [...document.querySelectorAll('button, a, [role="button"]')].find((el) => {
+      const text = el.textContent || ''
+      return /перемешать/i.test(text) && !el.closest(excluded)
+    })
+  }
+
+  function getShuffleBtn() {
+    if (!shuffleChecked || (cachedShuffleBtn && !cachedShuffleBtn.isConnected)) {
+      cachedShuffleBtn = getShuffleButton()
+      shuffleChecked = true
+    }
+    return cachedShuffleBtn
+  }
+
+  function isExcludedRow(node) {
+    if (node.closest(excluded)) return true
+    const shuffleBtn = getShuffleBtn()
+    if (shuffleBtn && shuffleBtn.isConnected) {
+      if (Boolean(node.compareDocumentPosition(shuffleBtn) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+        return true
+      }
+    }
+    return false
+  }
+
   const originalURL = location.href
   let scope = document
   let scroller
   const saved = []
   const rowCache = new WeakMap()
-  let expected = null
+  let expected = maxCollectionCount || null
   let reason = 'end'
 
   function rows() {
     const nodes = new Set()
     for (const candidate of scope.querySelectorAll(rowSelector)) {
-      if (candidate.closest(excluded)) continue
+      if (isExcludedRow(candidate)) continue
       const node =
         candidate.closest('.audio_row, .audio_item, [data-testid="MusicTrackRow"]') || candidate
       if (node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden')
@@ -138,13 +176,16 @@
       object.is_restricted === true ||
       object.is_deleted === true
     const track = {
-      id,
-      artist,
-      title: title.trim(),
-      duration,
+      id: String(id || ''),
+      artist: String(artist || ''),
+      title: String(title || '').trim(),
+      duration:
+        typeof duration === 'number' && Number.isFinite(duration) && duration >= 0
+          ? duration
+          : null,
       availability: blocked ? 'blocked' : 'unknown',
       url: '',
-      rawText,
+      rawText: String(rawText || ''),
     }
     rowCache.set(node, { stamp, track })
     return locate(node, { ...track })
@@ -191,7 +232,7 @@
       const anchored =
         current[0].position !== null && saved[start].position !== null
           ? current[0].position === saved[start].position
-          : Math.abs(current[0].top - saved[start].top) <= 2
+          : Math.abs(current[0].top - saved[start].top) <= 8
       candidates.push({ start, anchored })
     }
     const anchoredCandidates = candidates.filter((item) => item.anchored)
@@ -212,23 +253,38 @@
     return true
   }
   try {
-    for (const selector of [
-      '[data-testid="AudioCatalog_SectionMyTracks"]',
-      '#au_search_items',
-      '.audio_page__audio_rows_list',
-      '[data-testid="MusicTracksList"]',
-      '[data-testid="MusicTrackList"]',
-    ]) {
-      const candidates = [...document.querySelectorAll(selector)].filter((node) =>
-        node.querySelector(rowSelector),
+    for (let attempt = 0; attempt < 30 && !state.cancelled; attempt++) {
+      const shuffle = getShuffleBtn()
+      const myTracks = document.querySelector(
+        '[data-testid="AudioCatalog_SectionMyTracks"], #au_search_items, .audio_page__audio_rows_list',
       )
-      if (candidates.length) {
-        scope = candidates.sort(
-          (a, b) => b.querySelectorAll(rowSelector).length - a.querySelectorAll(rowSelector).length,
-        )[0]
-        break
+      const anyRow = document.querySelector(rowSelector)
+      if (shuffle || myTracks || anyRow) break
+      await pause(400)
+    }
+
+    const shuffleBtn = getShuffleBtn()
+    if (shuffleBtn) {
+      shuffleBtn.scrollIntoView({ behavior: 'instant', block: 'start' })
+      await pause(500)
+    }
+
+    if (scope === document) {
+      for (const selector of [
+        '[data-testid="AudioCatalog_SectionMyTracks"]',
+        '#au_search_items',
+        '.audio_page__audio_rows_list',
+        '[data-testid="MusicTracksList"]',
+        '[data-testid="MusicTrackList"]',
+      ]) {
+        const el = document.querySelector(selector)
+        if (el && el.querySelector(rowSelector)) {
+          scope = el
+          break
+        }
       }
     }
+
     let first = rows()[0]
     for (let attempt = 0; !first && attempt < 30 && !state.cancelled; attempt++) {
       await pause(400)
@@ -238,6 +294,7 @@
       throw new Error(
         'Не найдены строки музыки. Откройте «Моя музыка» и дождитесь загрузки списка. Если список виден, разметка VK не поддерживается этой версией.',
       )
+
     let node = first.parentElement
     while (node && node !== document.body && node !== document.documentElement) {
       if (
@@ -252,10 +309,18 @@
     }
     scroller ||= document.scrollingElement
     if (!scroller) throw new Error('Не найдена область прокрутки списка VK.')
-    scroller.scrollTo({ top: 0, behavior: 'instant' })
+
+    if (shuffleBtn) {
+      shuffleBtn.scrollIntoView({ behavior: 'instant', block: 'start' })
+    } else if (scope && scope !== document) {
+      scope.scrollIntoView({ behavior: 'instant', block: 'start' })
+    } else {
+      scroller.scrollTo({ top: 0, behavior: 'instant' })
+    }
     await pause(800)
+
     let bottomSince = 0
-    let lastTop = 0
+    let lastTop = scroller.scrollTop
     let retries = 0
     let lastProgressAt = Date.now()
     for (let pass = 0; pass < 12000; pass++) {
@@ -291,6 +356,10 @@
         retries = 0
         lastProgressAt = Date.now()
       }
+      if (maxCollectionCount && saved.length >= maxCollectionCount) {
+        reason = 'limit'
+        break
+      }
       state.collected = saved.length
       state.expected = expected
       const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4
@@ -309,7 +378,16 @@
       await pause(atBottom ? 750 : 400)
       if (pass === 11999) reason = 'limit'
     }
-    const tracks = saved.map((item) => item.track)
+    let tracks = saved.map((item) => item.track)
+    if (rangeFrom > 1 || rangeTo || limit) {
+      const startIdx = Math.max(0, rangeFrom - 1)
+      const endIdx = limit
+        ? startIdx + limit
+        : rangeTo
+          ? Math.min(tracks.length, rangeTo)
+          : tracks.length
+      tracks = tracks.slice(startIdx, endIdx)
+    }
     if (!tracks.length) throw new Error('Сбор остановлен до чтения записей. Повторите выгрузку.')
     if (tracks.every((track) => !track.artist && !track.title))
       throw new Error(
@@ -319,14 +397,36 @@
     const positioned = saved.filter((item) => item.position !== null)
     if (
       positioned.length &&
+      !maxCollectionCount &&
       (positioned.length !== saved.length ||
         positioned.some((item, index) => item.position !== index + 1))
     )
       reason = 'gap'
-    return {
+    const exportResult = {
       tracks,
-      expectedCount: expected,
-      extraction: { reason, missingMetadata, reachedEnd: reason === 'end' },
+      expectedCount: maxCollectionCount ?? expected,
+      range:
+        rangeFrom > 1 || rangeTo || limit
+          ? {
+              from: rangeFrom,
+              to: rangeTo ?? (limit ? rangeFrom + limit - 1 : tracks.length),
+            }
+          : undefined,
+      extraction: {
+        reason,
+        missingMetadata,
+        reachedEnd: reason === 'end' || (reason === 'limit' && Boolean(maxCollectionCount)),
+      },
+    }
+    return {
+      ok: true,
+      result: exportResult,
+      ...exportResult,
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
     }
   } finally {
     state.running = false

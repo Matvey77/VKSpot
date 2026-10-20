@@ -1,3 +1,4 @@
+import { openLibrary, confirmMatches } from './navigation'
 import {
   test,
   expect,
@@ -52,8 +53,7 @@ async function mockSearch(app: ElectronApplication, autoResumeSearch = false): P
 }
 
 async function openReview(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
-  await page.getByRole('tab', { name: 'Разбор коллекции', exact: true }).click()
+  await openLibrary(page)
 }
 
 async function cleanup(directory: string): Promise<void> {
@@ -119,11 +119,9 @@ test('review confirms repeated metadata matches, advances through versions and p
       }
       return result.value
     })
+
     await openReview(page)
-    await expect(
-      page.getByRole('button', { name: 'Подтвердить совпадения (2)', exact: true }),
-    ).toBeEnabled()
-    await page.getByRole('button', { name: 'Подтвердить совпадения (2)', exact: true }).click()
+    await confirmMatches(page)
     let state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)
     expect(
@@ -132,22 +130,28 @@ test('review confirms repeated metadata matches, advances through versions and p
         .every((row) => row.working.destination === 'spotify'),
     ).toBe(true)
     await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
-    await page.getByRole('tab', { name: /Совпадают данные 2/ }).click()
-    await page.getByRole('button', { name: 'Подтвердить совпадения (2)', exact: true }).click()
-    await expect(page.locator('.review-source h3')).toHaveText('Song [DJ edit]')
+    await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
+    await confirmMatches(page)
+    await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
+    await page.getByRole('row', { name: 'Запись 3: Song [DJ edit]', exact: true }).click()
+    await expect(page.locator('.inspector')).toContainText('Song [DJ edit]')
     await page.screenshot({ path: '.local/evidence/e2e/review-versions-desktop.png' })
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760))
-    await page.getByRole('button', { name: 'Нужен локальный файл', exact: true }).click()
-    await expect(page.locator('.review-source h3')).toHaveText('Later Song (Remix)')
-    await expect(page.locator('.review-source h3')).toBeInViewport()
+    await page.getByRole('button', { name: 'Закрыть запись', exact: true }).click()
+    await page.getByLabel('Выбрать запись 3', { exact: true }).check()
+    await page.getByLabel('Действие с выбранными').selectOption('local')
     await expect(
-      page.getByRole('button', { name: 'Выбрать и дальше', exact: true }),
-    ).toBeInViewport()
-    await page.getByRole('button', { name: 'Выбрать и дальше', exact: true }).click()
-    await page.getByRole('tab', { name: /Без результатов 1/ }).click()
-    await page.getByRole('button', { name: 'Нужен файл для всех (1)', exact: true }).click()
-    await page.getByRole('tab', { name: /Нужен файл 2/ }).click()
-    await expect(page.getByText('Файл ещё не привязан.', { exact: false })).toBeVisible()
+      page.getByRole('row', { name: 'Запись 3: Song [DJ edit]', exact: true }),
+    ).toContainText('Нужен файл')
+    await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
+    await page.getByRole('row', { name: 'Запись 5: Later Song (Remix)', exact: true }).click()
+    await page.locator('.candidate').getByRole('button', { name: 'Выбрать', exact: true }).click()
+    await expect(page.locator('.destination-state')).toContainText('Spotify')
+    await page.getByRole('button', { name: 'Закрыть запись', exact: true }).click()
+    await page.getByLabel('Результат поиска', { exact: true }).selectOption('missing')
+    await page.getByRole('button', { name: /Выделить выборку/ }).click()
+    await page.getByLabel('Действие с выбранными').selectOption('local')
+    await page.getByLabel('Результат поиска', { exact: true }).selectOption('local-pending')
+    await expect(page.getByRole('row')).toHaveCount(3)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760))
     await page.screenshot({ path: '.local/evidence/e2e/review-files-compact.png' })
     await page.evaluate(async () => {
@@ -234,7 +238,9 @@ test('collection runs a resumable background search without switching to jobs or
     })
     await page.getByRole('button', { name: 'Продолжить поиск', exact: true }).click()
     await expect(page.getByText('Поиск завершён · 4 / 4', { exact: true })).toBeVisible()
-    await expect(page.getByRole('tab', { name: /Без результатов 3/ })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Результат поиска' })).toContainText(
+      'Без результатов (3)',
+    )
     const state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)
     expect(
@@ -303,7 +309,8 @@ test('resumed search keeps decisions and repeated pause available, including aft
     await page.getByRole('button', { name: 'Продолжить поиск', exact: true }).click()
     await expect(pause).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Сохранить архив', exact: true })).toBeEnabled()
-    await page.getByRole('button', { name: 'Выбрать и дальше', exact: true }).click()
+    await page.getByRole('row').nth(1).click()
+    await page.locator('.candidate').getByRole('button', { name: 'Выбрать', exact: true }).click()
     const state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)
     expect(state.value.collections[0].rows[0].working.destination).toBe('spotify')
@@ -351,7 +358,7 @@ test('resumed search keeps decisions and repeated pause available, including aft
   }
 })
 
-test('collection tabs expose labelled panels and support arrows, Home, End and Tab', async () => {
+test('collection filters support keyboard selection and preserve the visible table', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
   const app = await launch(directory)
   try {
@@ -365,32 +372,19 @@ test('collection tabs expose labelled panels and support arrows, Home, End and T
       } as never),
     )
     await openReview(page)
-    const modes = page.getByRole('tablist', { name: 'Режим работы с коллекцией' })
-    await modes.getByRole('tab', { name: 'Разбор коллекции', exact: true }).focus()
-    await page.keyboard.press('ArrowRight')
-    await expect(modes.getByRole('tab', { name: 'Таблица', exact: true })).toBeFocused()
-    await expect(page.getByRole('tabpanel', { name: 'Таблица', exact: true })).toBeVisible()
+    const filter = page.getByRole('combobox', { name: 'Результат поиска' })
+    await filter.focus()
     await page.keyboard.press('End')
-    await expect(modes.getByRole('tab', { name: 'Разбор коллекции', exact: true })).toBeFocused()
-    const groups = page.getByRole('tablist', { name: 'Результаты поиска' })
-    const active = groups.locator('[aria-selected="true"]')
-    await active.focus()
-    await page.keyboard.press('End')
-    await expect(groups.getByRole('tab', { name: /На потом/ })).toBeFocused()
-    await page.keyboard.press('ArrowRight')
-    await expect(groups.getByRole('tab', { name: /Совпадают данные/ })).toBeFocused()
-    await page.keyboard.press('ArrowLeft')
-    await expect(groups.getByRole('tab', { name: /На потом/ })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(filter).toHaveValue('ready')
+    await expect(page.getByRole('table')).toBeVisible()
+    await filter.focus()
     await page.keyboard.press('Home')
+    await page.keyboard.press('Enter')
+    await expect(filter).toHaveValue('all')
+    await expect(page.getByRole('row', { name: 'Запись 1: Song', exact: true })).toBeVisible()
     await page.keyboard.press('Tab')
-    await expect(page.locator('#review-groups-panel')).toBeFocused()
-    for (const list of [modes, groups]) {
-      await expect(list.locator('[tabindex="0"]')).toHaveCount(1)
-      for (const tab of await list.getByRole('tab').all()) {
-        const panel = await tab.getAttribute('aria-controls')
-        await expect(page.locator('#' + panel)).toHaveAttribute('role', 'tabpanel')
-      }
-    }
+    await expect(page.getByRole('button', { name: /Выделить выборку/ })).toBeFocused()
   } finally {
     await app.close()
     await cleanup(directory)
@@ -503,11 +497,7 @@ test('Spotify quota wait preserves candidates, explains the deadline and unlocks
       animations: 'disabled',
     })
     await page.keyboard.press('Escape')
-    await page.getByRole('tab', { name: /Совпадают данные 1/ }).click()
-    await expect(
-      page.getByRole('button', { name: 'Подтвердить совпадения (1)', exact: true }),
-    ).toBeEnabled()
-    await page.getByRole('button', { name: 'Подтвердить совпадения (1)', exact: true }).click()
+    await confirmMatches(page)
     const before = await page.evaluate(async () => {
       const state = await window.vkspot.state()
       if (!state.ok) throw new Error(state.error)
@@ -636,11 +626,8 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
       await window.vkspot.patchRows(c.id, [c.rows[8].id], { excluded: true })
       return { id: c.id, hash: c.sourceHash, ids: c.rows.map((row) => row.id) }
     })
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
-    await expect(page.getByRole('tab', { name: 'Таблица', exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
+    await openLibrary(page)
+    await expect(page.getByRole('table')).toBeVisible()
     await expect(
       page.getByRole('columnheader', { name: 'Результат поиска', exact: true }),
     ).toBeVisible()
@@ -701,7 +688,7 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
     await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
     await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
     await page.getByRole('button', { name: 'Разобрать запись 3', exact: true }).click()
-    await expect(page.locator('.review-source h3')).toHaveText('Version (Remix)')
+    await expect(page.locator('.inspector')).toContainText('Version (Remix)')
   } finally {
     await app.close()
     await cleanup(directory)
@@ -745,7 +732,7 @@ test('automatic search is on by default, respects Spotify wait and supports a pe
     await expect(
       page.getByRole('checkbox', { name: 'Автоматически продолжать фоновый поиск', exact: true }),
     ).toBeChecked()
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+    await openLibrary(page)
     await page.getByRole('button', { name: 'Фоновый поиск (1)', exact: true }).click()
     await expect(page.locator('.review-progress')).toContainText('Поиск продолжится автоматически')
     await expect(page.getByRole('button', { name: 'Оставить на паузе', exact: true })).toBeEnabled()
@@ -809,7 +796,7 @@ test('in-app audio comparison controls are available for VK source and Spotify c
     })
 
     await openReview(page)
-    await page.getByRole('tab', { name: /Совпадают данные/ }).click()
+    await page.getByRole('row').nth(1).click()
 
     // 1. VK audio button is visible
     const vkListenBtn = page.locator('.review-audio-bar .audio-listen-button')
@@ -817,13 +804,13 @@ test('in-app audio comparison controls are available for VK source and Spotify c
     await expect(vkListenBtn).toContainText('Слушать оригинал VK')
 
     // 2. Spotify candidate listen button is visible
-    const spotifyListenBtn = page.locator('.review-candidate .audio-listen-button')
+    const spotifyListenBtn = page.locator('.candidate .audio-listen-button')
     await expect(spotifyListenBtn).toBeVisible()
-    await expect(spotifyListenBtn).toContainText('Слушать в Spotify')
+    await expect(spotifyListenBtn).toContainText('Слушать')
 
     // 3. Toggle Spotify embed player
     await spotifyListenBtn.click()
-    await expect(spotifyListenBtn).toContainText('Скрыть плеер')
+    await expect(spotifyListenBtn).toContainText('Пауза')
     const iframe = page.locator('.spotify-embed-card iframe')
     await expect(iframe).toBeVisible()
     expect(await iframe.getAttribute('src')).toContain(
@@ -832,7 +819,7 @@ test('in-app audio comparison controls are available for VK source and Spotify c
 
     // 4. Hide player
     await spotifyListenBtn.click()
-    await expect(spotifyListenBtn).toContainText('Слушать в Spotify')
+    await expect(spotifyListenBtn).toContainText('Слушать')
     await expect(page.locator('.spotify-embed-card iframe')).toHaveCount(0)
   } finally {
     await app.close()
@@ -872,8 +859,8 @@ test('table inspector supports resizing, layout toggle (parallel/sequential), re
       })
     })
 
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
-    await expect(page.getByRole('tab', { name: 'Таблица', exact: true })).toBeVisible()
+    await openLibrary(page)
+    await expect(page.getByRole('table')).toBeVisible()
 
     // 1. Column resizer handles are visible in table header
     const resizers = page.locator('.table-column-resizer')
