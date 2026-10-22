@@ -19,17 +19,27 @@ function save(key: string, value: string): void {
 }
 
 export function useInspectorLayout() {
+  const [overlay, setOverlay] = useState(() => window.matchMedia('(max-width: 1250px)').matches)
   const [layout, setLayout] = useState<Layout>(() =>
     read('vkspot_inspector_layout', 'parallel', (value) =>
       value === 'sequential' ? value : 'parallel',
     ),
   )
   const [width, setWidth] = useState(() =>
-    read('vkspot_inspector_width', 660, (value) =>
-      Number.isFinite(Number(value)) ? clamp(Number(value)) : 660,
+    read('vkspot_inspector_width', 580, (value) =>
+      Number.isFinite(Number(value)) ? clamp(Number(value)) : 580,
     ),
   )
   const panel = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1250px)')
+    const update = (event: MediaQueryListEvent) => {
+      setOverlay(event.matches)
+      if (event.matches) panel.current?.querySelector('h2')?.focus({ preventScroll: true })
+    }
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const cleanup = useRef<(() => void) | null>(null)
   useEffect(() => () => cleanup.current?.(), [])
 
@@ -95,5 +105,5 @@ export function useInspectorLayout() {
       return next
     })
   }
-  return { layout, width, panel, changeLayout, startResize, resizeWithKeyboard }
+  return { layout, width, panel, overlay, changeLayout, startResize, resizeWithKeyboard }
 }

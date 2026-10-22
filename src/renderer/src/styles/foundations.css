@@ -17,6 +17,12 @@
   --error-ink: #a72d3a;
   --control: #fff;
   --hover: #f0f5f3;
+  --shell: #162d3b;
+  --nav-text: #c6d7df;
+  --nav-hover: #264655;
+  --nav-active: #315467;
+  --radius-panel: 12px;
+  --space-page: 24px;
   color-scheme: light;
 }
 :root[data-theme='dark'] {
@@ -58,6 +64,7 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--accent);
 }
@@ -154,6 +161,13 @@ select {
 }
 input::placeholder {
   color: var(--muted);
+}
+input,
+textarea {
+  caret-color: var(--accent);
+}
+a {
+  text-underline-offset: 3px;
 }
 input[type='checkbox'] {
   width: 16px;

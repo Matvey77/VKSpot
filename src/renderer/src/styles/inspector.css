@@ -182,8 +182,15 @@
   overflow-wrap: anywhere;
   line-height: 1.5;
 }
-.inspector .status-tag {
+.inspector-section .status-tag {
   margin-top: 10px;
+}
+.decision-status-wrap .status-tag {
+  margin: 0;
+  font-size: 11px;
+}
+.decision-actions-wrap {
+  flex-wrap: wrap;
 }
 .field {
   display: flex;
@@ -254,6 +261,39 @@
 }
 .candidates {
   margin-top: 18px;
+}
+.manual-spotify {
+  margin: 12px 0;
+}
+.manual-spotify > button,
+.manual-spotify-form button {
+  height: auto;
+  min-height: 32px;
+  padding: 7px 9px;
+  font-size: 12px;
+  white-space: normal;
+  text-align: left;
+}
+.manual-spotify-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.manual-spotify-form .helper-text {
+  margin: 0 0 12px;
+}
+.manual-spotify-form button + .helper-text,
+.manual-spotify-player + .helper-text {
+  margin-top: 12px;
+}
+.manual-spotify-player {
+  margin: 12px 0;
+  border: 0;
+}
+.manual-spotify-error {
+  margin-bottom: 12px;
+  color: var(--error-ink);
+  font-size: 12px;
 }
 .candidates h4 {
   color: var(--muted);

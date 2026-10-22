@@ -82,6 +82,179 @@ async function launch(directory: string): Promise<ElectronApplication> {
   })
 }
 
+test('independent filters, exposed decisions and manual Spotify links preserve source, undo and restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  let app = await launch(directory)
+  try {
+    let page = await app.firstWindow()
+    await page.route('https://open.spotify.com/embed/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p>Synthetic Spotify preview</p>' }),
+    )
+    const original = await page.evaluate(async () => {
+      const result = await window.vkspot.importCollection({
+        name: 'Decision fixture',
+        origin: 'Synthetic',
+        completeness: { expected: 4, status: 'verified-count', message: 'Test only' },
+        tracks: [
+          { artist: 'Artist', title: 'Song One', duration: 180 },
+          { artist: 'Artist', title: 'Song Two', duration: 180 },
+          { artist: 'Artist', title: 'Need file', duration: 180 },
+          { artist: 'Artist', title: 'Worldwide', duration: 89 },
+        ],
+      } as never)
+      if (!result.ok) throw new Error(result.error)
+      const state = await window.vkspot.state()
+      if (!state.ok) throw new Error(state.error)
+      const collection = state.value.collections[0]
+      for (const [index, row] of collection.rows.entries()) {
+        const candidate = {
+          uri: 'spotify:track:' + 'a'.repeat(22),
+          url: '',
+          title: row.working.title,
+          artists: ['Artist'],
+          duration: 180,
+          album: 'Synthetic',
+        }
+        await window.vkspot.patchRows(collection.id, [row.id], {
+          searchedQuery: `${row.working.artist} ${row.working.title}`,
+          candidates: index < 2 ? [candidate] : [],
+          ...(index === 1 ? { spotify: candidate, destination: 'spotify' as const } : {}),
+          ...(index === 2 ? { localPending: true } : {}),
+        })
+      }
+      return collection
+    })
+    await openLibrary(page)
+    const resultFilter = page.getByRole('combobox', { name: 'Результат поиска', exact: true })
+    const decisionFilter = page.getByRole('combobox', { name: 'Статус записей', exact: true })
+    await resultFilter.selectOption('exact')
+    await expect(page.getByRole('row')).toHaveCount(3)
+    await expect(decisionFilter.locator('option[value="spotify"]')).toHaveText('Spotify (1)')
+    await decisionFilter.selectOption('spotify')
+    await expect(page.getByRole('row', { name: 'Запись 2: Song Two', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
+    await page.getByLabel('Найти запись', { exact: true }).fill('Artist Song')
+    await expect(page.getByRole('row')).toHaveCount(3)
+    await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
+
+    await page.getByLabel('Выбрать запись 1', { exact: true }).check()
+    await page.getByLabel('Выбрать запись 4', { exact: true }).check()
+    await expect(page.getByLabel('Решения для выбранных записей')).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Действие с выбранными' })).toHaveCount(0)
+    await resultFilter.selectOption('missing')
+    await expect(page.locator('.selection-bar')).toContainText('вне выборки 1')
+    await page.getByRole('button', { name: 'Оставить только видимые', exact: true }).click()
+    await page.getByRole('button', { name: 'Исключить', exact: true }).click()
+    await expect(page.getByRole('row', { name: 'Запись 4: Worldwide', exact: true })).toContainText(
+      'Исключённые',
+    )
+    await page.getByRole('button', { name: 'Вернуть в перенос', exact: true }).click()
+    await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
+    await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
+    await page.getByLabel('Выбрать запись 2', { exact: true }).check()
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Нужен локальный файл', exact: true })
+      .click()
+    await expect(page.getByRole('row', { name: 'Запись 2: Song Two', exact: true })).toContainText(
+      'Нужен файл',
+    )
+    await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
+    await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
+
+    await page.getByRole('row', { name: 'Запись 4: Worldwide', exact: true }).click()
+    const inspector = page.locator('.inspector')
+    const geometry = await inspector.locator('.decision-status-wrap').evaluate((element) => {
+      const [label, badge] = Array.from(element.children).map((child) =>
+        child.getBoundingClientRect(),
+      )
+      return Math.abs((label.top + label.bottom) / 2 - (badge.top + badge.bottom) / 2)
+    })
+    expect(geometry).toBeLessThanOrEqual(1)
+    await inspector.getByRole('button', { name: 'Указать трек Spotify', exact: true }).click()
+    const link = inspector.getByLabel('Ссылка или URI трека Spotify', { exact: true })
+    await link.fill('https://open.spotify.com/playlist/' + 'b'.repeat(22))
+    await inspector
+      .getByRole('button', { name: 'Подтвердить этот трек Spotify', exact: true })
+      .click()
+    await expect(inspector.getByRole('alert')).toContainText('именно на трек')
+    await link.fill('https://open.spotify.com/intl-ru/track/' + 'b'.repeat(22) + '?si=shared')
+    await inspector.getByRole('button', { name: 'Проверить в плеере Spotify', exact: true }).click()
+    await expect(
+      inspector.getByTitle('Проверка трека Spotify по ссылке', { exact: true }),
+    ).toHaveAttribute('src', /embed\/track\/b{22}/)
+    await inspector.getByRole('button', { name: 'Скрыть плеер', exact: true }).click()
+    await inspector
+      .getByLabel('Название для привязки', { exact: true })
+      .fill('Worldwide (Original)')
+    await inspector.getByLabel('Альбом (необязательно)', { exact: true }).fill('Manual Album')
+    await inspector
+      .getByRole('button', { name: 'Подтвердить этот трек Spotify', exact: true })
+      .click()
+    await expect(inspector.locator('.chosen-match')).toContainText('Worldwide (Original)')
+    await expect(inspector.locator('.chosen-match')).toContainText('1:29')
+    await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
+    await expect(inspector.locator('.chosen-match')).toHaveCount(0)
+    await inspector.getByRole('button', { name: 'Указать трек Spotify', exact: true }).click()
+    await inspector
+      .getByRole('button', { name: 'Подтвердить этот трек Spotify', exact: true })
+      .click()
+    await expect(inspector.locator('.chosen-match')).toContainText('Worldwide (Original)')
+    await page.getByLabel('Выбрать запись 1', { exact: true }).check()
+    for (const theme of ['light', 'dark'] as const) {
+      await page.evaluate(async (theme) => {
+        const state = await window.vkspot.state()
+        if (state.ok) await window.vkspot.saveSettings({ ...state.value.settings, theme })
+      }, theme)
+      for (const width of [1440, 940]) {
+        await app.evaluate(
+          ({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 900),
+          width,
+        )
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        await inspector.locator('.inspector-scroll-area').evaluate((element) => {
+          element.scrollTop = 0
+        })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        )
+        await page.screenshot({ path: `.local/evidence/e2e/decisions-${theme}-${width}.png` })
+        if (theme === 'light' && width === 1440) {
+          await inspector.getByRole('button', { name: 'Указать трек Spotify', exact: true }).click()
+          await inspector
+            .getByLabel('Ссылка или URI трека Spotify', { exact: true })
+            .scrollIntoViewIfNeeded()
+          await page.screenshot({ path: '.local/evidence/e2e/manual-spotify-form.png' })
+          await inspector.getByRole('button', { name: 'Указать трек Spotify', exact: true }).click()
+        }
+      }
+    }
+    await app.close()
+    app = await launch(directory)
+    page = await app.firstWindow()
+    const state = await page.evaluate(() => window.vkspot.state())
+    if (!state.ok) throw new Error(state.error)
+    expect(state.value.collections[0].rows[3].working).toMatchObject({
+      destination: 'spotify',
+      spotify: {
+        title: 'Worldwide (Original)',
+        uri: 'spotify:track:' + 'b'.repeat(22),
+        duration: 89,
+      },
+      candidates: [],
+      searchedQuery: 'Artist Worldwide',
+    })
+    expect(state.value.collections[0].sourceHash).toBe(original.sourceHash)
+    expect(state.value.collections[0].rows.map((row) => row.source)).toEqual(
+      original.rows.map((row) => row.source),
+    )
+    expect(state.value.collections[0].rows[0].working.excluded).toBe(false)
+  } finally {
+    await app.close()
+    await cleanup(directory)
+  }
+})
+
 test('review confirms repeated metadata matches, advances through versions and preserves file obligations', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
   const app = await launch(directory)
@@ -138,7 +311,10 @@ test('review confirms repeated metadata matches, advances through versions and p
     await page.screenshot({ path: '.local/evidence/e2e/review-versions-desktop.png' })
     await page.getByRole('button', { name: 'Закрыть запись', exact: true }).click()
     await page.getByLabel('Выбрать запись 3', { exact: true }).check()
-    await page.getByLabel('Действие с выбранными').selectOption('local')
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Нужен локальный файл', exact: true })
+      .click()
     await expect(
       page.getByRole('row', { name: 'Запись 3: Song [DJ edit]', exact: true }),
     ).toContainText('Нужен файл')
@@ -151,10 +327,12 @@ test('review confirms repeated metadata matches, advances through versions and p
       .getByRole('combobox', { name: 'Результат поиска', exact: true })
       .selectOption('missing')
     await page.getByRole('button', { name: /Выделить выборку/ }).click()
-    await page.getByLabel('Действие с выбранными').selectOption('local')
     await page
-      .getByRole('combobox', { name: 'Результат поиска', exact: true })
-      .selectOption('local-pending')
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Нужен локальный файл', exact: true })
+      .click()
+    await page.getByRole('combobox', { name: 'Результат поиска', exact: true }).selectOption('all')
+    await page.getByLabel('Статус записей', { exact: true }).selectOption('local-pending')
     await expect(page.getByRole('row')).toHaveCount(3)
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760))
     await page.screenshot({ path: '.local/evidence/e2e/review-files-compact.png' })
@@ -380,7 +558,7 @@ test('collection filters support keyboard selection and preserve the visible tab
     await filter.focus()
     await page.keyboard.press('End')
     await page.keyboard.press('Enter')
-    await expect(filter).toHaveValue('ready')
+    await expect(filter).toHaveValue('missing')
     await expect(page.getByRole('table')).toBeVisible()
     await filter.focus()
     await page.keyboard.press('Home')
@@ -680,15 +858,13 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
     await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
     await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()
     await page.getByLabel('Статус записей', { exact: true }).selectOption('excluded')
-    await page
-      .getByRole('combobox', { name: 'Результат поиска', exact: true })
-      .selectOption('ready')
+    await page.getByRole('combobox', { name: 'Результат поиска', exact: true }).selectOption('all')
     await page.getByLabel('Найти запись', { exact: true }).fill('Excluded')
     await expect(page.getByRole('row')).toHaveCount(2)
     await page.getByRole('button', { name: /Выделить выборку/ }).click()
     await page
       .getByRole('combobox', { name: 'Результат поиска', exact: true })
-      .selectOption('pending')
+      .selectOption('missing')
     await expect(page.locator('.selection-bar')).toContainText('вне выборки 1')
     await expect(page.getByRole('button', { name: /Подтвердить выбранные/ })).toBeDisabled()
     await page.getByRole('button', { name: 'Сбросить фильтры', exact: true }).click()

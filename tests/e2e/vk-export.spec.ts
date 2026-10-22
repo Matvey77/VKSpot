@@ -36,7 +36,11 @@ test.beforeEach(async () => {
     VKSPOT_BACKGROUND_TEST: '1',
   }
   delete env.ELECTRON_RUN_AS_NODE
-  app = await electron.launch({ args: ['.'], env })
+  app = await electron.launch({
+    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
+    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
+    env,
+  })
   await app.firstWindow()
 })
 test.afterEach(async () => {

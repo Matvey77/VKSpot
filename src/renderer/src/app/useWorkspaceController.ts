@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { summarizeCollection } from '../../../core/library'
-import { reviewGroup, type ReviewGroup } from '../../../core/matching'
+import { reviewGroup, type SearchResultGroup } from '../../../core/matching'
 import { retryDeadline } from '../../../shared/job-status'
 import type {
   Collection,
@@ -38,7 +38,7 @@ export function useWorkspaceController() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const [resultFilter, setResultFilter] = useState<'all' | ReviewGroup>('all')
+  const [resultFilter, setResultFilter] = useState<'all' | SearchResultGroup>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [vkExpected, setVKExpected] = useState('')
@@ -133,7 +133,7 @@ export function useWorkspaceController() {
 
   const search = (ids: string[], background = false) => {
     const targetCollId = openedCollectionId || collectionId
-    void run('search', () => api.startSearch(targetCollId, ids, background))
+    return run('search', () => api.startSearch(targetCollId, ids, background))
   }
 
   const setAutoResume = (value: boolean) => {

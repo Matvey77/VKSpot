@@ -39,6 +39,11 @@ const bridge: Bridge = {
   playVKTrack: (track) => invoke('playVKTrack', track),
   pauseVKTrack: () => invoke('pauseVKTrack'),
   resumeVKTrack: () => invoke('resumeVKTrack'),
+  onVKAudioProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, message: string) => callback(message)
+    ipcRenderer.on('vkspot:vk-audio-progress', listener)
+    return () => ipcRenderer.removeListener('vkspot:vk-audio-progress', listener)
+  },
   testProxy: (url, target) => invoke('testProxy', url, target),
   onChange: (callback) => {
     const listener = () => callback()

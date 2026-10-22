@@ -7,6 +7,63 @@ import { parseImport } from '../../src/core/collection'
 import { readSpotifySearch } from '../../src/main/integrations/spotify/browser'
 
 describe('search providers and independent API cooldown', () => {
+  it.each(['browser', 'api'] as const)(
+    'refreshes cached %s results manually and shares the fresh response between duplicates',
+    async (provider) => {
+      vi.useFakeTimers()
+      const store = new Store(':memory:')
+      const search = vi.fn(async () => [])
+      const jobs = new Jobs(
+        store,
+        { connected: () => true, search } as unknown as Spotify,
+        () => {},
+        { search, stop: vi.fn() },
+      )
+      try {
+        store.setValue('preferences', {
+          ...store.settings(),
+          searchProvider: provider,
+          searchDelayMs: 1000,
+        })
+        const id = store.import(parseImport('Artist - Song\nArtist - Song', '.txt', 'Refresh'))
+        const original = store.get(id)
+        const ids = original.rows.map((row) => row.id)
+        const cached = [
+          {
+            uri: 'spotify:track:' + 'a'.repeat(22),
+            title: 'Old result',
+            artists: ['Artist'],
+            duration: 180,
+            album: '',
+            url: '',
+          },
+        ]
+        const cacheKey =
+          (provider === 'browser' ? 'spotify-browser-v1:' : 'spotify-search-v1:') + 'Artist Song'
+        store.cache(cacheKey, cached)
+        const backgroundId = jobs.search(id, ids, true)
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(store.job(backgroundId).state).toBe('complete')
+        expect(search).not.toHaveBeenCalled()
+        expect(store.row(id, ids[0]).working.candidates).toEqual(cached)
+
+        const manualId = jobs.search(id, ids)
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(store.job(manualId)).toMatchObject({ state: 'complete', refreshSearchResults: true })
+        expect(search).toHaveBeenCalledExactlyOnceWith('Artist Song')
+        expect(store.get(id).rows.every((row) => row.working.candidates.length === 0)).toBe(true)
+        expect(store.cached(cacheKey)).toEqual([])
+        expect(store.get(id).sourceHash).toBe(original.sourceHash)
+        expect(store.get(id).rows.map((row) => row.source)).toEqual(
+          original.rows.map((row) => row.source),
+        )
+      } finally {
+        jobs.shutdown()
+        store.close()
+        vi.useRealTimers()
+      }
+    },
+  )
   it('runs a restored browser search while an older API search is waiting for quota', async () => {
     vi.useFakeTimers()
     const store = new Store(':memory:')

@@ -3,6 +3,13 @@ import { type MatchingRules, type SpotifyTrack, type TrackRow, type Working } fr
 
 export type ReviewGroup =
   'pending' | 'exact' | 'review' | 'missing' | 'local-pending' | 'deferred' | 'ready'
+export type SearchResultGroup = 'pending' | 'exact' | 'review' | 'missing'
+export const searchResultLabels: Record<SearchResultGroup, string> = {
+  pending: 'Не искали',
+  exact: 'Совпадают данные',
+  review: 'Проверить версию',
+  missing: 'Без результатов',
+}
 
 export const reviewLabels: Record<ReviewGroup, string> = {
   pending: 'Не искали',
@@ -271,6 +278,15 @@ export function reviewGroup(
   if (working.excluded || working.destination !== 'unresolved') return 'ready'
   if (working.localPending) return 'local-pending'
   if (working.reviewDeferred) return 'deferred'
+  return searchResultGroup(row, rules)
+}
+
+/** Search evidence is independent of inclusion and the user's destination decision. */
+export function searchResultGroup(
+  row: TrackRow,
+  rules: MatchingRules = defaultMatchingRules,
+): SearchResultGroup {
+  const working = row.working
   const searched =
     working.searchedQuery === searchText(working) ||
     (working.searchedQuery === null && working.candidates.length > 0)

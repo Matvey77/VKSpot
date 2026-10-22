@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T02:18:51.936Z",
+  "generatedAt": "2026-10-22T02:25:00.000Z",
   "title": "Design System: VKSpot",
   "extensions": {
     "colorMeta": {
@@ -67,16 +67,44 @@
       "local-ink": {
         "role": "semantic",
         "displayName": "Local Destination Blue Ink"
+      },
+      "nav-text": {
+        "role": "neutral",
+        "displayName": "Navigation Text"
+      },
+      "collection-nav-text": {
+        "role": "neutral",
+        "displayName": "Collection Navigation Text"
+      },
+      "nav-focus": {
+        "role": "primary",
+        "displayName": "Navigation Focus"
+      },
+      "nav-label": {
+        "role": "neutral",
+        "displayName": "Navigation Label"
+      },
+      "nav-border": {
+        "role": "neutral",
+        "displayName": "Navigation Border"
+      },
+      "text-selection-bg": {
+        "role": "primary",
+        "displayName": "Text Selection Wash"
+      },
+      "text-selection-ink": {
+        "role": "neutral",
+        "displayName": "Text Selection Ink"
       }
     },
     "typographyMeta": {
       "headline": {
         "displayName": "Page Heading",
-        "purpose": "Collection and section page names; 23px below 1250px. Detailed Welcome identity uses 29px, reduced to 25px below 1150px."
+        "purpose": "26px page heading; the collection title uses headline-compact at 1250px and below."
       },
       "title": {
         "displayName": "Section Title",
-        "purpose": "Standard section headings; inspector title is 15px. Detailed Welcome section and active-step headings use 21px."
+        "purpose": "17px section and inspector track headings."
       },
       "body": {
         "displayName": "Interface Body",
@@ -84,7 +112,7 @@
       },
       "label": {
         "displayName": "Record and Field Label",
-        "purpose": "Dense table records and field labels."
+        "purpose": "12px field/filter labels, secondary record lines and inspector metadata."
       },
       "helper": {
         "displayName": "Supporting Annotation",
@@ -93,13 +121,33 @@
       "code": {
         "displayName": "Technical Value",
         "purpose": "Local paths and connection configuration."
+      },
+      "display": {
+        "displayName": "Start Heading",
+        "purpose": "32px heading for the next action on Start."
+      },
+      "headline-compact": {
+        "displayName": "Compact Collection Heading",
+        "purpose": "23px collection heading at 1250px and below; the sidebar wordmark also reduces to 23px."
+      },
+      "brand": {
+        "displayName": "Sidebar Wordmark",
+        "purpose": "25px wordmark, 23px at 1250px and below. Existing supplied project mark is retained."
+      },
+      "supporting-title": {
+        "displayName": "Supporting Title",
+        "purpose": "Existing 16px headings in the compact Welcome workflow and embedded Spotify panel."
+      },
+      "record": {
+        "displayName": "Collection Record",
+        "purpose": "13px collection rows, track metadata, facets and inspector artist; supporting record lines use 12px and tags use 11px."
       }
     },
     "shadows": [
       {
         "name": "compact-inspector",
-        "value": "-10px 4px 25px #102a361f",
-        "purpose": "Separates the inspector overlay from the desktop table at 1250px and below."
+        "value": "-12px 6px 32px #102a3633",
+        "purpose": "Separates the full-height inspector overlay from the covered, inert list at 1250px and below."
       },
       {
         "name": "dialog",
@@ -110,6 +158,11 @@
         "name": "guide-explanation",
         "value": "0 8px 32px #102a3633",
         "purpose": "Viewport-mounted 310px explanation bubble over the actual UI capture."
+      },
+      {
+        "name": "success-notice",
+        "value": "0 6px 20px #102a361a",
+        "purpose": "Compact bottom-right successful-action notice; does not move the workspace."
       }
     ],
     "motion": [
@@ -131,12 +184,24 @@
     ],
     "breakpoints": [
       {
-        "name": "compact-inspector-and-guide",
+        "name": "compact-inspector-navigation-connections",
         "value": "1250px"
       },
       {
-        "name": "compact-desktop",
-        "value": "1000px"
+        "name": "inspector-content-stack",
+        "value": "619px container width"
+      },
+      {
+        "name": "wide-list-tools",
+        "value": "1800px"
+      },
+      {
+        "name": "short-desktop",
+        "value": "760px height"
+      },
+      {
+        "name": "minimum-desktop-window",
+        "value": "940px × 640px"
       },
       {
         "name": "welcome-identity-type",
@@ -173,9 +238,9 @@
       "name": "Desktop Navigation",
       "kind": "nav",
       "refersTo": "navigation-active",
-      "description": "Permanent ink-blue desktop navigation. Welcome is first and the default entry; the brand returns to it.",
+      "description": "Permanent ink-blue desktop navigation: 224px sidebar, 190px at 1250px and below; 44px actions with 8px corners. Welcome remains the default entry and the brand returns to it.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Разделы\"><button class=\"ds-nav-button ds-nav-active\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z\"/></svg> Добро пожаловать</button><button class=\"ds-nav-button\">Коллекция</button><button class=\"ds-nav-button\">Подключения</button><button class=\"ds-nav-button\">Задания</button><button class=\"ds-nav-button\">Архив и экспорт</button><button class=\"ds-nav-button\">Настройки</button></nav>",
-      "css": ".ds-nav{display:flex;flex-direction:column;gap:4px;background:#162d3b;padding:16px;width:194px}.ds-nav-button{font:14px \"Segoe UI\",system-ui,sans-serif;border:0;background:transparent;color:#bdcfd8;text-align:left;display:inline-flex;align-items:center;gap:11px;height:42px;padding:0 12px;border-radius:7px;cursor:pointer;transition:background .15s}.ds-nav-button:hover{background:#264655}.ds-nav-active{background:#315467;color:#fff}.ds-nav-button:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav-button{transition:none}}"
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:4px;background:#162d3b;padding:16px;width:196px}.ds-nav-button{font:14px \"Segoe UI\",system-ui,sans-serif;border:0;background:transparent;color:#c6d7df;text-align:left;display:inline-flex;align-items:center;gap:11px;height:44px;padding:0 12px;border-radius:8px;cursor:pointer;transition:background .15s}.ds-nav-button:hover{background:#264655}.ds-nav-active{background:#315467;color:#fff}.ds-nav-button:focus-visible{outline:2px solid #8be0cd;outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav-button{transition:none}}"
     },
     {
       "name": "Destination Annotations",
@@ -183,23 +248,23 @@
       "refersTo": "destination-spotify",
       "description": "Text-first semantic tags for destination or exclusion; source unavailability is independent.",
       "html": "<div class=\"ds-tags\"><span class=\"ds-tag ds-spotify\">Spotify</span><span class=\"ds-tag ds-local\">Локальные</span><span class=\"ds-tag\">Нужен выбор</span><span class=\"ds-tag\">Исключённые</span><span class=\"ds-tag ds-blocked\">Недоступна в VK</span></div>",
-      "css": ".ds-tags{display:flex;gap:8px;flex-wrap:wrap}.ds-tag{display:inline-flex;padding:4px 7px;border-radius:4px;font:10px/1.2 \"Segoe UI\",system-ui,sans-serif;white-space:nowrap;background:var(--hover,#f0f5f3);color:var(--muted,#536570)}.ds-spotify{background:var(--selected,#e6f3ef);color:var(--accent,#087f73)}.ds-local{background:#e8eff9;color:#315984}.ds-blocked{background:var(--warning-bg,#fff2d8);color:var(--warning-ink,#8b570c)}:host-context([data-theme=\"dark\"]) .ds-local{background:#293e59;color:#bad3fa}"
+      "css": ".ds-tags{display:flex;gap:8px;flex-wrap:wrap}.ds-tag{display:inline-flex;padding:5px 7px;border-radius:4px;font:11px/1.2 \"Segoe UI\",system-ui,sans-serif;white-space:nowrap;background:var(--hover,#f0f5f3);color:var(--muted,#536570)}.ds-spotify{background:var(--selected,#e6f3ef);color:var(--accent,#087f73)}.ds-local{background:#e8eff9;color:#315984}.ds-blocked{background:var(--warning-bg,#fff2d8);color:var(--warning-ink,#8b570c)}:host-context([data-theme=\"dark\"]) .ds-local{background:#293e59;color:#bad3fa}"
     },
     {
       "name": "Focused Collection Row",
       "kind": "custom",
-      "refersTo": "collection-panel",
-      "description": "A 52px record in the virtualized table; record focus and bulk checkbox selection are separate.",
+      "refersTo": "collection-row",
+      "description": "A 60px virtualized record with 13px main text, 12px secondary text and 11px tags; record focus and bulk checkbox selection are separate.",
       "html": "<div class=\"ds-table\" role=\"table\" aria-label=\"Пример коллекции\"><div class=\"ds-row\" role=\"row\" tabindex=\"0\"><div role=\"cell\"><input class=\"ds-checkbox\" type=\"checkbox\" aria-label=\"Выбрать запись 1\"></div><div class=\"ds-position\" role=\"cell\">1</div><div class=\"ds-track\" role=\"cell\"><strong>Пример записи</strong><span>Пример исполнителя</span></div><div role=\"cell\"><span class=\"ds-row-tag\">Нужен выбор</span></div><div class=\"ds-duration\" role=\"cell\">3:00</div><div role=\"cell\" aria-hidden=\"true\">→</div></div></div>",
-      "css": ".ds-table{background:var(--surface,#fff);border:1px solid var(--line,#d8e1e3);border-radius:10px;overflow:hidden}.ds-row{display:grid;grid-template-columns:38px 48px minmax(130px,1fr)140px 62px 26px;align-items:center;height:52px;border-bottom:1px solid var(--line,#d8e1e3);font:12px \"Segoe UI\",system-ui,sans-serif;cursor:pointer;color:var(--ink,#172e3a);background:var(--selected,#e6f3ef)}.ds-row>div{padding:0 6px;min-width:0}.ds-row>div:first-child{padding-left:14px}.ds-row:hover{background:var(--selected,#e6f3ef)}.ds-row:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:-3px}.ds-checkbox{width:16px;height:16px;accent-color:var(--accent,#087f73)}.ds-checkbox:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:3px}.ds-position,.ds-duration{font-variant-numeric:tabular-nums;color:var(--muted,#536570)}.ds-duration{text-align:right}.ds-track{display:flex;flex-direction:column;gap:3px}.ds-track strong{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-track span{font-size:11px;color:var(--muted,#536570);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-row-tag{display:inline-flex;padding:4px 7px;border-radius:4px;font-size:10px;line-height:1.2;white-space:nowrap;background:var(--hover,#f0f5f3);color:var(--muted,#536570)}"
+      "css": ".ds-table{background:var(--surface,#fff);border:1px solid var(--line,#d8e1e3);border-radius:12px;overflow:hidden}.ds-row{display:grid;grid-template-columns:38px 48px minmax(130px,1fr)140px 62px 26px;align-items:center;height:60px;border-bottom:1px solid var(--line,#d8e1e3);font:13px \"Segoe UI\",system-ui,sans-serif;cursor:pointer;color:var(--ink,#172e3a);background:var(--selected,#e6f3ef)}.ds-row>div{padding:0 6px;min-width:0}.ds-row>div:first-child{padding-left:14px}.ds-row:hover{background:var(--selected,#e6f3ef)}.ds-row:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:-3px}.ds-checkbox{width:16px;height:16px;accent-color:var(--accent,#087f73)}.ds-checkbox:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:3px}.ds-position,.ds-duration{font-variant-numeric:tabular-nums;color:var(--muted,#536570)}.ds-duration{text-align:right}.ds-track{display:flex;flex-direction:column;gap:5px}.ds-track strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-track span{font-size:12px;color:var(--muted,#536570);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-row-tag{display:inline-flex;padding:5px 7px;border-radius:4px;font-size:11px;line-height:1.2;white-space:nowrap;background:var(--hover,#f0f5f3);color:var(--muted,#536570)}.ds-row{box-shadow:inset 0 0 0 1px var(--accent,#087f73)}"
     },
     {
       "name": "Provenance and Retained Destination",
       "kind": "custom",
       "refersTo": "provenance-inspector",
-      "description": "Original → Working copy → Destination. Explicit active local destination with a neutral retained Spotify alternative.",
+      "description": "Original → Working copy → Destination evidence pattern. The shipping full-height panel defaults to 580px; persisted preference is 340–800px, rendered CSS minimum 350px and maximum min(800px,parent minus 350px). At ≤1250px it overlays the inert list; below 620px container width source, candidates and working copy stack. Previous/next follows filtered rows while retaining drafts; focus enters the heading and returns to row/search on close. This existing static snippet illustrates evidence and retained-destination styling.",
       "html": "<aside class=\"ds-inspector\" aria-label=\"Пример записи\"><section class=\"ds-section\"><h3>Оригинал из VK</h3><dl><dt>Название</dt><dd>Пример исходной записи</dd><dt>ID / длительность</dt><dd>demo-1 · 3:00</dd></dl></section><section class=\"ds-section\"><h3>Рабочая копия →</h3><label class=\"ds-inspector-field\">Название<input value=\"Пример рабочей записи\"></label></section><section class=\"ds-section\"><h3>Назначение →</h3><p>Текущее назначение: <strong>локальный файл</strong></p><div class=\"ds-retained\"><small>Сохранённый вариант Spotify</small><strong>Пример варианта</strong><button>Использовать Spotify</button></div></section></aside>",
-      "css": ".ds-inspector{width:340px;max-width:100%;background:var(--surface,#fff);color:var(--ink,#172e3a);border:1px solid var(--line,#d8e1e3);border-radius:10px;overflow:auto;font:12px \"Segoe UI\",system-ui,sans-serif}.ds-section{padding:16px;border-bottom:1px solid var(--line,#d8e1e3)}.ds-section:last-child{border-bottom:0}.ds-section h3{font-size:13px;font-weight:650;color:var(--muted,#536570);margin:0 0 14px}.ds-section dl{margin:0}.ds-section dt{font-size:10px;color:var(--muted,#536570);margin-top:9px}.ds-section dd{margin:3px 0 0;line-height:1.5;overflow-wrap:anywhere}.ds-inspector-field{display:flex;flex-direction:column;gap:6px;color:var(--muted,#536570)}.ds-inspector-field input{height:36px;padding:0 10px;font:14px \"Segoe UI\",system-ui,sans-serif;border:1px solid var(--line,#d8e1e3);border-radius:6px;background:var(--control,#fff);color:var(--ink,#172e3a);min-width:0}.ds-section p{font-size:12px;line-height:1.6;margin:0 0 12px;color:var(--muted,#536570)}.ds-section p strong{color:var(--ink,#172e3a)}.ds-retained{padding:10px;border-radius:6px;background:var(--hover,#f0f5f3);color:var(--muted,#536570)}.ds-retained small{display:block;font-size:10px;margin-bottom:4px}.ds-retained strong{display:block;font-size:12px;line-height:1.5}.ds-retained button{height:28px;font:11px \"Segoe UI\",system-ui,sans-serif;margin-top:8px;padding:0 8px;border:1px solid var(--line,#d8e1e3);border-radius:6px;background:var(--control,#fff);color:var(--ink,#172e3a);cursor:pointer;transition:background .15s}.ds-retained button:hover{background:var(--hover,#f0f5f3)}.ds-retained button:focus-visible,.ds-inspector-field input:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-retained button{transition:none}}"
+      "css": ".ds-inspector{width:580px;max-width:100%;background:var(--surface,#fff);color:var(--ink,#172e3a);border:1px solid var(--line,#d8e1e3);border-radius:12px;overflow:auto;font:13px \"Segoe UI\",system-ui,sans-serif}.ds-section{padding:18px 16px;border-bottom:1px solid var(--line,#d8e1e3)}.ds-section:last-child{border-bottom:0}.ds-section h3{font-size:13px;font-weight:650;color:var(--ink,#172e3a);margin:0 0 12px}.ds-section dl{margin:0}.ds-section dt{font-size:11px;color:var(--muted,#536570);margin-top:9px}.ds-section dd{margin:3px 0 0;line-height:1.5;overflow-wrap:anywhere}.ds-inspector-field{display:flex;flex-direction:column;gap:6px;color:var(--muted,#536570)}.ds-inspector-field input{height:36px;padding:0 10px;font:14px \"Segoe UI\",system-ui,sans-serif;border:1px solid var(--line,#d8e1e3);border-radius:6px;background:var(--control,#fff);color:var(--ink,#172e3a);min-width:0}.ds-section p{font-size:12px;line-height:1.6;margin:0 0 12px;color:var(--muted,#536570)}.ds-section p strong{color:var(--ink,#172e3a)}.ds-retained{padding:10px;border-radius:6px;background:var(--hover,#f0f5f3);color:var(--muted,#536570)}.ds-retained small{display:block;font-size:10px;margin-bottom:4px}.ds-retained strong{display:block;font-size:12px;line-height:1.5}.ds-retained button{height:28px;font:11px \"Segoe UI\",system-ui,sans-serif;margin-top:8px;padding:0 8px;border:1px solid var(--line,#d8e1e3);border-radius:6px;background:var(--control,#fff);color:var(--ink,#172e3a);cursor:pointer;transition:background .15s}.ds-retained button:hover{background:var(--hover,#f0f5f3)}.ds-retained button:focus-visible,.ds-inspector-field input:focus-visible{outline:2px solid var(--accent,#087f73);outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-retained button{transition:none}}"
     },
     {
       "name": "Welcome Route and Scene Selector",
@@ -227,38 +292,36 @@
   ],
   "narrative": {
     "northStar": "The Library Finding Aid",
-    "overview": "VKSpot's built Operate world is a restrained desktop collection workspace: deep ink-blue navigation, paper-like reading surfaces, tabular positions and careful annotations. Its personality comes from record keeping and visible evidence. The original direction was an implementation assumption delegated by the brief; this document refreshes it from the initial local build.\n\nThis is an Electron application rendered with web technologies, with Windows as the first tested host. Its reusable signature is **Original → Working copy → Destination**: preserve source descriptions, expose editable fields separately, and name the current destination explicitly. Russian copy is compact and direct. Review of the local interface does not validate live VK extraction, Spotify accounts or system automation end to end.\n\nThe first/default `Добро пожаловать` view adds an interactive Read-mode guide inside the same desktop shell. A clickable workflow and six-step selector lead to ten scenes of actual application UI, captured with an isolated synthetic collection. Official service logos and the owner's combined VK + Spotify project mark extend the existing identity. The guide inherits the collection world's typography, palette and controls.",
+    "overview": "VKSpot — сдержанное десктопное рабочее пространство для большой музыкальной коллекции. Глубокая синяя навигация, светлые читаемые поверхности, табличные цифры и бирюзовые действия поддерживают последовательный разбор записей. Пользователь подтвердил сохранение бирюзово-синей палитры и пересборку компоновки 22 октября 2026 года.\n\nПовторяемая сигнатура — **«Оригинал → Рабочая копия → Назначение»**. Исходные сведения отделены от редактируемых полей, результаты поиска — от принятого решения. Русскоязычные действия и пояснения компактны; визуальная плотность оставляет место для названий, исполнителей и сравнения версий.",
     "keyCharacteristics": [
-      "Persistent navigation and a dense, virtualized collection table.",
-      "Distinct source evidence, saved working values and unsaved edits.",
-      "Quiet borders, tonal state feedback and restrained teal actions.",
-      "Explicit omissions, uncertainty and retained destination alternatives.",
-      "A readable first-entry guide with measured markers over actual UI captures, synthetic demo records and real navigation actions."
+      "Постоянная навигация и виртуализированный список с независимыми инструментами.",
+      "Полноразмерный инспектор с последовательным переходом по текущей выборке.",
+      "Отдельные состояния оригинала, сохранённой рабочей копии и несохранённого черновика.",
+      "Спокойные границы, тональные выделения и явные семантические статусы.",
+      "Существующие фирменные SVG и инструкция с подписями к реальным снимкам демонстрационного интерфейса."
     ],
     "rules": [
       {
         "name": "The Active Destination Rule",
-        "body": "A saved alternative must be labelled as retained and must not look like a second active Spotify selection.",
+        "body": "Сохранённый альтернативный вариант подписан как сохранённый и не выглядит вторым активным назначением Spotify.",
         "section": "colors"
       }
     ],
     "dos": [
-      "Do keep original evidence legible beside working edits and explicit destination choice.",
-      "Do retain duplicates, excluded entries and original positions; show omissions.",
-      "Do preserve desktop density, independent scrolling and the compact inspector close control.",
-      "Do identify demo records and distinguish source completeness warnings from action errors.",
-      "Do label guide images as real UI with synthetic demo records, preserve theme pairs and measured control bounds, and connect guide actions to actual sections or import controls.",
-      "Do use the supplied official service SVGs and combined project mark with their original proportions and contextual Spotify color variant.",
-      "Do keep the saved-draft prerequisite and explicit `Найти в Spotify` trigger beside the measured search marker.",
-      "Do preserve manual steps and current integration limits when describing the route."
+      "Do сохранять подтверждённую бирюзово-синюю палитру, Segoe UI и существующие фирменные SVG.",
+      "Do отделять оригинал, сохранённую рабочую копию, несохранённый черновик и явное назначение.",
+      "Do сохранять высоту строки, независимые инструменты списка и полноразмерный инспектор.",
+      "Do поддерживать клавиатурный разбор, видимый фокус, Escape и доступное закрытие компактной панели.",
+      "Do обозначать синтетические данные и сохранять происхождение существующих снимков инструкции.",
+      "Do оставлять ошибки, ограничения платформ и возможность отмены действий видимыми."
     ],
     "donts": [
-      "Don't style retained alternatives as active Spotify choices.",
-      "Don't imply unsaved drafts are archived or durable across app closure.",
-      "Don't infer verified extraction, matching, local-file automation or completed mixed transfer from a successful local screen.",
-      "Don't treat screenshot contents, synthetic candidates or the workflow's final playlist as live account evidence.",
-      "Don't substitute schematic screen drawings or placeholder service glyphs for the implemented capture and brand assets.",
-      "Don't replace this desktop system with phone navigation or decorative graphics without a new brief."
+      "Don't изображать найденного кандидата или сохранённую альтернативу подтверждённым назначением.",
+      "Don't скрывать повторы, исключённые записи и исходные позиции ради чистоты списка.",
+      "Don't выдавать несохранённый черновик за архив или состояние, устойчивое к закрытию приложения.",
+      "Don't поднимать рабочие карточки или добавлять декоративную анимацию, замедляющую разбор.",
+      "Don't считать демонстрационные снимки подтверждением живого импорта или завершённого переноса.",
+      "Don't заменять десктопную навигацию мобильной компоновкой без нового запроса."
     ]
   }
 }

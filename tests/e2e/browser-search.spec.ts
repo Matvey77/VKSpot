@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, type ElectronApplication } from '@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { openLibrary } from './navigation'
 
 async function launch(directory: string) {
   const env: Record<string, string> = {
@@ -30,11 +31,15 @@ async function mockPages(app: ElectronApplication) {
       value: (_filter: unknown, listener: unknown) =>
         Reflect.set(globalThis, '__browserHeaders', listener),
     })
-    await network.protocol.handle('https', (request) => {
+    await network.protocol.handle('https', async (request) => {
       const url = new URL(request.url)
       const query = decodeURIComponent(url.pathname.split('/')[2] ?? '')
       const calls = Reflect.get(globalThis, '__browserQueries') as string[]
       calls.push(query)
+      if (Reflect.get(globalThis, '__holdBrowserSearch'))
+        await new Promise<void>((resolve) =>
+          Reflect.set(globalThis, '__releaseBrowserSearch', resolve),
+        )
       const times = (Reflect.get(globalThis, '__browserCallTimes') ?? []) as number[]
       times.push(Date.now())
       Reflect.set(globalThis, '__browserCallTimes', times)
@@ -52,10 +57,11 @@ async function mockPages(app: ElectronApplication) {
         return new Response('<body><main>Verify you are human</main></body>', {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         })
-      const rows = query.includes('Missing')
-        ? '<h1>Ничего не найдено</h1>'
-        : `
-        <div data-testid="tracklist-row"><div role="gridcell"><a href="/track/${'a'.repeat(22)}">Song</a><a href="/artist/${'b'.repeat(22)}">Artist</a></div><div role="gridcell"><a href="/album/${'c'.repeat(22)}">Album</a><span>3:00</span></div></div>`
+      const rows =
+        query.includes('Missing') || Reflect.get(globalThis, '__browserEmpty')
+          ? '<h1>Ничего не найдено</h1>'
+          : `
+        <div data-testid="tracklist-row"><div role="gridcell"><a href="/track/${'a'.repeat(22)}">${Reflect.get(globalThis, '__browserUpdated') ? 'Updated Song' : 'Song'}</a><a href="/artist/${'b'.repeat(22)}">Artist</a></div><div role="gridcell"><a href="/album/${'c'.repeat(22)}">Album</a><span>3:00</span></div></div>`
       return new Response(
         '<!doctype html><html><body><iframe src="about:blank#captcha" style="display:none"></iframe><main>' +
           rows +
@@ -75,6 +81,80 @@ async function cleanup(directory: string) {
     throw new Error('Unsafe cleanup target')
   await rm(directory, { recursive: true, force: true })
 }
+
+test('inspector searches Spotify again after cached results and displays progress, empty results and errors', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const app = await launch(directory)
+  try {
+    await mockPages(app)
+    const page = await app.firstWindow()
+    const original = await page.evaluate(async () => {
+      const imported = await window.vkspot.importCollection({
+        name: 'Manual search fixture',
+        origin: 'Synthetic',
+        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
+        tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
+      } as never)
+      if (!imported.ok) throw new Error(imported.error)
+      const state = await window.vkspot.state()
+      if (!state.ok) throw new Error(state.error)
+      const collection = state.value.collections[0]
+      await window.vkspot.startSearch(collection.id, [collection.rows[0].id], true)
+      return collection
+    })
+    await expect
+      .poll(async () => {
+        const state = await page.evaluate(() => window.vkspot.state())
+        return state.ok && state.value.jobs[0]?.state
+      })
+      .toBe('complete')
+    await openLibrary(page)
+    await page.getByRole('cell', { name: 'Song Artist', exact: true }).click()
+    const inspector = page.locator('.inspector')
+    await expect(inspector.locator('.candidate strong')).toHaveText('Song')
+    await app.evaluate(() => {
+      Reflect.set(globalThis, '__browserUpdated', true)
+      Reflect.set(globalThis, '__holdBrowserSearch', true)
+    })
+    await inspector.getByRole('button', { name: 'Найти в Spotify', exact: true }).click()
+    await expect(
+      inspector.getByRole('button', { name: 'Поиск в Spotify…', exact: true }),
+    ).toBeDisabled()
+    await expect(inspector.getByRole('status')).toContainText('Запрашиваем актуальные варианты')
+    await expect
+      .poll(() => app.evaluate(() => Reflect.get(globalThis, '__browserQueries').length))
+      .toBe(2)
+    await app.evaluate(() => {
+      Reflect.set(globalThis, '__holdBrowserSearch', false)
+      Reflect.get(globalThis, '__releaseBrowserSearch')()
+    })
+    await expect(inspector.locator('.candidate strong')).toHaveText('Updated Song')
+    await expect(inspector.getByRole('status')).toHaveText('Поиск завершён. Найдено вариантов: 1.')
+    await page.screenshot({ path: '.local/evidence/e2e/inspector-manual-search.png' })
+
+    await app.evaluate(() => Reflect.set(globalThis, '__browserChallenge', true))
+    await inspector.getByRole('button', { name: 'Найти в Spotify', exact: true }).click()
+    await expect(inspector.getByRole('status')).toContainText('Spotify требует вход или проверку')
+    await expect(inspector.locator('.candidate strong')).toHaveText('Updated Song')
+    await app.evaluate(() => {
+      Reflect.set(globalThis, '__browserChallenge', false)
+      Reflect.set(globalThis, '__browserEmpty', true)
+    })
+    await inspector.getByRole('button', { name: 'Найти в Spotify', exact: true }).click()
+    await expect(inspector.getByRole('status')).toHaveText('Поиск завершён. Найдено вариантов: 0.')
+    await expect(inspector.locator('.candidate')).toHaveCount(0)
+    expect(await app.evaluate(() => Reflect.get(globalThis, '__browserQueries'))).toEqual(
+      Array(4).fill('Artist Song'),
+    )
+    const state = await page.evaluate(() => window.vkspot.state())
+    if (!state.ok) throw new Error(state.error)
+    expect(state.value.collections[0].sourceHash).toBe(original.sourceHash)
+    expect(state.value.collections[0].rows[0].source).toEqual(original.rows[0].source)
+  } finally {
+    await app.close()
+    await cleanup(directory)
+  }
+})
 
 test('browser search needs no API login, caches repeats, keeps source and offers the next review step', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))

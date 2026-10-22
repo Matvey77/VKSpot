@@ -12,6 +12,7 @@ export interface VKSessionOptions {
 }
 
 export class VKSessionManager {
+  private personalAudioURL: string | null = null
   private vkWindow: BrowserWindow | null = null
   private vkView: WebContentsView | null = null
   private vkExtracting = false
@@ -25,6 +26,10 @@ export class VKSessionManager {
 
   public getStatus(): VKStatus {
     return { ...this.vkStatus }
+  }
+
+  public libraryURL(): string | null {
+    return this.personalAudioURL
   }
 
   private beginVKCheck(): void {
@@ -46,6 +51,7 @@ export class VKSessionManager {
   }
 
   private resetVKStatus(message: string): void {
+    this.personalAudioURL = null
     ++this.vkCheckRevision
     this.vkStatus = { state: 'unknown', message }
     this.vkLastChecked = { ...this.vkStatus }
@@ -89,6 +95,15 @@ export class VKSessionManager {
       ) {
         this.finishVKCheck({ state: 'unknown', message: 'Статус не подтверждён по странице VK.' })
         return
+      }
+      if (signals.personalLibrary) {
+        const url = new URL(contents.getURL())
+        if (
+          url.protocol === 'https:' &&
+          ['vk.com', 'vk.ru'].includes(url.hostname) &&
+          /^\/audios-?\d+\/?$/.test(url.pathname)
+        )
+          this.personalAudioURL = `${url.origin}${url.pathname}?section=all`
       }
       this.finishVKCheck(
         classifyVKPage(

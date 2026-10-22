@@ -28,7 +28,7 @@ export function Preferences({
         <div className="search-provider-header">
           <label className="search-provider-label">Способ поиска в Spotify</label>
           <span className="search-provider-hint">
-            Выберите механизм сопоставления и переноса треков
+            Оба способа ищут варианты. Решение о переносе принимаешь ты.
           </span>
         </div>
 
@@ -61,7 +61,7 @@ export function Preferences({
                   <span className="provider-badge provider-badge-recommended">Без API ключей</span>
                 </div>
                 <p className="provider-subtitle">
-                  Поиск выполняется через защищенный браузерный модуль Spotify внутри VKSpot
+                  Поиск на странице Spotify во встроенном окне VKSpot.
                 </p>
               </div>
             </div>
@@ -75,11 +75,11 @@ export function Preferences({
               </div>
               <div className="provider-feature-item positive">
                 <Check size={14} className="feature-icon positive" />
-                <span>Быстрый запуск — достаточно войти в аккаунт Spotify</span>
+                <span>Если понадобится вход или проверка, страница откроется здесь же</span>
               </div>
               <div className="provider-feature-item neutral">
                 <Info size={14} className="feature-icon neutral" />
-                <span>Плейлист формируется в приложении при экспорте результатов</span>
+                <span>Для создания плейлиста отдельно подключи Spotify API</span>
               </div>
             </div>
           </div>
@@ -105,10 +105,10 @@ export function Preferences({
               <div className="provider-title-wrap">
                 <div className="provider-title-row">
                   <span className="provider-title">Официальный Spotify API</span>
-                  <span className="provider-badge provider-badge-api">Полная синхронизация</span>
+                  <span className="provider-badge provider-badge-api">Нужен Client ID</span>
                 </div>
                 <p className="provider-subtitle">
-                  Прямое взаимодействие с серверами через официальный протокол Spotify Web API
+                  Поиск через официальный API с подключённым аккаунтом.
                 </p>
               </div>
             </div>
@@ -118,15 +118,15 @@ export function Preferences({
             <div className="provider-features">
               <div className="provider-feature-item positive">
                 <Check size={14} className="feature-icon positive" />
-                <span>Автоматическое создание плейлиста прямо в вашем аккаунте</span>
+                <span>Подключение используется и для создания плейлиста</span>
               </div>
               <div className="provider-feature-item positive">
                 <Check size={14} className="feature-icon positive" />
-                <span>Прямое добавление найденных треков в фоновом режиме</span>
+                <span>В плейлист попадут только подтверждённые назначения</span>
               </div>
               <div className="provider-feature-item neutral">
                 <Info size={14} className="feature-icon neutral" />
-                <span>Требует указания Client ID разработчика и учитывает Rate Limit</span>
+                <span>При лимите запросов очередь сохранится и дождётся Spotify</span>
               </div>
             </div>
           </div>

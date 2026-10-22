@@ -4,7 +4,7 @@ import { ArrowRight, Search } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { type MatchingRules, type TrackRow } from '../../../../../shared/model'
 import { analyzeRow, destinationLabels, formatDuration } from '../../../../../core/library'
-import { reviewLabels } from '../../../../../core/matching'
+import { searchResultLabels } from '../../../../../core/matching'
 import { tableColumns, useColumnSizing } from './useColumnSizing'
 
 type TableProps = {
@@ -49,6 +49,7 @@ const VisibleRow = memo(function VisibleRow({
       role="row"
       tabIndex={0}
       aria-label={`Запись ${row.position}: ${row.working.title}`}
+      aria-selected={selected}
       onClick={() => onFocus(row.id)}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
@@ -86,7 +87,9 @@ const VisibleRow = memo(function VisibleRow({
         </div>
       </div>
       <div role="cell" className="cell cell-result">
-        <span className={`status-tag result-${item.group}`}>{reviewLabels[item.group]}</span>
+        <span className={`status-tag result-${item.searchGroup}`}>
+          {searchResultLabels[item.searchGroup]}
+        </span>
       </div>
       <div role="cell" className="cell cell-status">
         <span className={`status-tag ${item.destination}`}>
@@ -151,7 +154,7 @@ export const TrackTable = memo(function TrackTable({
     count: rows.length,
     getItemKey: getKey,
     getScrollElement: () => container.current,
-    estimateSize: () => 52,
+    estimateSize: () => 60,
     overscan: 10,
   })
   useEffect(() => {

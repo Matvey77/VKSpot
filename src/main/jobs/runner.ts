@@ -105,6 +105,7 @@ export class Jobs {
       throw new Error('Выберите записи из этой коллекции.')
     const job = this.store.newJob(collectionId, 'search', [...new Set(rowIds)])
     job.backgroundSearch = background
+    job.refreshSearchResults = !background
     job.autoResume = background
     job.searchProvider = provider
     this.store.putJob(job)
@@ -207,6 +208,9 @@ export class Jobs {
     this.save(job)
     try {
       if (job.kind === 'search') {
+        // Manual searches refresh Spotify, while repeats within this run still
+        // share one response. Background jobs can reuse the persistent cache.
+        const refreshed = new Map<string, Awaited<ReturnType<Spotify['search']>>>()
         while (job.cursor < job.rowIds.length && !this.interrupted.has(id)) {
           const row = this.store.row(job.collectionId, job.rowIds[job.cursor])
           let requested = false
@@ -216,7 +220,9 @@ export class Jobs {
               const cacheKey =
                 (job.searchProvider === 'browser' ? 'spotify-browser-v1:' : 'spotify-search-v1:') +
                 query
-              let results = this.store.cached<Awaited<ReturnType<Spotify['search']>>>(cacheKey)
+              let results = job.refreshSearchResults
+                ? refreshed.get(cacheKey)
+                : this.store.cached<Awaited<ReturnType<Spotify['search']>>>(cacheKey)
               if (!results) {
                 requested = true
                 results =
@@ -224,6 +230,7 @@ export class Jobs {
                     ? await this.browser!.search(query)
                     : await this.spotify.search(query)
                 this.store.cache(cacheKey, results)
+                if (job.refreshSearchResults) refreshed.set(cacheKey, results)
               }
               const current = this.store.row(job.collectionId, row.id)
               if (searchText(current.working) === query)

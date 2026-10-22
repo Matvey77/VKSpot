@@ -187,6 +187,7 @@ export type Job = {
   retryAt?: number
   waitReason?: 'quota' | 'rate-limit'
   backgroundSearch?: boolean
+  refreshSearchResults?: boolean
   autoResume?: boolean
   searchProvider?: 'browser' | 'api'
   createdAt: string
@@ -297,8 +298,11 @@ export type Bridge = {
     id?: string
     artist: string
     title: string
+    duration?: number | null
+    position?: number
   }): Promise<Result<{ playing: boolean; error?: string }>>
   pauseVKTrack(): Promise<Result<{ playing: boolean }>>
+  onVKAudioProgress(callback: (message: string) => void): () => void
   resumeVKTrack(): Promise<Result<{ playing: boolean }>>
   testProxy(
     proxyUrl: string,

@@ -300,6 +300,8 @@ export function registerIpc(services: IpcServices): void {
       id: z.string().optional(),
       artist: z.string(),
       title: z.string(),
+      duration: z.number().nonnegative().nullable().optional(),
+      position: z.number().int().positive().optional(),
     })
     const parsed = schema.parse(track)
     return await vkAudio.play(parsed)
@@ -313,7 +315,10 @@ export function registerIpc(services: IpcServices): void {
   handler('openVK', () => vkSession.openVK())
   handler('extractVK', (options) => vkSession.extractVK(options))
   handler('cancelVKExtraction', () => vkSession.cancelVKExtraction())
-  handler('clearVK', () => vkSession.clearVK())
+  handler('clearVK', async () => {
+    vkAudio.close()
+    await vkSession.clearVK()
+  })
 
   handler('prepareLocal', (id) => prepareLocalDialog(main, store, id))
   handler('helper', (action) => executeSpotifyHelper(action))

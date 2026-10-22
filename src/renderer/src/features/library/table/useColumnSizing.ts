@@ -120,7 +120,7 @@ export function useColumnSizing() {
     resizeWithKeyboard,
     gridTemplateColumns: custom
       ? tableColumns.map((column) => `${sizes[column.id] ?? column.width}px`).join(' ')
-      : '38px 48px minmax(130px, 1fr) 158px 140px 62px 32px',
+      : '36px 40px minmax(140px, 1fr) 138px 112px 52px 32px',
     width: custom
       ? tableColumns.reduce((sum, column) => sum + (sizes[column.id] ?? column.width), 0)
       : '100%',

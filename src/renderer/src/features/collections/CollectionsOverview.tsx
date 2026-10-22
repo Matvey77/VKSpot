@@ -218,11 +218,11 @@ export function CollectionsOverview({
             const total = c.rows.length
             const summary = summarizeCollection(c, matchingRules)
             const resolved = total - summary.unresolved
-            const exactMatches = summary.groups.exact
+            const spotifyCount = summary.destinations.spotify
             const reviewVersions = summary.groups.review
             const localPending = summary.localPending
 
-            const spotifyPct = total > 0 ? (exactMatches / total) * 100 : 0
+            const spotifyPct = total > 0 ? (spotifyCount / total) * 100 : 0
             const reviewPct = total > 0 ? (reviewVersions / total) * 100 : 0
             const localPct = total > 0 ? (localPending / total) * 100 : 0
 
@@ -311,13 +311,14 @@ export function CollectionsOverview({
                       </div>
                     ) : (
                       <>
-                        <span
+                        <button
+                          type="button"
                           className="collection-title-link"
                           onClick={() => onOpenCollection(c.id)}
                           title="Открыть коллекцию"
                         >
                           {c.name}
-                        </span>
+                        </button>
                         <IconButton
                           title="Переименовать коллекцию"
                           onClick={() => handleStartRename(c)}
@@ -342,7 +343,7 @@ export function CollectionsOverview({
                       <div
                         className="segmented-part spotify"
                         style={{ width: `${spotifyPct}%` }}
-                        title={`Spotify совпадений: ${count(exactMatches)} (${Math.round(spotifyPct)}%)`}
+                        title={`Выбрано Spotify: ${count(spotifyCount)} (${Math.round(spotifyPct)}%)`}
                       />
                       <div
                         className="segmented-part local"
@@ -357,10 +358,10 @@ export function CollectionsOverview({
                     </div>
 
                     <div className="collection-progress-legend">
-                      {exactMatches > 0 && (
+                      {spotifyCount > 0 && (
                         <span className="legend-item">
                           <span className="legend-dot spotify" />
-                          {count(exactMatches)} в Spotify
+                          {count(spotifyCount)} выбрано в Spotify
                         </span>
                       )}
                       {reviewVersions > 0 && (

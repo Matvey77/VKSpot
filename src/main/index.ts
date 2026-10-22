@@ -54,7 +54,13 @@ app
       session.fromPartition('vkspot-spotify-api').fetch(url, init),
     )
     spotifyBrowser = new SpotifyBrowser(() => main, changed)
-    vkAudio = new VKAudioPlayer(() => main)
+    vkAudio = new VKAudioPlayer(
+      () => main,
+      () => vkSession.libraryURL(),
+      (message) => {
+        if (main && !main.isDestroyed()) main.webContents.send('vkspot:vk-audio-progress', message)
+      },
+    )
 
     vkSession = new VKSessionManager({
       backgroundTest,

@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Link2,
   ListFilter,
+  ShieldCheck,
   Search,
   Undo2,
   Upload,
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react'
 import type { Collection, Working } from '../../../../shared/model'
 import type { ViewState } from '../../../../shared/sync'
-import { reviewLabels, type ReviewGroup } from '../../../../core/matching'
+import { searchResultLabels, type SearchResultGroup } from '../../../../core/matching'
 import ExplainedButton from '../../components/ui/ExplainedButton'
 import IconButton from '../../components/ui/IconButton'
 import CompletenessNotice from '../collections/CompletenessNotice'
@@ -51,8 +52,8 @@ export interface LibraryViewProps {
   onQueryChange: (q: string) => void
   filter: Filter
   onFilterChange: (f: Filter) => void
-  resultFilter: 'all' | ReviewGroup
-  onResultFilterChange: (rf: 'all' | ReviewGroup) => void
+  resultFilter: 'all' | SearchResultGroup
+  onResultFilterChange: (rf: 'all' | SearchResultGroup) => void
   selected: Set<string>
   onSelectedChange: React.Dispatch<React.SetStateAction<Set<string>>>
   onImportFile: () => void
@@ -62,7 +63,7 @@ export interface LibraryViewProps {
   onUndo: () => void
   onOpenSpotifyPanel: (jobId?: string) => void
   onContinueSearch: (id: string, browser: boolean) => void
-  onSearch: (ids: string[], background?: boolean) => void
+  onSearch: (ids: string[], background?: boolean) => Promise<string | undefined>
   onControlJob: (id: string, action: 'pause' | 'resume') => void
   onPatch: (ids: string[], value: Partial<Working>) => Promise<boolean>
   onConfirmMetadata: (ids: string[]) => Promise<boolean>
@@ -112,9 +113,19 @@ export function LibraryView({
     () => collection?.rows.find((row) => row.id === focusId),
     [collection, focusId],
   )
-  const { baseRows, rows, matchingRows, resultCounts, selectedMatches, hiddenSelected, summary } =
-    useLibraryRows(collection, data.settings.matchingRules, query, filter, resultFilter, selected)
+  const {
+    baseRows,
+    rows,
+    matchingRows,
+    resultCounts,
+    destinationCounts,
+    selectedMatches,
+    hiddenSelected,
+    summary,
+  } = useLibraryRows(collection, data.settings.matchingRules, query, filter, resultFilter, selected)
   const searchCounts = { pending: summary.groups.pending, resolved: summary.groups.ready }
+  const focusedIndex = rows.findIndex((row) => row.id === focusId)
+  const quickFilters: Filter[] = ['all', 'unresolved', 'spotify', 'local', 'excluded']
 
   const confirmSelection = async () => {
     const ids = [...selected]
@@ -126,28 +137,37 @@ export function LibraryView({
   }
 
   const openReviewRow = useCallback((id: string) => onFocusIdChange(id), [onFocusIdChange])
+  const closeInspector = () => {
+    const activeRow = document.querySelector<HTMLElement>('.table-row.focused')
+    onFocusIdChange('')
+    requestAnimationFrame(() => {
+      const target = activeRow?.isConnected
+        ? activeRow
+        : document.querySelector<HTMLInputElement>('.library-tools input')
+      target?.focus()
+    })
+  }
+  const navigateReview = (index: number, direction: 'Предыдущая запись' | 'Следующая запись') => {
+    onFocusIdChange(rows[index].id)
+    requestAnimationFrame(() => {
+      const target =
+        inspector.panel.current?.querySelector<HTMLButtonElement>(
+          `button[title="${direction}"]:not(:disabled)`,
+        ) ??
+        inspector.panel.current?.querySelector<HTMLButtonElement>(
+          '.inspector-track-navigation button:not(:disabled)',
+        ) ??
+        inspector.panel.current?.querySelector<HTMLButtonElement>('button[title="Закрыть запись"]')
+      target?.focus()
+    })
+  }
 
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading library-heading">
         <div>
           {onBackToOverview && (
-            <button
-              type="button"
-              onClick={onBackToOverview}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--muted)',
-                background: 'transparent',
-                border: 'none',
-                padding: '0 0 6px 0',
-                cursor: 'pointer',
-              }}
-            >
+            <button type="button" onClick={onBackToOverview} className="collection-back">
               <ArrowLeft size={14} /> Все коллекции
             </button>
           )}
@@ -158,7 +178,31 @@ export function LibraryView({
               : 'Сначала сохраним исходный список. Затем выберем путь для каждой записи.'}
           </p>
         </div>
-        {!collection && (
+        {collection ? (
+          <div className="heading-actions library-actions">
+            <button onClick={onExportArchive} disabled={!!busy} aria-label="Сохранить архив">
+              <Download size={16} />
+              <span className="desktop-label">Сохранить архив</span>
+            </button>
+            <ExplainedButton
+              className="primary"
+              hintLabel="Перенос в Spotify"
+              hint={
+                data.spotify.connected
+                  ? 'Проверить состав и создать приватный плейлист.'
+                  : 'Для создания плейлиста подключи Spotify API. Поиск через страницу работает отдельно.'
+              }
+              reason={busy ? 'Дождись завершения текущего действия.' : undefined}
+              onClick={onTransferClick}
+            >
+              {data.spotify.connected ? 'Проверить перенос' : 'Подключить для переноса'}
+              <ArrowRight size={16} />
+            </ExplainedButton>
+            <IconButton title="Отменить последнюю правку" disabled={!!busy} onClick={onUndo}>
+              <Undo2 size={18} />
+            </IconButton>
+          </div>
+        ) : (
           <div className="heading-actions">
             <button onClick={onImportFile} disabled={!!busy}>
               <Upload size={16} />
@@ -223,40 +267,33 @@ export function LibraryView({
               onDismiss={onDismissRecentExport}
             />
           )}
-          <div
-            className="library-mode"
-            style={{ justifyContent: 'flex-end', marginBottom: '12px' }}
-          >
-            <div className="button-row library-actions">
-              <button
-                onClick={onExportArchive}
-                disabled={!!busy}
-                aria-label="Сохранить архив"
-                title="Сохранить архив"
-              >
-                <Download size={16} />
-                <span className="desktop-label">Сохранить архив</span>
-              </button>
-              <ExplainedButton
-                hintLabel="Перенос в Spotify"
-                hint={
-                  data.spotify.connected
-                    ? 'Проверить состав и создать приватный плейлист.'
-                    : 'Для создания плейлиста подключи Spotify API. Поиск через страницу работает отдельно.'
-                }
-                reason={busy ? 'Дождись завершения текущего действия.' : undefined}
-                onClick={onTransferClick}
-              >
-                {data.spotify.connected ? 'Проверить перенос' : 'Подключить для переноса'}{' '}
-                <ArrowRight size={16} />
-              </ExplainedButton>
-              <IconButton title="Отменить последнюю правку" disabled={!!busy} onClick={onUndo}>
-                <Undo2 size={18} />
-              </IconButton>
+          <div className="collection-navigation">
+            <div className="collection-facets" role="group" aria-label="Быстрые фильтры коллекции">
+              {quickFilters.map((value) => (
+                <button
+                  key={value}
+                  aria-pressed={filter === value && resultFilter === 'all' && !query}
+                  onClick={() => {
+                    onFilterChange(value)
+                    onResultFilterChange('all')
+                    onQueryChange('')
+                  }}
+                >
+                  {value === 'spotify' && <SpotifyIcon size={15} />}
+                  {labels[value]}
+                  <span>{count(summary.destinations[value])}</span>
+                </button>
+              ))}
             </div>
+            <span className="collection-safety">
+              <ShieldCheck size={15} /> Оригинал сохранён
+            </span>
           </div>
-          <div className="library-panel">
-            <div className="table-workspace">
+          <div className={`library-panel collection-work ${focused ? 'with-inspector' : ''}`}>
+            <div
+              className="table-workspace library-list-pane"
+              inert={!!focused && inspector.overlay}
+            >
               <SearchControls
                 compact
                 collectionId={collection.id}
@@ -292,34 +329,42 @@ export function LibraryView({
                     onChange={(e) => onQueryChange(e.target.value)}
                   />
                 </div>
-                <div className="filter-select">
-                  <ListFilter size={16} />
+                <label className="library-filter">
+                  <span>Решение о переносе</span>
+                  <div className="filter-select">
+                    <ListFilter size={16} />
+                    <select
+                      aria-label="Статус записей"
+                      value={filter}
+                      onChange={(e) => onFilterChange(e.target.value as Filter)}
+                    >
+                      {Object.entries(labels).map(([key, name]) => (
+                        <option key={key} value={key}>
+                          {key === 'local-pending' ? 'Нужен локальный файл' : name} (
+                          {count(destinationCounts[key as Filter])})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+                <label className="library-filter">
+                  <span>Результат поиска</span>
                   <select
-                    aria-label="Статус записей"
-                    value={filter}
-                    onChange={(e) => onFilterChange(e.target.value as Filter)}
+                    aria-label="Результат поиска"
+                    title="Последняя выдача Spotify. Этот фильтр применяется вместе с решением и текстовым поиском."
+                    value={resultFilter}
+                    onChange={(event) =>
+                      onResultFilterChange(event.target.value as typeof resultFilter)
+                    }
                   >
-                    {Object.entries(labels).map(([key, name]) => (
-                      <option key={key} value={key}>
-                        {name} ({count(counts[key as Filter])})
+                    <option value="all">Все результаты ({count(baseRows.length)})</option>
+                    {Object.entries(searchResultLabels).map(([group, label]) => (
+                      <option key={group} value={group}>
+                        {label} ({count(resultCounts[group as SearchResultGroup])})
                       </option>
                     ))}
                   </select>
-                </div>
-                <select
-                  aria-label="Результат поиска"
-                  value={resultFilter}
-                  onChange={(event) =>
-                    onResultFilterChange(event.target.value as typeof resultFilter)
-                  }
-                >
-                  <option value="all">Все результаты ({count(baseRows.length)})</option>
-                  {Object.entries(reviewLabels).map(([group, label]) => (
-                    <option key={group} value={group}>
-                      {label} ({count(resultCounts[group as ReviewGroup])})
-                    </option>
-                  ))}
-                </select>
+                </label>
                 {(query || filter !== 'all' || resultFilter !== 'all') && (
                   <IconButton
                     title="Сбросить фильтры"
@@ -356,6 +401,7 @@ export function LibraryView({
                 >
                   Выделить совпадения ({count(matchingRows.length)})
                 </ExplainedButton>
+                <span className="selection-help">Подтверждаются только записи без решения.</span>
               </div>
               {selected.size > 0 && (
                 <div className="selection-bar">
@@ -371,104 +417,149 @@ export function LibraryView({
                       busy
                         ? 'Дождись завершения текущего действия.'
                         : selectedMatches !== selected.size
-                          ? 'Для массового подтверждения выбери только записи «Совпадают данные». Используй кнопку «Выделить совпадения».'
+                          ? 'Для массового подтверждения выбери записи без решения со статусом «Совпадают данные». Используй кнопку «Выделить совпадения».'
                           : undefined
                     }
                     onClick={() => void confirmSelection()}
                   >
                     Подтвердить выбранные ({count(selectedMatches)})
                   </ExplainedButton>
-                  <select
-                    aria-label="Действие с выбранными"
-                    value=""
-                    disabled={!!busy}
-                    onChange={(event) => {
-                      if (event.target.value === 'exclude')
-                        void onPatch([...selected], { excluded: true })
-                      if (event.target.value === 'include')
-                        void onPatch([...selected], { excluded: false })
-                      if (event.target.value === 'defer')
-                        void onPatch([...selected], { reviewDeferred: true })
-                      if (event.target.value === 'local')
-                        void onPatch([...selected], { localPending: true, reviewDeferred: false })
-                      if (event.target.value === 'search') onSearch([...selected])
-                    }}
+                  <div
+                    className="selection-decisions"
+                    role="group"
+                    aria-label="Решения для выбранных записей"
                   >
-                    <option value="" disabled>
-                      Другие действия
-                    </option>
-                    <option value="exclude">Исключить</option>
-                    <option value="include">Вернуть в перенос</option>
-                    <option value="defer">Разобрать позже</option>
-                    <option value="local">Нужен локальный файл</option>
-                    <option
-                      value="search"
-                      disabled={
-                        data.settings.searchProvider !== 'browser' && !data.spotify.connected
+                    <button
+                      disabled={!!busy}
+                      onClick={() => void onPatch([...selected], { excluded: true })}
+                    >
+                      Исключить
+                    </button>
+                    <button
+                      disabled={!!busy}
+                      onClick={() => void onPatch([...selected], { excluded: false })}
+                    >
+                      Вернуть в перенос
+                    </button>
+                    <button
+                      disabled={!!busy}
+                      onClick={() =>
+                        void onPatch([...selected], {
+                          destination: 'unresolved',
+                          localPending: false,
+                          reviewDeferred: true,
+                        })
                       }
                     >
+                      Разобрать позже
+                    </button>
+                    <button
+                      disabled={!!busy}
+                      onClick={() =>
+                        void onPatch([...selected], {
+                          destination: 'unresolved',
+                          localPending: true,
+                          reviewDeferred: false,
+                        })
+                      }
+                    >
+                      Нужен локальный файл
+                    </button>
+                    <button
+                      disabled={
+                        !!busy ||
+                        (data.settings.searchProvider !== 'browser' && !data.spotify.connected)
+                      }
+                      onClick={() => void onSearch([...selected])}
+                    >
                       Повторить поиск
-                    </option>
-                  </select>
+                    </button>
+                  </div>
+                  {hiddenSelected > 0 && (
+                    <button
+                      disabled={!!busy}
+                      onClick={() => {
+                        const visible = new Set(rows.map((row) => row.id))
+                        onSelectedChange(new Set([...selected].filter((id) => visible.has(id))))
+                      }}
+                    >
+                      Оставить только видимые
+                    </button>
+                  )}
                   <IconButton title="Снять выделение" onClick={() => onSelectedChange(new Set())}>
                     <X size={16} />
                   </IconButton>
                 </div>
               )}
-              <div className={`collection-work ${focused ? 'with-inspector' : ''}`}>
-                <TrackTable
-                  rows={rows}
-                  selected={selected}
-                  onSelect={onSelectedChange}
-                  focusedId={focusId}
-                  onFocus={onFocusIdChange}
-                  onReview={openReviewRow}
-                  resetKey={`${collectionId}:${query}:${filter}:${resultFilter}`}
-                  matchingRules={data.settings.matchingRules}
-                />
-                {focused && (
-                  <>
-                    <div
-                      className="inspector-resizer"
-                      onPointerDown={inspector.startResize}
-                      onKeyDown={inspector.resizeWithKeyboard}
-                      role="separator"
-                      aria-orientation="vertical"
-                      aria-label="Ширина инспектора"
-                      tabIndex={0}
-                      title="Потяните для изменения ширины панели"
-                    />
-                    <Inspector
-                      key={focused.id}
-                      row={focused}
-                      draft={drafts[focused.id]}
-                      onDraftChange={(draft) =>
-                        onDraftsChange((current) => ({ ...current, [focused.id]: draft }))
-                      }
-                      busy={!!busy}
-                      spotifyConnected={
-                        data.settings.searchProvider === 'browser' || data.spotify.connected
-                      }
-                      onClose={() => onFocusIdChange('')}
-                      onPatch={(value) => onPatch([focused.id], value)}
-                      onLink={() => void onLinkFile(focused.id)}
-                      onSearch={() => onSearch([focused.id])}
-                      onExternal={onOpenExternal}
-                      width={inspector.width}
-                      panelRef={inspector.panel}
-                      layout={inspector.layout}
-                      onLayoutChange={inspector.changeLayout}
-                    />
-                  </>
-                )}
-              </div>
+              <TrackTable
+                rows={rows}
+                selected={selected}
+                onSelect={onSelectedChange}
+                focusedId={focusId}
+                onFocus={onFocusIdChange}
+                onReview={openReviewRow}
+                resetKey={`${collectionId}:${query}:${filter}:${resultFilter}`}
+                matchingRules={data.settings.matchingRules}
+              />
               <footer className="collection-footer">
                 <span>
-                  {count(rows.length)} из {count(counts.all)} записей · {count(counts.excluded)}{' '}
-                  исключено, сохранено в списке
+                  {count(rows.length)} из {count(counts.all)} записей
+                  {counts.excluded > 0 && (
+                    <> · {count(counts.excluded)} исключено, сохранено в списке</>
+                  )}
                 </span>
+                <span>Порядок VK сохранён</span>
               </footer>
             </div>
+            {focused && (
+              <>
+                <div
+                  className="inspector-resizer"
+                  onPointerDown={inspector.startResize}
+                  onKeyDown={inspector.resizeWithKeyboard}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Ширина инспектора"
+                  aria-valuenow={inspector.width}
+                  aria-valuemin={340}
+                  aria-valuemax={800}
+                  tabIndex={0}
+                  title="Потяните для изменения ширины панели"
+                />
+                <Inspector
+                  key={focused.id}
+                  row={focused}
+                  draft={drafts[focused.id]}
+                  onDraftChange={(draft) =>
+                    onDraftsChange((current) => ({ ...current, [focused.id]: draft }))
+                  }
+                  busy={!!busy}
+                  jobs={data.jobs}
+                  spotifyConnected={
+                    data.settings.searchProvider === 'browser' || data.spotify.connected
+                  }
+                  onClose={closeInspector}
+                  onPatch={(value) => onPatch([focused.id], value)}
+                  onLink={() => void onLinkFile(focused.id)}
+                  onSearch={() => onSearch([focused.id])}
+                  onExternal={onOpenExternal}
+                  width={inspector.width}
+                  panelRef={inspector.panel}
+                  layout={inspector.layout}
+                  onLayoutChange={inspector.changeLayout}
+                  onPrevious={
+                    focusedIndex > 0
+                      ? () => navigateReview(focusedIndex - 1, 'Предыдущая запись')
+                      : undefined
+                  }
+                  onNext={
+                    focusedIndex < rows.length - 1
+                      ? () => navigateReview(focusedIndex + 1, 'Следующая запись')
+                      : undefined
+                  }
+                />
+              </>
+            )}
           </div>
         </>
       )}
