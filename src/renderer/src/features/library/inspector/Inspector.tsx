@@ -11,7 +11,6 @@ import {
   Loader2,
   Pause,
   Play,
-  RotateCcw,
   Rows2,
   Search,
   ShieldCheck,
@@ -20,10 +19,7 @@ import {
 import type { TrackRow, Working } from '../../../../../shared/model'
 import type { JobStatus } from '../../../../../shared/job-status'
 import { spotifyTrackId } from '../../../../../core/matching'
-import {
-  destinationStatus as status,
-  formatDuration as duration,
-} from '../../../../../core/library'
+import { formatDuration as duration } from '../../../../../core/library'
 import { SpotifyIcon } from '../../../components/brand/BrandIcons'
 import IconButton from '../../../components/ui/IconButton'
 import ManualSpotifyMatch from './ManualSpotifyMatch'
@@ -68,7 +64,6 @@ export function Inspector({
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
   useLayoutEffect(() => heading.current?.focus({ preventScroll: true }), [])
-  const [excluded, setExcluded] = useState(row.working.excluded)
   const [startingSearch, setStartingSearch] = useState(false)
   const [searchId, setSearchId] = useState<string>()
   const searchJob = jobs.find((job) => job.id === searchId)
@@ -83,7 +78,7 @@ export function Inspector({
       setStartingSearch(false)
     }
   }
-  useEffect(() => setExcluded(row.working.excluded), [row.id, row.working.excluded])
+  const excluded = row.working.excluded
 
   const [playingSpotifyId, setPlayingSpotifyId] = useState<string | null>(null)
   const [manualPreview, setManualPreview] = useState(false)
@@ -171,14 +166,6 @@ export function Inspector({
   const modified = Object.entries(draft).some(
     ([key, value]) => value !== row.working[key as keyof typeof draft],
   )
-
-  const hasDecision =
-    row.working.destination !== 'unresolved' ||
-    row.working.spotify !== null ||
-    row.working.local !== null ||
-    row.working.localPending ||
-    row.working.reviewDeferred ||
-    row.working.excluded
 
   const vkOriginalSection = (
     <div className="inspector-card">
@@ -595,83 +582,6 @@ export function Inspector({
           <IconButton title="Закрыть запись" onClick={onClose}>
             <X size={18} />
           </IconButton>
-        </div>
-      </div>
-
-      <div className="inspector-decision-bar">
-        <div className="decision-bar-row">
-          <div className="decision-status-wrap">
-            <label className="decision-title" htmlFor={`decision-${row.id}`}>
-              Решение:
-            </label>
-            <select
-              id={`decision-${row.id}`}
-              aria-label="Решение для записи"
-              value={status(row)}
-              disabled={busy}
-              onChange={(event) => {
-                const choice = event.target.value
-                void onPatch(
-                  choice === 'excluded'
-                    ? { excluded: true }
-                    : {
-                        excluded: false,
-                        destination:
-                          choice === 'spotify' || choice === 'local' ? choice : 'unresolved',
-                        localPending: choice === 'local-pending',
-                        reviewDeferred: choice === 'deferred',
-                      },
-                )
-              }}
-            >
-              <option value="unresolved">Нужен выбор</option>
-              <option value="local-pending">Нужен локальный файл</option>
-              <option value="deferred">Разобрать позже</option>
-              {row.working.spotify && <option value="spotify">Spotify</option>}
-              {row.working.local && <option value="local">Локальный файл</option>}
-              <option value="excluded">Исключить из переноса</option>
-            </select>
-          </div>
-          <div className="decision-actions-wrap">
-            {hasDecision && (
-              <button
-                type="button"
-                className="reset-decision-button"
-                disabled={busy}
-                onClick={() =>
-                  onPatch({
-                    destination: 'unresolved',
-                    spotify: null,
-                    localPending: false,
-                    reviewDeferred: false,
-                    local: null,
-                    excluded: false,
-                  })
-                }
-                title="Сбросить решение и вернуть трек в статус «Нужен выбор»"
-              >
-                <RotateCcw size={13} />
-                <span>Сбросить решение</span>
-              </button>
-            )}
-            <label
-              className="check-field compact-exclude"
-              title="Исключить трек из переноса в Spotify"
-            >
-              <input
-                type="checkbox"
-                aria-label="Исключить из переноса"
-                checked={excluded}
-                disabled={busy}
-                onChange={async (e) => {
-                  const next = e.target.checked
-                  setExcluded(next)
-                  if (!(await onPatch({ excluded: next }))) setExcluded(row.working.excluded)
-                }}
-              />
-              <span>Исключить из переноса</span>
-            </label>
-          </div>
         </div>
       </div>
 

@@ -133,7 +133,14 @@ export function LibraryView({
     }
   }
 
-  const openReviewRow = useCallback((id: string) => onFocusIdChange(id), [onFocusIdChange])
+  const handleFocusRow = useCallback(
+    (id: string) => {
+      onFocusIdChange(id)
+      if (id) onSelectedChange(new Set([id]))
+    },
+    [onFocusIdChange, onSelectedChange],
+  )
+  const openReviewRow = handleFocusRow
   const closeInspector = () => {
     const activeRow = document.querySelector<HTMLElement>('.table-row.focused')
     onFocusIdChange('')
@@ -145,7 +152,8 @@ export function LibraryView({
     })
   }
   const navigateReview = (index: number, direction: 'Предыдущая запись' | 'Следующая запись') => {
-    onFocusIdChange(rows[index].id)
+    const nextId = rows[index].id
+    handleFocusRow(nextId)
     requestAnimationFrame(() => {
       const target =
         inspector.panel.current?.querySelector<HTMLButtonElement>(
@@ -507,7 +515,7 @@ export function LibraryView({
                 selected={selected}
                 onSelect={onSelectedChange}
                 focusedId={focusId}
-                onFocus={onFocusIdChange}
+                onFocus={handleFocusRow}
                 onReview={openReviewRow}
                 resetKey={`${collectionId}:${query}:${filter}:${resultFilter}`}
                 matchingRules={data.settings.matchingRules}

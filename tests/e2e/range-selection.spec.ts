@@ -122,7 +122,7 @@ test('Shift selects and deselects filtered ranges across virtual rows without ch
     await expect(checkbox(5)).toBeChecked()
     await row(7).click()
     await expect(page.locator('.inspector-track-heading')).toContainText('Track 007')
-    await expect(selection).toContainText('Выбрано 3')
+    await expect(selection).toContainText('Выбрано 1')
     const final = await page.evaluate(() => window.vkspot.state())
     if (!final.ok) throw new Error(final.error)
     expect(final.value.collections[0]).toEqual(original)

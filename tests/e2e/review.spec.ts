@@ -175,13 +175,8 @@ test('independent filters, exposed decisions and manual Spotify links preserve s
 
     await page.getByRole('row', { name: 'Запись 4: Worldwide', exact: true }).click()
     const inspector = page.locator('.inspector')
-    const geometry = await inspector.locator('.decision-status-wrap').evaluate((element) => {
-      const [label, badge] = Array.from(element.children).map((child) =>
-        child.getBoundingClientRect(),
-      )
-      return Math.abs((label.top + label.bottom) / 2 - (badge.top + badge.bottom) / 2)
-    })
-    expect(geometry).toBeLessThanOrEqual(1)
+    await expect(inspector).toBeVisible()
+    await expect(page.locator('.selection-bar')).toContainText('Выбрано 1')
     await inspector.getByRole('button', { name: 'Указать трек Spotify', exact: true }).click()
     const link = inspector.getByLabel('Ссылка или URI трека Spotify', { exact: true })
     await link.fill('https://open.spotify.com/playlist/' + 'b'.repeat(22))
@@ -1073,10 +1068,10 @@ test('table inspector supports resizing, layout toggle (parallel/sequential), re
     await expect(inspector).toBeVisible()
     await expect(inspector).toHaveClass(/layout-parallel/)
 
-    // 3. Top decision bar and Reset Decision button
-    const decisionBar = page.locator('.inspector-decision-bar')
-    await expect(decisionBar).toBeVisible()
-    const resetBtn = page.locator('.reset-decision-button')
+    // 3. Selection bar and Reset Decision button
+    const resetBtn = page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Сбросить решение', exact: true })
     await expect(resetBtn).toBeVisible()
     await expect(resetBtn).toContainText('Сбросить решение')
 
@@ -1099,9 +1094,7 @@ test('table inspector supports resizing, layout toggle (parallel/sequential), re
 
     // 6. Reset decision clears destination to unresolved
     await resetBtn.click()
-    await expect(inspector.getByRole('combobox', { name: 'Решение для записи' })).toHaveValue(
-      'unresolved',
-    )
+    await expect(row).toContainText('Нужен выбор')
   } finally {
     await app.close()
     await cleanup(directory)
@@ -1152,9 +1145,10 @@ test('empty search explains the saved query and an individual local-file decisio
     await expect(inspector.locator('.candidate-empty')).toContainText(
       'Пустой ответ не означает, что трека нет в Spotify',
     )
-    const decision = inspector.getByRole('combobox', { name: 'Решение для записи' })
-    await decision.selectOption('local-pending')
-    await expect(decision).toHaveValue('local-pending')
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Нужен локальный файл', exact: true })
+      .click()
     await expect(inspector.locator('.destination-state')).toContainText('ожидает привязки')
     await mkdir('.local/evidence/decisions', { recursive: true })
     await page.screenshot({ path: '.local/evidence/decisions/desktop.png' })
@@ -1172,8 +1166,11 @@ test('empty search explains the saved query and an individual local-file decisio
       'missing',
     )
     await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
-    await expect(decision).toHaveValue('unresolved')
-    await decision.selectOption('local-pending')
+    await expect(inspector.locator('.destination-state')).toContainText('не выбрано')
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Нужен локальный файл', exact: true })
+      .click()
     await app.close()
     app = await launch(directory)
     page = await app.firstWindow()
@@ -1183,9 +1180,7 @@ test('empty search explains the saved query and an individual local-file decisio
       .selectOption('local-pending')
     await expect(page.getByRole('row')).toHaveCount(2)
     await page.getByRole('row', { name: 'Запись 1: Rare remix', exact: true }).click()
-    await expect(page.getByRole('combobox', { name: 'Решение для записи' })).toHaveValue(
-      'local-pending',
-    )
+    await expect(page.locator('.destination-state')).toContainText('ожидает привязки')
     const result = await page.evaluate(() => window.vkspot.state())
     if (!result.ok) throw new Error(result.error)
     const saved = result.value.collections[0]
@@ -1198,11 +1193,16 @@ test('empty search explains the saved query and an individual local-file decisio
     })
     expect(saved.rows.map((row) => row.source)).toEqual(original.rows.map((row) => row.source))
     expect(saved.sourceHash).toBe(original.sourceHash)
-    await page.getByRole('combobox', { name: 'Решение для записи' }).selectOption('deferred')
-    await page.getByRole('button', { name: 'Сбросить решение', exact: true }).click()
-    await expect(page.getByRole('combobox', { name: 'Решение для записи' })).toHaveValue(
-      'unresolved',
-    )
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Разобрать позже', exact: true })
+      .click()
+    await expect(page.locator('.destination-state')).toContainText('разобрать позже')
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Сбросить решение', exact: true })
+      .click()
+    await expect(page.locator('.destination-state')).toContainText('не выбрано')
   } finally {
     await app.close()
     await cleanup(directory)
