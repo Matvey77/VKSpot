@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
 import { modernVKPage } from '../fixtures/vk-pages'
 
-const sections = ['Начало', 'Коллекция', 'Подключения', 'Задания', 'Архив и экспорт', 'Настройки']
+const sections = ['Обзор', 'Коллекции', 'Подключения', 'Задания', 'Настройки']
 const viewports = [
   { width: 940, height: 640 },
   { width: 1000, height: 760 },
@@ -157,7 +157,7 @@ test('sidebar service and task status stays visible across sections and compact 
         (size) => window.innerWidth === size.width && window.innerHeight === size.height,
         viewport,
       )
-      await page.getByRole('button', { name: 'Начало', exact: true }).click()
+      await page.getByRole('button', { name: 'Обзор', exact: true }).click()
       await page.screenshot({
         path: `.local/evidence/e2e/sidebar-status-start-${viewport.width}x${viewport.height}.png`,
         animations: 'disabled',
@@ -309,7 +309,7 @@ test('latest sidebar task follows createdAt and reports live progress across vie
     })
     if (!preferences.ok) throw new Error(preferences.error)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    await page.getByRole('button', { name: 'Начало', exact: true }).click()
+    await page.getByRole('button', { name: 'Обзор', exact: true }).click()
     await expect(statusButton).toHaveAttribute(
       'aria-label',
       'Последнее задание: Поиск Spotify, Пауза, 1 из 3',

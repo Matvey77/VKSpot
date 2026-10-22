@@ -6,7 +6,7 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
@@ -421,7 +421,7 @@ test('collection runs a resumable background search without switching to jobs or
     await page.getByRole('button', { name: 'Продолжить поиск', exact: true }).click()
     await expect(page.getByText('Поиск завершён · 4 / 4', { exact: true })).toBeVisible()
     await expect(page.getByRole('combobox', { name: 'Результат поиска' })).toContainText(
-      'Без результатов (3)',
+      'Ничего не найдено (3)',
     )
     const state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)
@@ -490,7 +490,7 @@ test('resumed search keeps decisions and repeated pause available, including aft
     })
     await page.getByRole('button', { name: 'Продолжить поиск', exact: true }).click()
     await expect(pause).toBeEnabled()
-    await expect(page.getByRole('button', { name: 'Сохранить архив', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Коллекции', exact: true })).toBeEnabled()
     await page.getByRole('row').nth(1).click()
     await page.locator('.candidate').getByRole('button', { name: 'Выбрать', exact: true }).click()
     const state = await page.evaluate(() => window.vkspot.state())
@@ -817,7 +817,7 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
     for (const [position, title, status] of [
       [1, 'Plain Song', 'Совпадают данные'],
       [3, 'Version (Remix)', 'Проверить версию'],
-      [4, 'Missing', 'Без результатов'],
+      [4, 'Missing', 'Ничего не найдено'],
       [5, 'Pending', 'Не искали'],
       [6, 'Need file', 'Нужен файл'],
       [7, 'Deferred', 'На потом'],
@@ -1088,8 +1088,109 @@ test('table inspector supports resizing, layout toggle (parallel/sequential), re
 
     // 6. Reset decision clears destination to unresolved
     await resetBtn.click()
-    await expect(inspector.locator('.decision-status-wrap .status-tag')).toContainText(
-      'Нужен выбор',
+    await expect(inspector.getByRole('combobox', { name: 'Решение для записи' })).toHaveValue(
+      'unresolved',
+    )
+  } finally {
+    await app.close()
+    await cleanup(directory)
+  }
+})
+
+test('empty search explains the saved query and an individual local-file decision survives undo and restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-local-decision-'))
+  let app = await launch(directory)
+  try {
+    let page = await app.firstWindow()
+    const original = await page.evaluate(async () => {
+      const imported = await window.vkspot.importCollection({
+        name: 'Local decision fixture',
+        origin: 'Synthetic',
+        completeness: { expected: 2, status: 'verified-count', message: 'Test only' },
+        tracks: [
+          { artist: 'Artist', title: 'Rare remix', duration: 180 },
+          { artist: 'Artist', title: 'Not searched', duration: 180 },
+        ],
+      } as never)
+      if (!imported.ok) throw new Error(imported.error)
+      const state = await window.vkspot.state()
+      if (!state.ok) throw new Error(state.error)
+      const collection = state.value.collections[0]
+      const patched = await window.vkspot.patchRows(collection.id, [collection.rows[0].id], {
+        searchedQuery: 'Artist Rare remix',
+        candidates: [],
+      })
+      if (!patched.ok) throw new Error(patched.error)
+      return collection
+    })
+    await openLibrary(page)
+    await expect(
+      page.getByRole('row', { name: 'Запись 1: Rare remix', exact: true }),
+    ).toContainText('Ничего не найдено')
+    await expect(
+      page.getByRole('row', { name: 'Запись 2: Not searched', exact: true }),
+    ).toContainText('Не искали')
+    await page
+      .getByRole('combobox', { name: 'Результат поиска', exact: true })
+      .selectOption('missing')
+    await page.getByRole('row', { name: 'Запись 1: Rare remix', exact: true }).click()
+    const inspector = page.locator('.inspector')
+    await expect(inspector.locator('.candidate-empty')).toContainText(
+      'Последний запрос: Artist Rare remix',
+    )
+    await expect(inspector.locator('.candidate-empty')).toContainText(
+      'Пустой ответ не означает, что трека нет в Spotify',
+    )
+    const decision = inspector.getByRole('combobox', { name: 'Решение для записи' })
+    await decision.selectOption('local-pending')
+    await expect(decision).toHaveValue('local-pending')
+    await expect(inspector.locator('.destination-state')).toContainText('ожидает привязки')
+    await mkdir('.local/evidence/decisions', { recursive: true })
+    await page.screenshot({ path: '.local/evidence/decisions/desktop.png' })
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setContentSize(940, 640),
+    )
+    await page.screenshot({ path: '.local/evidence/decisions/compact.png' })
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].setContentSize(1440, 920),
+    )
+    await expect(
+      page.getByRole('row', { name: 'Запись 1: Rare remix', exact: true }),
+    ).toContainText('Нужен файл')
+    await expect(page.getByRole('combobox', { name: 'Результат поиска', exact: true })).toHaveValue(
+      'missing',
+    )
+    await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
+    await expect(decision).toHaveValue('unresolved')
+    await decision.selectOption('local-pending')
+    await app.close()
+    app = await launch(directory)
+    page = await app.firstWindow()
+    await openLibrary(page)
+    await page
+      .getByRole('combobox', { name: 'Статус записей', exact: true })
+      .selectOption('local-pending')
+    await expect(page.getByRole('row')).toHaveCount(2)
+    await page.getByRole('row', { name: 'Запись 1: Rare remix', exact: true }).click()
+    await expect(page.getByRole('combobox', { name: 'Решение для записи' })).toHaveValue(
+      'local-pending',
+    )
+    const result = await page.evaluate(() => window.vkspot.state())
+    if (!result.ok) throw new Error(result.error)
+    const saved = result.value.collections[0]
+    expect(saved.rows[0].working).toMatchObject({
+      destination: 'unresolved',
+      localPending: true,
+      local: null,
+      searchedQuery: 'Artist Rare remix',
+      candidates: [],
+    })
+    expect(saved.rows.map((row) => row.source)).toEqual(original.rows.map((row) => row.source))
+    expect(saved.sourceHash).toBe(original.sourceHash)
+    await page.getByRole('combobox', { name: 'Решение для записи' }).selectOption('deferred')
+    await page.getByRole('button', { name: 'Сбросить решение', exact: true }).click()
+    await expect(page.getByRole('combobox', { name: 'Решение для записи' })).toHaveValue(
+      'unresolved',
     )
   } finally {
     await app.close()

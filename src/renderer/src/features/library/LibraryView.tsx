@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Download,
   FolderOpen,
   Link2,
   ListFilter,
@@ -58,7 +57,6 @@ export interface LibraryViewProps {
   onSelectedChange: React.Dispatch<React.SetStateAction<Set<string>>>
   onImportFile: () => void
   onOpenVK: () => void
-  onExportArchive: () => void
   onTransferClick: () => void
   onUndo: () => void
   onOpenSpotifyPanel: (jobId?: string) => void
@@ -94,7 +92,6 @@ export function LibraryView({
   onSelectedChange,
   onImportFile,
   onOpenVK,
-  onExportArchive,
   onTransferClick,
   onUndo,
   onOpenSpotifyPanel,
@@ -180,10 +177,6 @@ export function LibraryView({
         </div>
         {collection ? (
           <div className="heading-actions library-actions">
-            <button onClick={onExportArchive} disabled={!!busy} aria-label="Сохранить архив">
-              <Download size={16} />
-              <span className="desktop-label">Сохранить архив</span>
-            </button>
             <ExplainedButton
               className="primary"
               hintLabel="Перенос в Spotify"

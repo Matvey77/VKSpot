@@ -1,6 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
 import { lazy, Suspense } from 'react'
-import ArchiveView from '../features/archive/ArchiveView'
 import { CollectionsOverview } from '../features/collections/CollectionsOverview'
 import ConnectionsView from '../features/connections/ConnectionsView'
 import JobsView from '../features/jobs/JobsView'
@@ -88,6 +87,23 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
                 if (collection) setOpenedCollectionId(collection.id)
                 setView('library')
               }}
+              onCollections={() => {
+                setOpenedCollectionId(null)
+                setView('library')
+              }}
+              onSelectCollection={(id) => {
+                setCollectionId(id)
+                setOpenedCollectionId(id)
+              }}
+              onReview={(decision, result) => {
+                setFilter(decision)
+                setResultFilter(result)
+                setQuery('')
+                setSelected(new Set())
+                setFocusId('')
+                if (collection) setOpenedCollectionId(collection.id)
+                setView('library')
+              }}
               onSearch={beginSearch}
               onBrowser={() => openSpotifyPanel()}
               onResume={continueSearch}
@@ -115,6 +131,11 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
                 hasCollection={!!collection}
                 busy={!!busy}
                 navigate={(destination) => {
+                  if (destination === 'collections') {
+                    setOpenedCollectionId(null)
+                    setView('library')
+                    return
+                  }
                   if (destination === 'library') {
                     setOpenedCollectionId(collection?.id ?? null)
                   }
@@ -148,7 +169,7 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
                   void run('vk', () => api.openVK())
                 }}
                 onOpenRepair={openRepair}
-                onExportCollection={(id) => exported('archive', id)}
+                onExportCollection={(id, format) => exported(format, id)}
                 busy={busy}
               />
             )}
@@ -177,7 +198,6 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
                 onSelectedChange={setSelected}
                 onImportFile={() => void importFile()}
                 onOpenVK={() => setView('connections')}
-                onExportArchive={() => exported('archive', openedCollectionId)}
                 onTransferClick={() => {
                   if (data.spotify.connected) setConfirmTransfer(true)
                   else setView('connections')
@@ -289,14 +309,6 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
               }
               onSetAutoResume={setAutoResume}
               onGoToLibrary={() => setView('library')}
-            />
-          )}
-          {view === 'archive' && (
-            <ArchiveView
-              collection={collection}
-              busy={busy}
-              onExport={exported}
-              onImportFile={() => void importFile()}
             />
           )}
           {view === 'settings' && (

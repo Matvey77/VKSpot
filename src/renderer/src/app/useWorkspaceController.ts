@@ -14,7 +14,7 @@ import { api } from '../state/api'
 import { useAppState } from '../state/useAppState'
 import useRetryClock from '../hooks/useRetryClock'
 
-type View = 'welcome' | 'library' | 'connections' | 'jobs' | 'archive' | 'settings'
+type View = 'welcome' | 'library' | 'connections' | 'jobs' | 'settings'
 export function useWorkspaceController() {
   const [view, setView] = useState<View>('welcome')
   const [showGuide, setShowGuide] = useState(false)

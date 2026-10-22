@@ -4,13 +4,11 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
-  Download,
   GripVertical,
   LoaderCircle,
   Music2,
   Pencil,
   Star,
-  Trash2,
   Upload,
   Wrench,
   X,
@@ -20,6 +18,7 @@ import type { Collection, MatchingRules } from '../../../../shared/model'
 import { summarizeCollection } from '../../../../core/library'
 import IconButton from '../../components/ui/IconButton'
 import { VKIcon } from '../../components/brand/BrandIcons'
+import CollectionOptions, { type ExportFormat } from './CollectionOptions'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
@@ -54,7 +53,7 @@ export interface CollectionsOverviewProps {
   onExtractVK?: () => void
   onOpenVK: () => void
   onOpenRepair: (collection: Collection) => void
-  onExportCollection: (id: string) => void
+  onExportCollection: (id: string, format: ExportFormat) => void
   busy: string
 }
 
@@ -392,24 +391,17 @@ export function CollectionsOverview({
                     type="button"
                     className="repair-btn"
                     onClick={() => onOpenRepair(c)}
-                    title="Починить / синхронизировать список из VK без потери решений"
+                    title="Сверить исходный список без потери решений"
                   >
                     <Wrench size={14} />
-                    Починить
+                    Сверить список
                   </button>
-                  <IconButton
-                    title="Экспорт архива коллекции"
-                    onClick={() => onExportCollection(c.id)}
-                  >
-                    <Download size={16} />
-                  </IconButton>
-                  <IconButton
-                    title="Удалить коллекцию"
-                    onClick={() => setConfirmDeleteId(c.id)}
-                    className="danger-hover"
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
+                  <CollectionOptions
+                    collection={c}
+                    busy={!!busy}
+                    onExport={(format) => onExportCollection(c.id, format)}
+                    onDelete={() => setConfirmDeleteId(c.id)}
+                  />
                 </div>
               </div>
             )

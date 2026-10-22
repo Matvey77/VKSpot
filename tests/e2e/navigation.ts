@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 
 export async function openLibrary(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+  await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
   const state = await page.evaluate(() => window.vkspot.state())
   if (!state.ok) throw new Error(state.error)
   if (state.value.collections.length) {

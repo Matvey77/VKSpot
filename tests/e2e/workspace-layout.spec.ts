@@ -157,10 +157,10 @@ test('collection workspace preserves drafts, scopes quick filters and fits deskt
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     await page.getByRole('button', { name: 'Закрыть запись', exact: true }).click()
     for (const [label, name] of [
-      ['Коллекция', 'collections'],
+      ['Коллекции', 'collections'],
       ['Подключения', 'connections'],
       ['Настройки', 'settings'],
-      ['Начало', 'start'],
+      ['Обзор', 'start'],
     ] as const) {
       await page.getByRole('button', { name: label, exact: true }).click()
       await page.screenshot({ path: `.local/evidence/redesign/${name}.png` })

@@ -1,4 +1,5 @@
 import { ArrowRight, LoaderCircle, X } from 'lucide-react'
+import { useEffect } from 'react'
 import { AppSidebar } from './AppSidebar'
 import { useWorkspaceController } from './useWorkspaceController'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
@@ -17,6 +18,14 @@ export default function App() {
     data,
     openSpotifyPanel,
   } = controller
+  useEffect(() => {
+    if (!notice || notice.error) return
+    const timer = setTimeout(
+      () => setNotice((current) => (current === notice ? null : current)),
+      5000,
+    )
+    return () => clearTimeout(timer)
+  }, [notice, setNotice])
   return (
     <div className="app">
       <AppSidebar controller={controller} />

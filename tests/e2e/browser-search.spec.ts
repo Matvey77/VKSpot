@@ -486,7 +486,7 @@ test('file import starts search by default and a manual pause survives restart w
     await app.evaluate(({ dialog }, file) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] })
     }, file)
-    await page.getByRole('button', { name: 'У меня уже есть список', exact: true }).click()
+    await page.getByRole('button', { name: 'Импортировать файл', exact: true }).click()
     await expect(
       page.getByRole('checkbox', { name: 'Начать поиск после сохранения', exact: true }),
     ).toBeChecked()

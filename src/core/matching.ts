@@ -8,14 +8,14 @@ export const searchResultLabels: Record<SearchResultGroup, string> = {
   pending: 'Не искали',
   exact: 'Совпадают данные',
   review: 'Проверить версию',
-  missing: 'Без результатов',
+  missing: 'Ничего не найдено',
 }
 
 export const reviewLabels: Record<ReviewGroup, string> = {
   pending: 'Не искали',
   exact: 'Совпадают данные',
   review: 'Проверить версию',
-  missing: 'Без результатов',
+  missing: 'Ничего не найдено',
   'local-pending': 'Нужен файл',
   deferred: 'На потом',
   ready: 'Решено',

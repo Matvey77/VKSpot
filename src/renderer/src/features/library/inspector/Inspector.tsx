@@ -21,7 +21,6 @@ import type { TrackRow, Working } from '../../../../../shared/model'
 import type { JobStatus } from '../../../../../shared/job-status'
 import { spotifyTrackId } from '../../../../../core/matching'
 import {
-  destinationLabels as labels,
   destinationStatus as status,
   formatDuration as duration,
 } from '../../../../../core/library'
@@ -178,6 +177,7 @@ export function Inspector({
     row.working.spotify !== null ||
     row.working.local !== null ||
     row.working.localPending ||
+    row.working.reviewDeferred ||
     row.working.excluded
 
   const vkOriginalSection = (
@@ -294,7 +294,11 @@ export function Inspector({
             ? 'Spotify'
             : row.working.destination === 'local'
               ? 'локальный файл'
-              : 'не выбрано'}
+              : row.working.localPending
+                ? 'локальный файл — ожидает привязки'
+                : row.working.reviewDeferred
+                  ? 'разобрать позже'
+                  : 'не выбрано'}
         </strong>
       </p>
       <div className="button-row" style={{ marginBottom: '12px' }}>
@@ -505,9 +509,24 @@ export function Inspector({
         <div className="candidate-empty">
           <Search size={22} />
           <strong>
-            {row.working.searchedQuery ? 'Вариантов пока нет' : 'Найдём эту запись в Spotify'}
+            {row.working.searchedQuery
+              ? 'По этому запросу ничего не найдено'
+              : 'Найдём эту запись в Spotify'}
           </strong>
-          <p>Запусти поиск, укажи ссылку на трек или привяжи локальный файл.</p>
+          {row.working.searchedQuery ? (
+            <>
+              <p className="last-search-query">
+                Последний запрос: <span>{row.working.searchedQuery}</span>
+              </p>
+              <p>
+                Пустой ответ не означает, что трека нет в Spotify. Повтори поиск или измени
+                исполнителя и название в рабочей копии. Можно также указать ссылку или выбрать
+                решение «Нужен локальный файл».
+              </p>
+            </>
+          ) : (
+            <p>Запусти поиск, укажи ссылку на трек или выбери решение «Нужен локальный файл».</p>
+          )}
         </div>
       )}
     </div>
@@ -582,8 +601,36 @@ export function Inspector({
       <div className="inspector-decision-bar">
         <div className="decision-bar-row">
           <div className="decision-status-wrap">
-            <span className="decision-title">Решение:</span>
-            <span className={`status-tag ${status(row)}`}>{labels[status(row)]}</span>
+            <label className="decision-title" htmlFor={`decision-${row.id}`}>
+              Решение:
+            </label>
+            <select
+              id={`decision-${row.id}`}
+              aria-label="Решение для записи"
+              value={status(row)}
+              disabled={busy}
+              onChange={(event) => {
+                const choice = event.target.value
+                void onPatch(
+                  choice === 'excluded'
+                    ? { excluded: true }
+                    : {
+                        excluded: false,
+                        destination:
+                          choice === 'spotify' || choice === 'local' ? choice : 'unresolved',
+                        localPending: choice === 'local-pending',
+                        reviewDeferred: choice === 'deferred',
+                      },
+                )
+              }}
+            >
+              <option value="unresolved">Нужен выбор</option>
+              <option value="local-pending">Нужен локальный файл</option>
+              <option value="deferred">Разобрать позже</option>
+              {row.working.spotify && <option value="spotify">Spotify</option>}
+              {row.working.local && <option value="local">Локальный файл</option>}
+              <option value="excluded">Исключить из переноса</option>
+            </select>
           </div>
           <div className="decision-actions-wrap">
             {hasDecision && (
@@ -596,6 +643,7 @@ export function Inspector({
                     destination: 'unresolved',
                     spotify: null,
                     localPending: false,
+                    reviewDeferred: false,
                     local: null,
                     excluded: false,
                   })

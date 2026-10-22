@@ -17,7 +17,7 @@ import {
 import { ProjectIcon, SpotifyIcon, VKIcon } from '../../components/brand/BrandIcons'
 import { guideCapture } from './GuideAssets'
 
-type Destination = 'library' | 'connections' | 'jobs' | 'archive'
+type Destination = 'library' | 'collections' | 'connections' | 'jobs'
 type Props = {
   hasCollection: boolean
   busy: boolean
@@ -59,22 +59,22 @@ const steps: {
     ],
   },
   {
-    short: 'Архив',
+    short: 'Копия',
     title: 'Сохрани исходник до любых правок',
-    location: 'Архив и экспорт',
+    location: 'Коллекции → Параметры коллекции',
     description:
       'У тебя останется полная копия описаний: исходные названия, повторы, недоступные записи и все рабочие изменения.',
     detail: 'Аудиофайлы в JSON не входят. Их резервную копию нужно хранить отдельно.',
-    action: 'Открыть архив и экспорт',
-    destination: 'archive',
+    action: 'Открыть коллекции',
+    destination: 'collections',
     scenes: [
       {
         key: 'archive',
         name: 'Две резервные копии',
         instructions: [
-          'Открой «Архив и экспорт» после импорта коллекции.',
-          'Сохрани «Полный архив VKSpot». Его можно восстановить вместе с рабочими правками.',
-          'Отдельно сохрани «Буквальный исходный список». В нём названия останутся как в VK.',
+          'Открой «Коллекции» и нажми кнопку с тремя точками у нужного списка.',
+          'Выбери «Сохранить резервную копию». Её можно восстановить вместе с рабочими правками.',
+          'Отдельно сохрани «Исходный список VK». В нём названия останутся как в VK.',
         ],
       },
     ],
@@ -135,7 +135,7 @@ const steps: {
         name: 'Фоновый поиск',
         instructions: [
           'В таблице нажми «Фоновый поиск». Автопродолжение включено по умолчанию: после ожидания Spotify запросы продолжатся сами, пока приложение открыто. Ручная пауза останавливает поиск до команды «Продолжить».',
-          'Фильтруй записи по результату поиска и назначению, добавляй текстовый поиск. «Без результатов» означает только, что текущий запрос ничего не нашёл; это не доказательство отсутствия песни в Spotify.',
+          'Фильтруй записи по результату поиска и назначению, добавляй текстовый поиск. «Ничего не найдено» означает только, что текущий запрос ничего не нашёл; это не доказательство отсутствия песни в Spotify.',
           '«Выделить совпадения» выберет все записи «Совпадают данные» в текущей выборке, включая строки за пределами видимой части таблицы.',
         ],
       },
@@ -323,7 +323,7 @@ export default function Welcome({ hasCollection, busy, theme, navigate, importFi
           <ArrowRight className="workflow-arrow" size={22} aria-hidden="true" />
           <button className="workflow-node" onClick={() => selectStep(1, true)}>
             <Files size={30} aria-hidden="true" />
-            <strong>Полный архив</strong>
+            <strong>Резервная копия</strong>
             <span>Названия и повторы</span>
           </button>
           <ArrowRight className="workflow-arrow" size={22} aria-hidden="true" />

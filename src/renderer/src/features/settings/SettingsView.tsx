@@ -10,19 +10,12 @@ export interface SettingsViewProps {
 
 export function SettingsView({ settings, dataPath, busy, onSaveSettings }: SettingsViewProps) {
   return (
-    <div className="content-page">
+    <div className="content-page settings-page">
       <h1>Настройки</h1>
-      <p className="page-description">Все настройки и данные остаются на этом компьютере.</p>
-      <Preferences settings={settings} busy={!!busy} save={onSaveSettings} />
-      <section className="settings-section">
-        <h2>Данные</h2>
-        <p>Локальная база и защищённая сессия Spotify:</p>
-        <code className="data-path">{dataPath}</code>
-        <p className="helper-text">
-          Исходные записи защищены от изменения. Удаление и очистка коллекции в этой версии не
-          выполняются автоматически.
-        </p>
-      </section>
+      <p className="page-description">
+        Поиск, сопоставление и оформление. Изменения применяются после сохранения.
+      </p>
+      <Preferences settings={settings} dataPath={dataPath} busy={!!busy} save={onSaveSettings} />
     </div>
   )
 }

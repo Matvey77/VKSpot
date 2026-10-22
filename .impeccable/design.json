@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-22T02:25:00.000Z",
+  "generatedAt": "2026-10-22T04:23:27.000Z",
   "title": "Design System: VKSpot",
   "extensions": {
     "colorMeta": {
@@ -106,6 +106,10 @@
         "displayName": "Section Title",
         "purpose": "17px section and inspector track headings."
       },
+      "panel-title": {
+        "displayName": "Settings Panel Title",
+        "purpose": "20px active settings section heading, with inherited 650 weight and 1.4 line height."
+      },
       "body": {
         "displayName": "Interface Body",
         "purpose": "Default interface type, using the local Windows system font."
@@ -123,8 +127,8 @@
         "purpose": "Local paths and connection configuration."
       },
       "display": {
-        "displayName": "Start Heading",
-        "purpose": "32px heading for the next action on Start."
+        "displayName": "Legacy Start Heading",
+        "purpose": "Retained 32px legacy Start role; the current Overview next action uses the 26px headline."
       },
       "headline-compact": {
         "displayName": "Compact Collection Heading",
@@ -162,7 +166,7 @@
       {
         "name": "success-notice",
         "value": "0 6px 20px #102a361a",
-        "purpose": "Compact bottom-right successful-action notice; does not move the workspace."
+        "purpose": "Compact bottom-right successful-action notice for five seconds; does not move the workspace. Settings uses a 104px bottom offset above the always-visible save footer."
       }
     ],
     "motion": [
@@ -184,7 +188,7 @@
     ],
     "breakpoints": [
       {
-        "name": "compact-inspector-navigation-connections",
+        "name": "compact-inspector-navigation-connections-overview-settings",
         "value": "1250px"
       },
       {
@@ -238,8 +242,8 @@
       "name": "Desktop Navigation",
       "kind": "nav",
       "refersTo": "navigation-active",
-      "description": "Permanent ink-blue desktop navigation: 224px sidebar, 190px at 1250px and below; 44px actions with 8px corners. Welcome remains the default entry and the brand returns to it.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"Разделы\"><button class=\"ds-nav-button ds-nav-active\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z\"/></svg> Добро пожаловать</button><button class=\"ds-nav-button\">Коллекция</button><button class=\"ds-nav-button\">Подключения</button><button class=\"ds-nav-button\">Задания</button><button class=\"ds-nav-button\">Архив и экспорт</button><button class=\"ds-nav-button\">Настройки</button></nav>",
+      "description": "Permanent ink-blue desktop navigation: Overview, Collections, Connections, Jobs and Settings; no standalone archive. The sidebar is 224px, 190px at 1250px and below; 44px actions with 8px corners. Welcome remains the default entry and the brand returns to it.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Разделы\"><button class=\"ds-nav-button ds-nav-active\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z\"/></svg> Обзор</button><button class=\"ds-nav-button\">Коллекции</button><button class=\"ds-nav-button\">Подключения</button><button class=\"ds-nav-button\">Задания</button><button class=\"ds-nav-button\">Настройки</button></nav>",
       "css": ".ds-nav{display:flex;flex-direction:column;gap:4px;background:#162d3b;padding:16px;width:196px}.ds-nav-button{font:14px \"Segoe UI\",system-ui,sans-serif;border:0;background:transparent;color:#c6d7df;text-align:left;display:inline-flex;align-items:center;gap:11px;height:44px;padding:0 12px;border-radius:8px;cursor:pointer;transition:background .15s}.ds-nav-button:hover{background:#264655}.ds-nav-active{background:#315467;color:#fff}.ds-nav-button:focus-visible{outline:2px solid #8be0cd;outline-offset:3px}@media(prefers-reduced-motion:reduce){.ds-nav-button{transition:none}}"
     },
     {
@@ -298,7 +302,10 @@
       "Полноразмерный инспектор с последовательным переходом по текущей выборке.",
       "Отдельные состояния оригинала, сохранённой рабочей копии и несохранённого черновика.",
       "Спокойные границы, тональные выделения и явные семантические статусы.",
-      "Существующие фирменные SVG и инструкция с подписями к реальным снимкам демонстрационного интерфейса."
+      "Существующие фирменные SVG и инструкция с подписями к реальным снимкам демонстрационного интерфейса.",
+      "Обзор до 1480px: выбор текущей коллекции, следующий шаг и готовность в двух колонках; до 1250px одна колонка. Четыре очереди открывают отфильтрованный разбор; готовность — назначения Spotify плюс привязанные локальные файлы относительно включённых записей.",
+      "Настройки до 1220px: навигация 175px (150px до 1250px), прокручиваемая панель и всегда доступная нижняя строка сохранения. Пять вкладок с управлением стрелками, Home и End сохраняют общий черновик; провайдер выбирается нативными радиокнопками, тема применяется после сохранения.",
+      "Параметры конкретной коллекции открывают диалог 650px с пятью форматами экспорта и явным идентификатором коллекции: резервная копия JSON VKSpot, исходный JSON VK, CSV, план переноса JSON, M3U8. Светлый и тёмный снимки экспорта в инструкции обновлены с сохранением происхождения."
     ],
     "rules": [
       {

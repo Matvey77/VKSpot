@@ -63,7 +63,7 @@ const percentile = (values, fraction) =>
       return { id: imported.value, ids }
     }, count)
     const importMs = performance.now() - importStart
-    await page.getByRole('button', { name: 'Коллекция', exact: true }).click()
+    await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
     await page
       .locator('.collection-card')
       .first()

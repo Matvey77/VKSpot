@@ -1,14 +1,4 @@
-import {
-  ArrowRight,
-  Database,
-  History,
-  House,
-  Library,
-  Link2,
-  Music2,
-  Settings2,
-  Upload,
-} from 'lucide-react'
+import { ArrowRight, History, House, Library, Link2, Music2, Settings2, Upload } from 'lucide-react'
 import { ProjectIcon, SpotifyIcon, VKIcon } from '../components/brand/BrandIcons'
 import SidebarStatus from '../components/sidebar/SidebarStatus'
 import { api } from '../state/api'
@@ -66,11 +56,10 @@ export function AppSidebar({ controller }: { controller: WorkspaceController }) 
         <nav aria-label="Разделы">
           {(
             [
-              { id: 'welcome', title: 'Начало', icon: House },
-              { id: 'library', title: 'Коллекция', icon: Library },
+              { id: 'welcome', title: 'Обзор', icon: House },
+              { id: 'library', title: 'Коллекции', icon: Library },
               { id: 'connections', title: 'Подключения', icon: Link2 },
               { id: 'jobs', title: 'Задания', icon: History },
-              { id: 'archive', title: 'Архив и экспорт', icon: Database },
               { id: 'settings', title: 'Настройки', icon: Settings2 },
             ] as const
           ).map((item) => (
