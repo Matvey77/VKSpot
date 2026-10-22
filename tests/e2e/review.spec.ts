@@ -159,6 +159,17 @@ test('independent filters, exposed decisions and manual Spotify links preserve s
     await expect(page.getByRole('row', { name: 'Запись 2: Song Two', exact: true })).toContainText(
       'Нужен файл',
     )
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Сбросить решение', exact: true })
+      .click()
+    await expect(page.getByRole('row', { name: 'Запись 2: Song Two', exact: true })).toContainText(
+      'Нужен выбор',
+    )
+    await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
+    await expect(page.getByRole('row', { name: 'Запись 2: Song Two', exact: true })).toContainText(
+      'Нужен файл',
+    )
     await page.getByRole('button', { name: 'Отменить последнюю правку', exact: true }).click()
     await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
 

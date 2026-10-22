@@ -426,6 +426,22 @@ export function LibraryView({
                   >
                     <button
                       disabled={!!busy}
+                      title="Сбросить решение и вернуть выбранные записи в статус «Нужен выбор»"
+                      onClick={() =>
+                        void onPatch([...selected], {
+                          destination: 'unresolved',
+                          spotify: null,
+                          localPending: false,
+                          reviewDeferred: false,
+                          local: null,
+                          excluded: false,
+                        })
+                      }
+                    >
+                      Сбросить решение
+                    </button>
+                    <button
+                      disabled={!!busy}
                       onClick={() => void onPatch([...selected], { excluded: true })}
                     >
                       Исключить

@@ -65,6 +65,51 @@ describe('transactional collection storage', () => {
       store.close()
     }
   })
+  it('resets decisions on multiple tracks back to unresolved and supports undo', () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(
+        parseImport('Artist 1 - Song 1\nArtist 2 - Song 2\nArtist 3 - Song 3', '.txt', 'Test'),
+      )
+      const [r1, r2, r3] = store.get(id).rows
+      store.patch(id, [r1.id], { localPending: true })
+      store.patch(id, [r2.id], { reviewDeferred: true })
+      store.patch(id, [r3.id], { excluded: true })
+
+      expect(store.get(id).rows[0].working.localPending).toBe(true)
+      expect(store.get(id).rows[1].working.reviewDeferred).toBe(true)
+      expect(store.get(id).rows[2].working.excluded).toBe(true)
+
+      // Batch reset decisions
+      store.patch(id, [r1.id, r2.id, r3.id], {
+        destination: 'unresolved',
+        spotify: null,
+        localPending: false,
+        reviewDeferred: false,
+        local: null,
+        excluded: false,
+      })
+
+      const afterReset = store.get(id).rows
+      for (const row of afterReset) {
+        expect(row.working.destination).toBe('unresolved')
+        expect(row.working.spotify).toBeNull()
+        expect(row.working.localPending).toBe(false)
+        expect(row.working.reviewDeferred).toBe(false)
+        expect(row.working.local).toBeNull()
+        expect(row.working.excluded).toBe(false)
+      }
+
+      // Undo restores the previous decisions
+      expect(store.undo(id)).toBe(true)
+      const afterUndo = store.get(id).rows
+      expect(afterUndo[0].working.localPending).toBe(true)
+      expect(afterUndo[1].working.reviewDeferred).toBe(true)
+      expect(afterUndo[2].working.excluded).toBe(true)
+    } finally {
+      store.close()
+    }
+  })
   it('archives individual and finished jobs', () => {
     const store = new Store(':memory:')
     try {
