@@ -25,7 +25,7 @@ type RowProps = {
   gridTemplateColumns: string
   width: number | string
   rules: MatchingRules
-  onSelect: (id: string, selected: boolean) => void
+  onSelect: (id: string, selected: boolean, range: boolean) => void
   onFocus: (id: string) => void
   onReview: (id: string) => void
 }
@@ -50,11 +50,27 @@ const VisibleRow = memo(function VisibleRow({
       tabIndex={0}
       aria-label={`Запись ${row.position}: ${row.working.title}`}
       aria-selected={selected}
-      onClick={() => onFocus(row.id)}
+      onMouseDown={(event) => {
+        if (
+          event.shiftKey &&
+          event.button === 0 &&
+          !(event.target as Element).closest('input, button')
+        ) {
+          event.preventDefault()
+          event.currentTarget.focus({ preventScroll: true })
+        }
+      }}
+      onClick={(event) => {
+        if (event.shiftKey) {
+          event.preventDefault()
+          onSelect(row.id, true, true)
+        } else onFocus(row.id)
+      }}
       onKeyDown={(event) => {
         if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault()
-          onFocus(row.id)
+          if (event.key === ' ' && event.shiftKey) onSelect(row.id, true, true)
+          else onFocus(row.id)
         }
       }}
       className={`table-row ${focused ? 'focused' : ''} ${row.working.excluded ? 'excluded-row' : ''}`}
@@ -66,7 +82,13 @@ const VisibleRow = memo(function VisibleRow({
           aria-label={`Выбрать запись ${row.position}`}
           checked={selected}
           onClick={(event) => event.stopPropagation()}
-          onChange={(event) => onSelect(row.id, event.target.checked)}
+          onChange={(event) =>
+            onSelect(
+              row.id,
+              event.target.checked,
+              event.nativeEvent instanceof MouseEvent && event.nativeEvent.shiftKey,
+            )
+          }
         />
       </div>
       <div role="cell" className="cell cell-position">
@@ -132,15 +154,37 @@ export const TrackTable = memo(function TrackTable({
 }: TableProps) {
   const container = useRef<HTMLDivElement>(null)
   const headerScroll = useRef<HTMLDivElement>(null)
-  const selection = useRef({ selected, onSelect })
-  selection.current = { selected, onSelect }
+  const selection = useRef({ rows, selected, onSelect, focusedId, resetKey })
+  selection.current = { rows, selected, onSelect, focusedId, resetKey }
+  const selectionAnchor = useRef<{ id: string; resetKey: string } | null>(null)
   const columns = useColumnSizing()
-  const selectRow = useCallback((id: string, checked: boolean) => {
-    const next = new Set(selection.current.selected)
-    if (checked) next.add(id)
-    else next.delete(id)
-    selection.current.onSelect(next)
+  const selectRow = useCallback((id: string, checked: boolean, range: boolean) => {
+    const current = selection.current
+    const targetIndex = current.rows.findIndex((row) => row.id === id)
+    if (targetIndex < 0) return
+    const anchorId =
+      selectionAnchor.current?.resetKey === current.resetKey
+        ? selectionAnchor.current.id
+        : current.focusedId
+    const anchorIndex = range ? current.rows.findIndex((row) => row.id === anchorId) : -1
+    const affectedRows =
+      anchorIndex < 0
+        ? [current.rows[targetIndex]]
+        : current.rows.slice(
+            Math.min(anchorIndex, targetIndex),
+            Math.max(anchorIndex, targetIndex) + 1,
+          )
+    const next = new Set(current.selected)
+    for (const row of affectedRows) {
+      if (checked) next.add(row.id)
+      else next.delete(row.id)
+    }
+    if (!range || anchorIndex < 0) selectionAnchor.current = { id, resetKey: current.resetKey }
+    current.onSelect(next)
   }, [])
+  useEffect(() => {
+    if (!selected.size) selectionAnchor.current = null
+  }, [selected])
   const allSelected = useMemo(
     () => rows.length > 0 && rows.every((row) => selected.has(row.id)),
     [rows, selected],
@@ -158,6 +202,7 @@ export const TrackTable = memo(function TrackTable({
     overscan: 10,
   })
   useEffect(() => {
+    selectionAnchor.current = null
     virtual.scrollToOffset(0)
   }, [resetKey])
 
@@ -195,9 +240,10 @@ export const TrackTable = memo(function TrackTable({
                   ref={(element) => {
                     if (element) element.indeterminate = partlySelected
                   }}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    selectionAnchor.current = null
                     onSelect(event.target.checked ? new Set(rows.map((row) => row.id)) : new Set())
-                  }
+                  }}
                 />
               ) : (
                 column.label

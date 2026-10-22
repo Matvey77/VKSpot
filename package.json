@@ -1,6 +1,6 @@
 {
   "name": "vkspot",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "description": "Local VK Music archive and reviewed Spotify migration",
   "main": "out/main/index.js",
   "author": "VKSpot contributors",

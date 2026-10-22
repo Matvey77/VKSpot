@@ -394,7 +394,9 @@ export function LibraryView({
                 >
                   Выделить совпадения ({count(matchingRows.length)})
                 </ExplainedButton>
-                <span className="selection-help">Подтверждаются только записи без решения.</span>
+                <span className="selection-help">
+                  Shift + клик — выделить диапазон. Подтверждаются только записи без решения.
+                </span>
               </div>
               {selected.size > 0 && (
                 <div className="selection-bar">
