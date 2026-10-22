@@ -8,6 +8,7 @@ import {
   Columns2,
   FileAudio,
   Headphones,
+  Link2,
   Loader2,
   Pause,
   Play,
@@ -82,6 +83,7 @@ export function Inspector({
 
   const [playingSpotifyId, setPlayingSpotifyId] = useState<string | null>(null)
   const [manualPreview, setManualPreview] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
   const [vkPlaying, setVkPlaying] = useState(false)
   const [vkLoading, setVkLoading] = useState(false)
   const [vkError, setVkError] = useState<string | null>(null)
@@ -96,6 +98,8 @@ export function Inspector({
     }
     setPlayingSpotifyId(null)
     setVkError(null)
+    setManualPreview(false)
+    setManualOpen(false)
   }, [row.id])
 
   useEffect(() => {
@@ -297,9 +301,17 @@ export function Inspector({
           {searching ? <Loader2 size={15} className="spin" /> : <Search size={15} />}
           {searching ? 'Поиск в Spotify…' : 'Найти в Spotify'}
         </button>
-        <button disabled={busy} onClick={onLink}>
-          <FileAudio size={15} />
-          Привязать файл
+        <button
+          type="button"
+          disabled={busy || modified || excluded}
+          aria-expanded={manualOpen}
+          onClick={() => {
+            setManualOpen(!manualOpen)
+            setManualPreview(false)
+          }}
+        >
+          <Link2 size={15} />
+          Указать трек Spotify
         </button>
       </div>
       {(startingSearch || searchJob) && (
@@ -313,6 +325,8 @@ export function Inspector({
       )}
       <ManualSpotifyMatch
         key={`${row.working.artist}:${row.working.title}`}
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
         row={row}
         disabled={busy || modified || excluded}
         preview={manualPreview}
@@ -328,6 +342,12 @@ export function Inspector({
           setPlayingSpotifyId(null)
         }}
       />
+      <div className="button-row" style={{ marginBottom: '12px' }}>
+        <button type="button" disabled={busy} onClick={onLink}>
+          <FileAudio size={15} />
+          Привязать файл
+        </button>
+      </div>
 
       {row.working.spotify && (
         <div
