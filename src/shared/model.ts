@@ -104,6 +104,7 @@ export const matchingRulesSchema = z.object({
   identicalVersions: z.boolean().default(true),
   remixPunctuation: z.boolean().default(true),
   extendedDurationTolerance: z.boolean().default(true),
+  transliteration: z.boolean().default(true),
 })
 export type MatchingRules = z.infer<typeof matchingRulesSchema>
 

@@ -8,4 +8,5 @@ export const defaultMatchingRules: MatchingRules = {
   identicalVersions: true,
   remixPunctuation: true,
   extendedDurationTolerance: true,
+  transliteration: true,
 }

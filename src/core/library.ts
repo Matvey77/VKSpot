@@ -46,6 +46,7 @@ export const rulesKey = (rules: MatchingRules): string =>
     rules.identicalVersions,
     rules.remixPunctuation,
     rules.extendedDurationTolerance,
+    rules.transliteration ?? true,
   ]
     .map(Number)
     .join('')

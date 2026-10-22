@@ -236,9 +236,104 @@ describe('conservative metadata review', () => {
     ]
     expect(metadataMatch(entry)).not.toBeNull()
     expect(reviewGroup(entry)).toBe('exact')
+
+    // 9. Producer credits in VK title (Prod. by ..., prod. by ...)
+    entry.working.title = 'Мейхана Флоу Prod. by Wex, JXRD'
+    entry.working.artist = 'Heronwater, Джон Гарик'
+    entry.source.duration = 129
+    entry.working.searchedQuery = searchText(entry.working)
+    entry.working.candidates = [
+      {
+        ...candidate,
+        title: 'Мейхана Флоу',
+        artists: ['Heronwater', 'Джон Гарик'],
+        duration: 129,
+      },
+    ]
+    expect(metadataMatch(entry)).not.toBeNull()
+    expect(reviewGroup(entry)).toBe('exact')
+
+    entry.working.title = 'Баня prod. by djcodenwar'
+    entry.working.artist = 'GORILLA GLU, LIL NAKU, FLOCKAA'
+    entry.source.duration = 148
+    entry.working.searchedQuery = searchText(entry.working)
+    entry.working.candidates = [
+      {
+        ...candidate,
+        title: 'Баня',
+        artists: ['GORILLA GLU', 'LIL NAKU', 'FLOCKAA'],
+        duration: 148.048,
+      },
+    ]
+    expect(metadataMatch(entry)).not.toBeNull()
+    expect(reviewGroup(entry)).toBe('exact')
+
+    // 10. Bilingual transliteration (Cyrillic На Заре ↔ Latin Na Zare)
+    entry.working.title = 'На Заре'
+    entry.working.artist = 'Альянс, Братство Атома, BassnPanda, Atomic Heart'
+    entry.source.duration = 210
+    entry.working.searchedQuery = searchText(entry.working)
+    entry.working.candidates = [
+      {
+        ...candidate,
+        title: 'Na Zare',
+        artists: ['Альянс', 'Братство Атома', 'BassnPanda', 'Atomic Heart'],
+        duration: 210.218,
+      },
+    ]
+    expect(metadataMatch(entry)).not.toBeNull()
+    expect(reviewGroup(entry)).toBe('exact')
+
+    // 11. Artist spacing and punctuation relaxation (Big Bang ↔ BIGBANG)
+    entry.working.title = 'Bang Bang Bang'
+    entry.working.artist = 'Big Bang'
+    entry.source.duration = 215
+    entry.working.searchedQuery = searchText(entry.working)
+    entry.working.candidates = [
+      {
+        ...candidate,
+        title: 'BANG BANG BANG',
+        artists: ['BIGBANG'],
+        duration: 220.177,
+      },
+    ]
+    expect(metadataMatch(entry)).not.toBeNull()
+    expect(reviewGroup(entry)).toBe('exact')
   })
   it('respects matchingRules toggles when rules are disabled', () => {
     const entry = row()
+
+    // Transliteration disabled
+    entry.working.title = 'На Заре'
+    entry.working.artist = 'Альянс'
+    entry.source.duration = 210
+    entry.working.searchedQuery = searchText(entry.working)
+    entry.working.candidates = [
+      {
+        ...candidate,
+        title: 'Na Zare',
+        artists: ['Альянс'],
+        duration: 210,
+      },
+    ]
+    expect(metadataMatch(entry, { ...defaultMatchingRules, transliteration: false })).toBeNull()
+    expect(reviewGroup(entry, { ...defaultMatchingRules, transliteration: false })).toBe('review')
+
+    // Feat / Prod deduplication disabled
+    entry.working.title = 'Мейхана Флоу Prod. by Wex, JXRD'
+    entry.working.artist = 'Heronwater, Джон Гарик'
+    entry.source.duration = 129
+    entry.working.searchedQuery = searchText(entry.working)
+    entry.working.candidates = [
+      {
+        ...candidate,
+        title: 'Мейхана Флоу',
+        artists: ['Heronwater', 'Джон Гарик'],
+        duration: 129,
+      },
+    ]
+    expect(metadataMatch(entry, { ...defaultMatchingRules, featDeduplication: false })).toBeNull()
+    expect(reviewGroup(entry, { ...defaultMatchingRules, featDeduplication: false })).toBe('review')
     // Homoglyphs disabled
     entry.working.title = 'Шадэ'
     entry.working.artist = 'By Индия, Xcho, MOT' // Latin MOT

@@ -31,8 +31,8 @@ const rules = [
   },
   {
     key: 'featDeduplication',
-    name: 'Объединять соисполнителей',
-    description: 'Учитывать feat., ft., featuring и with в названии или списке исполнителей.',
+    name: 'Объединять соисполнителей и продюсеров',
+    description: 'Учитывать feat., ft., with и prod. by в названии или списке исполнителей.',
   },
   {
     key: 'identicalVersions',
@@ -48,6 +48,12 @@ const rules = [
     key: 'extendedDurationTolerance',
     name: 'Допуск длительности до 5 секунд',
     description: 'Вместо 2 секунд при точном совпадении названия.',
+  },
+  {
+    key: 'transliteration',
+    name: 'Транслитерация названий',
+    description:
+      'Сопоставлять кириллицу и латиницу («На заре» ↔ «Na Zare») при совпадении исполнителя.',
   },
 ] as const
 

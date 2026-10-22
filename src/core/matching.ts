@@ -41,6 +41,65 @@ const HOMOGLYPHS: Record<string, string> = {
   ј: 'j',
 }
 
+const TRANSLIT_RU_TO_EN: Record<string, string> = {
+  а: 'a',
+  б: 'b',
+  в: 'v',
+  г: 'g',
+  д: 'd',
+  е: 'e',
+  ё: 'yo',
+  ж: 'zh',
+  з: 'z',
+  и: 'i',
+  й: 'y',
+  к: 'k',
+  л: 'l',
+  м: 'm',
+  н: 'n',
+  о: 'o',
+  п: 'p',
+  р: 'r',
+  с: 's',
+  т: 't',
+  у: 'u',
+  ф: 'f',
+  х: 'kh',
+  ц: 'ts',
+  ч: 'ch',
+  ш: 'sh',
+  щ: 'shch',
+  ъ: '',
+  ы: 'y',
+  ь: '',
+  э: 'e',
+  ю: 'yu',
+  я: 'ya',
+}
+
+export function transliterateRuToEn(str: string): string {
+  return str
+    .replace(/дж/g, 'j')
+    .replace(/кс/g, 'x')
+    .replace(/щ/g, 'shch')
+    .replace(/ш/g, 'sh')
+    .replace(/ч/g, 'ch')
+    .replace(/ж/g, 'zh')
+    .replace(/х/g, 'kh')
+    .replace(/ц/g, 'ts')
+    .replace(/ю/g, 'yu')
+    .replace(/я/g, 'ya')
+    .replace(/ё/g, 'yo')
+    .replace(/[а-яё]/g, (ch) => (TRANSLIT_RU_TO_EN[ch] !== undefined ? TRANSLIT_RU_TO_EN[ch] : ch))
+}
+
+const normalizeTranslit = (s: string) =>
+  s
+    .replace(/kh/g, 'h')
+    .replace(/ya/g, 'ia')
+    .replace(/yu/g, 'iu')
+    .replace(/(?:iy|yy|ij)(?=\s|$)/g, 'y')
+
 function foldConfusables(s: string): string {
   return s.replace(/[авекмнорстхуіј]/g, (c) => HOMOGLYPHS[c] || c)
 }
@@ -65,17 +124,41 @@ export const normalized = (value: string, rules: MatchingRules = defaultMatching
   return res
 }
 
-export function extractFeatures(title: string): { baseTitle: string; featured: string[] } {
+export function extractFeatures(title: string): {
+  baseTitle: string
+  featured: string[]
+  producers: string[]
+} {
   const featured: string[] = []
-  let base = title.replace(/\s*[([](?:feat\.?|ft\.?|with)\s+([^\])]+)[\])]/gi, (_, guests) => {
-    featured.push(...guests.split(/\s*(?:,|&|;|\+)\s*/))
+  const producers: string[] = []
+  let base = title
+
+  const splitArtists = (s: string) => s.split(/\s*(?:,|&|;|\+|\s+[xX]\s+)\s*/)
+
+  base = base.replace(/\s*[([](?:feat\.?|ft\.?|with)\s+([^\])]+)[\])]/gi, (_, guests) => {
+    featured.push(...splitArtists(guests))
     return ''
   })
+  base = base.replace(
+    /\s*[([](?:prod\.?|produced|beat)\s*(?:by\s+)?([^\])]+)[\])]/gi,
+    (_, prods) => {
+      producers.push(...splitArtists(prods))
+      return ''
+    },
+  )
   base = base.replace(/\s+(?:feat\.?|ft\.?)\s+(.+)$/i, (_, guests) => {
-    featured.push(...guests.split(/\s*(?:,|&|;|\+)\s*/))
+    featured.push(...splitArtists(guests))
     return ''
   })
-  return { baseTitle: base.trim(), featured }
+  base = base.replace(/\s+(?:prod\.?|produced|beat)\s+(?:by\s+)?(.+)$/i, (_, prods) => {
+    producers.push(...splitArtists(prods))
+    return ''
+  })
+  return {
+    baseTitle: base.trim(),
+    featured: featured.map((s) => s.trim()).filter(Boolean),
+    producers: producers.map((s) => s.trim()).filter(Boolean),
+  }
 }
 
 function artists(value: string[], rules: MatchingRules = defaultMatchingRules): string {
@@ -119,20 +202,28 @@ export function candidateEvidence(
 ) {
   const rowFeat = rules.featDeduplication
     ? extractFeatures(row.working.title)
-    : { baseTitle: row.working.title, featured: [] }
+    : { baseTitle: row.working.title, featured: [], producers: [] }
   const candFeat = rules.featDeduplication
     ? extractFeatures(candidate.title)
-    : { baseTitle: candidate.title, featured: [] }
+    : { baseTitle: candidate.title, featured: [], producers: [] }
 
   const rowBaseArtists = artists([row.working.artist], rules)
-  const rowAllArtists = artists([row.working.artist, ...rowFeat.featured], rules)
+  const rowAllArtists = artists(
+    [row.working.artist, ...rowFeat.featured, ...rowFeat.producers],
+    rules,
+  )
   const candBaseArtists = artists(candidate.artists, rules)
-  const candAllArtists = artists([...candidate.artists, ...candFeat.featured], rules)
+  const candAllArtists = artists(
+    [...candidate.artists, ...candFeat.featured, ...candFeat.producers],
+    rules,
+  )
 
   const remixArtists = candidate.artists.map((a) => normalized(a, rules))
   const isRemixerInCandidate =
     row.working.title.toLowerCase().includes('remix') &&
     remixArtists.some((a) => normalized(row.working.title, rules).includes(a))
+
+  const relaxArtist = (s: string) => s.replace(/[\s\-._']/g, '')
 
   const artistMatches =
     Boolean(row.working.artist.trim()) &&
@@ -140,20 +231,49 @@ export function candidateEvidence(
       rowAllArtists === candBaseArtists ||
       rowBaseArtists === candAllArtists ||
       rowAllArtists === candAllArtists ||
+      (Boolean(relaxArtist(rowBaseArtists)) &&
+        relaxArtist(rowBaseArtists) === relaxArtist(candBaseArtists)) ||
+      (Boolean(relaxArtist(rowAllArtists)) &&
+        relaxArtist(rowAllArtists) === relaxArtist(candBaseArtists)) ||
+      (Boolean(relaxArtist(rowBaseArtists)) &&
+        relaxArtist(rowBaseArtists) === relaxArtist(candAllArtists)) ||
+      (Boolean(relaxArtist(rowAllArtists)) &&
+        relaxArtist(rowAllArtists) === relaxArtist(candAllArtists)) ||
       isRemixerInCandidate)
 
   const rowNorm = normalized(row.working.title, rules)
   const candNorm = normalized(candidate.title, rules)
   const rowClean = normalized(rowFeat.baseTitle, rules)
   const candClean = normalized(candFeat.baseTitle, rules)
+  const rawRowClean = normalized(rowFeat.baseTitle, { ...rules, homoglyphs: false })
+  const rawCandClean = normalized(candFeat.baseTitle, { ...rules, homoglyphs: false })
+
+  const hasCyrillic = (s: string) => /[а-яё]/i.test(s)
+  const translitMatches =
+    Boolean(rules.transliteration ?? true) &&
+    ((hasCyrillic(rawRowClean) &&
+      !hasCyrillic(rawCandClean) &&
+      (transliterateRuToEn(rawRowClean) === rawCandClean ||
+        normalizeTranslit(transliterateRuToEn(rawRowClean)) === normalizeTranslit(rawCandClean) ||
+        relaxPunctuation(transliterateRuToEn(rawRowClean)) === relaxPunctuation(rawCandClean))) ||
+      (hasCyrillic(rawCandClean) &&
+        !hasCyrillic(rawRowClean) &&
+        (transliterateRuToEn(rawCandClean) === rawRowClean ||
+          normalizeTranslit(transliterateRuToEn(rawCandClean)) === normalizeTranslit(rawRowClean) ||
+          relaxPunctuation(transliterateRuToEn(rawCandClean)) === relaxPunctuation(rawRowClean))))
+
+  const hasFeaturesOrProducers =
+    rowFeat.featured.length > 0 ||
+    candFeat.featured.length > 0 ||
+    rowFeat.producers.length > 0 ||
+    candFeat.producers.length > 0
 
   const titleMatches =
     Boolean(row.working.title.trim()) &&
     (rowNorm === candNorm ||
-      (rules.featDeduplication &&
-        rowClean === candClean &&
-        (rowFeat.featured.length > 0 || candFeat.featured.length > 0)) ||
-      (rules.remixPunctuation && relaxPunctuation(rowNorm) === relaxPunctuation(candNorm)))
+      (rules.featDeduplication && rowClean === candClean && hasFeaturesOrProducers) ||
+      (rules.remixPunctuation && relaxPunctuation(rowNorm) === relaxPunctuation(candNorm)) ||
+      translitMatches)
 
   return {
     artistMatches,
@@ -223,7 +343,7 @@ export function metadataMatch(
         evidence.artistMatches &&
         evidence.titleMatches &&
         evidence.durationDifference !== null &&
-        evidence.durationDifference <= tolerance
+        Math.round(evidence.durationDifference) <= tolerance
       ) {
         matches.push({ candidate, diff: evidence.durationDifference, index: i })
       }
