@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="resources/icon.png" width="88" height="88" alt="Логотип VKSpot">
+  <img src="resources/icon.png" width="96" height="96" alt="Логотип VKSpot">
 </p>
 
 <h1 align="center">VKSpot</h1>
@@ -10,10 +10,16 @@
 </p>
 
 <p align="center">
-  <kbd>Windows 10/11 · x64</kbd>&ensp;
-  <kbd>Локальные данные</kbd>&ensp;
-  <kbd>Светлая и тёмная темы</kbd>&ensp;
-  <a href="LICENSE"><kbd>MIT</kbd></a>
+  <a href="https://github.com/Matvey77/VKSpot/releases/latest">
+    <img src="https://img.shields.io/github/v/release/Matvey77/VKSpot?style=flat-square&label=release&color=087f73" alt="Последний релиз">
+  </a>
+  <a href="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml">
+    <img src="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml/badge.svg?branch=main" alt="Проверки Windows">
+  </a>
+  <img src="https://img.shields.io/badge/Windows-10%2F11_x64-162d3b?style=flat-square" alt="Windows 10/11 x64">
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/Matvey77/VKSpot?style=flat-square&color=087f73" alt="Лицензия MIT">
+  </a>
 </p>
 
 <p align="center">
@@ -23,8 +29,10 @@
 <p align="center">
   <a href="#возможности">Возможности</a> ·
   <a href="#что-потребуется">Требования</a> ·
-  <a href="#быстрая-установка">Установка</a> ·
+  <a href="#скачивание-и-установка">Скачать</a> ·
   <a href="#от-списка-к-плейлисту">Перенос</a> ·
+  <a href="#скриншоты">Скриншоты</a> ·
+  <a href="#частые-вопросы">Помощь</a> ·
   <a href="#для-разработчиков">Разработка</a>
 </p>
 
@@ -41,19 +49,6 @@ VKSpot — бесплатное приложение с открытым код�
 | 🎧 **Плейлист Spotify**  | Перенос подтверждённых треков через API. Поиск и перенос можно приостановить и продолжить после перезапуска.             |
 | 📂 **Свои аудиофайлы**   | Привязка редких записей, подготовка копий для Local Files и план общего порядка.                                         |
 | ↩️ **Обратимые решения** | Правки рабочей копии, отмена, откладывание и исключение записей. Оригинал остаётся в архиве.                             |
-
-### Рабочее пространство
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workspace-dark.png">
-  <img src="docs/images/workspace-light.png" alt="VKSpot: слева коллекция с фильтрами, справа сравнение оригинала с версиями Spotify" width="1440">
-</picture>
-
-<p align="center">
-  <sub>Настоящий интерфейс на вымышленных данных. Тема снимка следует теме GitHub.</sub><br>
-  <a href="docs/images/workspace-light.png">Светлая тема ↗</a> ·
-  <a href="docs/images/workspace-dark.png">Тёмная тема ↗</a>
-</p>
 
 ## Что потребуется
 
@@ -74,10 +69,20 @@ VKSpot — бесплатное приложение с открытым код�
 
 При необходимости в «Подключениях» можно настроить отдельные HTTP/SOCKS5-прокси для Spotify и VK.
 
-## Быстрая установка
+## Скачивание и установка
+
+Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери установщик в разделе **Assets**:
+
+| Система       | Архитектура | Файл                        |
+| ------------- | ----------- | --------------------------- |
+| Windows 10/11 | x64         | `VKSpot.Setup.<версия>.exe` |
+
+Установщик содержит среду выполнения приложения. Для проверки файла в том же релизе есть [SHA256SUMS.txt](https://github.com/Matvey77/VKSpot/releases/latest/download/SHA256SUMS.txt).
+
+### Быстрый старт
 
 1. **📦 Установи приложение**<br>
-   Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и раздел **Assets**. Скачай `VKSpot Setup <версия>.exe` и запусти установщик.
+   Скачай файл `.exe` и запусти установщик.
 
 2. **📥 Добавь свою музыку**<br>
    В VKSpot открой **Подключения → VK → Открыть VK**, войди и нажми **Выгрузить мой список**. Для уже сохранённого файла выбери **Импорт списка**.
@@ -85,7 +90,7 @@ VKSpot — бесплатное приложение с открытым код�
 3. **🔎 Запусти поиск**<br>
    Проверь количество, первые и последние записи. Начни поиск из «Обзора» или коллекции и переходи к проверке версий.
 
-Если готового релиза ещё нет, приложение можно [собрать из исходников](#для-разработчиков).
+Для самостоятельной сборки см. [раздел разработки](#для-разработчиков).
 
 ## От списка к плейлисту
 
@@ -115,11 +120,92 @@ flowchart LR
 
 Открой параметры коллекции и сохрани **полный архив VKSpot**: список и решения, без аудиофайлов. Также доступны исходный JSON, CSV, план переноса и M3U8.
 
+## Скриншоты
+
+Настоящий интерфейс на вымышленной коллекции. Изображения переключаются вместе с темой GitHub; нажми на ссылки под снимком, чтобы открыть нужную тему в полном размере.
+
+### Коллекция и проверка версий
+
+Список и решения — слева, оригинал и кандидаты Spotify — в инспекторе справа.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workspace-dark.png">
+  <img src="docs/images/workspace-light.png" alt="Коллекция VKSpot: фильтры, массовые действия и сравнение версий с оригиналом" width="1440">
+</picture>
+
+<p align="center">
+  <a href="docs/images/workspace-light.png">Светлая тема ↗</a> ·
+  <a href="docs/images/workspace-dark.png">Тёмная тема ↗</a>
+</p>
+
+<details>
+<summary><strong>Обзор: прогресс и следующий шаг</strong></summary>
+
+Обзор показывает состояние выбранной коллекции и открывает нужную очередь проверки.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
+  <img src="docs/images/overview-light.png" alt="Обзор VKSpot: прогресс коллекции и очереди записей для проверки" width="1440">
+</picture>
+
+<p align="center">
+  <a href="docs/images/overview-light.png">Светлая тема ↗</a> ·
+  <a href="docs/images/overview-dark.png">Тёмная тема ↗</a>
+</p>
+
+</details>
+
+<details>
+<summary><strong>Архив и экспорт: сохранить результат работы</strong></summary>
+
+Резервная копия, исходный список, CSV, план переноса и M3U8 доступны из параметров коллекции.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/archive-dark.png">
+  <img src="docs/images/archive-light.png" alt="Параметры коллекции VKSpot: резервная копия и форматы экспорта" width="1440">
+</picture>
+
+<p align="center">
+  <a href="docs/images/archive-light.png">Светлая тема ↗</a> ·
+  <a href="docs/images/archive-dark.png">Тёмная тема ↗</a>
+</p>
+
+</details>
+
 ## Ограничения и приватность
 
 - VKSpot архивирует список и готовит перенос; скачивания музыки из VK в приложении нет.
 - Разметка VK/Spotify, доступность треков и ограничения сервисов меняются. Сверяй полноту выгрузки; пустой поиск не доказывает отсутствие трека.
 - Коллекции, история и настройки хранятся локально. Телеметрии нет; обращения к VK и Spotify нужны для их функций. Подробнее — [безопасность и приватность](SECURITY.md).
+
+## Частые вопросы
+
+<details>
+<summary><strong>Почему поиск работает, а плейлист не создаётся?</strong></summary>
+
+Поиск через страницу Spotify и создание плейлиста через API подключаются отдельно. Проверь [настройку API](docs/workflows.md#подключение-spotify-api), Premium владельца API-приложения и статус задания: перенос может ожидать восстановления квоты.
+
+</details>
+
+<details>
+<summary><strong>Что делать, если список из VK выгрузился не полностью?</strong></summary>
+
+Сверь количество, первые и последние записи с VK. Если полнота не подтверждена, результат нельзя считать полным: страница могла загрузить только часть списка. Подробности — в [описании выгрузки VK](docs/workflows.md#импорт-и-выгрузка-vk).
+
+</details>
+
+<details>
+<summary><strong>Почему Windows показывает неизвестного издателя?</strong></summary>
+
+Установщик пока не подписан сертификатом издателя. Скачивай его из [официальных релизов проекта](https://github.com/Matvey77/VKSpot/releases/latest). Сверить SHA-256 можно в PowerShell:
+
+```powershell
+Get-FileHash -Algorithm SHA256 "$HOME\Downloads\VKSpot.Setup.<версия>.exe"
+```
+
+Подставь версию скачанного файла и сравни результат с `SHA256SUMS.txt` из того же релиза. Если файл сохранён в другую папку, укажи её путь.
+
+</details>
 
 ## Для разработчиков
 

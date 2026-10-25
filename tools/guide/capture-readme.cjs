@@ -77,11 +77,9 @@ const path = require('node:path')
         )
       }
     })
-    await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
-    await page.locator('.collection-card').first().getByRole('button', { name: 'Открыть' }).click()
-    await page.getByRole('row', { name: 'Запись 1: Северный свет (Remix)', exact: true }).click()
-    await expect(page.locator('.inspector')).toBeVisible()
     await fs.mkdir(assets, { recursive: true })
+    const capture = (name, theme) =>
+      page.screenshot({ path: path.join(assets, `${name}-${theme}.png`), animations: 'disabled' })
     for (const theme of ['light', 'dark']) {
       await page.evaluate(async (theme) => {
         const state = await window.vkspot.state()
@@ -90,13 +88,28 @@ const path = require('node:path')
         if (!result.ok) throw new Error(result.error)
       }, theme)
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
-      await page.screenshot({
-        path: path.join(assets, `workspace-${theme}.png`),
-        animations: 'disabled',
-      })
+      await page.getByRole('button', { name: 'Обзор', exact: true }).click()
+      await expect(page.getByRole('heading', { name: 'Обзор', exact: true })).toBeVisible()
+      await capture('overview', theme)
+
+      await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
+      await page
+        .locator('.collection-card')
+        .first()
+        .getByRole('button', { name: 'Открыть' })
+        .click()
+      await page.getByRole('row', { name: 'Запись 1: Северный свет (Remix)', exact: true }).click()
+      await expect(page.locator('.inspector')).toBeVisible()
+      await capture('workspace', theme)
+
+      await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
+      await page.getByRole('button', { name: /^Параметры коллекции «/ }).click()
+      await expect(page.getByRole('dialog', { name: 'Параметры коллекции' })).toBeVisible()
+      await capture('archive', theme)
+      await page.getByRole('button', { name: 'Закрыть параметры коллекции', exact: true }).click()
     }
     process.stdout.write(
-      'Captured README workspace in light and dark themes (synthetic profile).\n',
+      'Captured README overview, workspace and archive in both themes (synthetic profile).\n',
     )
   } finally {
     try {
