@@ -82,19 +82,22 @@ async function expectVisiblePage(
     .poll(async () => {
       const expectedBounds = await areaBounds(page)
       const state = await nativePanel(app)
-      return state?.visible && JSON.stringify(state.bounds) === JSON.stringify(expectedBounds)
+      // The portal and native view can resize between separate assertions.
+      // Check the latest geometry and page isolation in one retried observation.
+      return state
+        ? { ...state, matchesArea: JSON.stringify(state.bounds) === JSON.stringify(expectedBounds) }
+        : null
     })
-    .toBe(true)
-  await expect
-    .poll(async () => (await nativePanel(app))?.page.text)
-    .toContain('SYNTHETIC SPOTIFY PANEL')
-  const expectedBounds = await areaBounds(page)
-  const state = await nativePanel(app)
-  expect(state).toMatchObject({
-    visible: true,
-    bounds: expectedBounds,
-    page: { node: 'undefined', bridge: 'undefined', process: 'undefined' },
-  })
+    .toMatchObject({
+      visible: true,
+      matchesArea: true,
+      page: {
+        text: expect.stringContaining('SYNTHETIC SPOTIFY PANEL'),
+        node: 'undefined',
+        bridge: 'undefined',
+        process: 'undefined',
+      },
+    })
 }
 
 test('Spotify native panel opens after the Radix portal mounts without resizing', async () => {
