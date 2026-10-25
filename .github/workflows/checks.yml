@@ -14,6 +14,16 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+      - name: Configure desktop for Electron tests
+        shell: powershell
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1080 -Force
+          Add-Type -AssemblyName System.Windows.Forms
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          Write-Output "Desktop: $($bounds.Width)x$($bounds.Height)"
+          if ($bounds.Width -lt 1920 -or $bounds.Height -lt 1080) {
+            throw 'Electron desktop tests require a 1920x1080 display.'
+          }
       - uses: actions/setup-node@v4
         with:
           node-version: 24
