@@ -2,11 +2,16 @@ name: Checks
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,9 +21,27 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
-      - run: npm run build
       - run: npm test
-      - run: npm run test:e2e
+      - run: npm run dist:win -- --publish never
+      - name: Test packaged application
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $env:VKSPOT_TEST_EXECUTABLE = (Resolve-Path "release/$version/win-unpacked/VKSpot.exe").Path
+          npm run test:e2e
+      - name: Checksum installer
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $installer = Get-Item "release/$version/VKSpot Setup $version.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer.FullName).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content "release/$version/SHA256SUMS.txt" -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            release/*/*.exe
+            release/*/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

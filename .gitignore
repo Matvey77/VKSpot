@@ -12,10 +12,12 @@ release/
 test-results/
 playwright-report/
 data/
-.impeccable/mocks/
-.impeccable/hook.cache.json
-.impeccable/questions/
-.impeccable/audit/
+.impeccable/
+*.enc
+*.pem
+*.key
+*.p12
+*.pfx
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
