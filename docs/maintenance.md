@@ -4,6 +4,8 @@
 
 Требуется Node.js 24 LTS; установка из корня — `npm ci`. Запуск — `npm run dev`. Полезные команды: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:e2e`, `npm run build`, `npm run dist:win`.
 
+`npm run audit` проверяет все зависимости, включая Electron и инструменты разработки; тот же аудит обязателен в GitHub Checks перед сборкой.
+
 Правила версий, сборок и коммитов: [AGENTS.md](../AGENTS.md). Установщик — `release/<version>/VKSpot Setup <version>.exe`. Пакет сохраняет локали Chromium `ru` и `en-US`; другие локали интерфейса Chromium используют fallback, содержимое сайтов и Unicode-треки сохраняются.
 
 Проверка готовой сборки в PowerShell:
