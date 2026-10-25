@@ -1,15 +1,15 @@
 import { LoaderCircle } from 'lucide-react'
 import { lazy, Suspense } from 'react'
 import { CollectionsOverview } from '../features/collections/CollectionsOverview'
-import ConnectionsView from '../features/connections/ConnectionsView'
-import JobsView from '../features/jobs/JobsView'
 import LibraryView from '../features/library/LibraryView'
-import SettingsView from '../features/settings/SettingsView'
 import StartPage from '../features/start/StartPage'
 import { api } from '../state/api'
 
 import type { WorkspaceController } from './useWorkspaceController'
 const Welcome = lazy(() => import('../features/start/Welcome'))
+const ConnectionsView = lazy(() => import('../features/connections/ConnectionsView'))
+const JobsView = lazy(() => import('../features/jobs/JobsView'))
+const SettingsView = lazy(() => import('../features/settings/SettingsView'))
 
 export function WorkspaceRoutes({ controller }: { controller: WorkspaceController }) {
   const {
@@ -65,7 +65,13 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
     openRepair,
   } = controller
   return (
-    <>
+    <Suspense
+      fallback={
+        <div className="loading" role="status">
+          Открываем раздел…
+        </div>
+      }
+    >
       {!data ? (
         <div className="loading" role="status">
           <LoaderCircle size={24} />
@@ -323,6 +329,6 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
           )}
         </>
       )}
-    </>
+    </Suspense>
   )
 }

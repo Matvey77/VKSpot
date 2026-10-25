@@ -120,53 +120,34 @@ export type Settings = {
   searchProvider: 'browser' | 'api'
   theme: 'light' | 'dark'
 }
+const proxySchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .refine((value) => {
+    if (!value) return true
+    try {
+      const url = new URL(value)
+      return (
+        ['http:', 'https:', 'socks5:', 'socks5h:'].includes(url.protocol) &&
+        Boolean(url.hostname) &&
+        !url.username &&
+        !url.password &&
+        (!url.pathname || url.pathname === '/') &&
+        !url.search &&
+        !url.hash
+      )
+    } catch {
+      return false
+    }
+  }, 'Укажите HTTP или SOCKS5 адрес прокси без логина, пароля и пути.')
+  .default('')
+
 export const settingsSchema = z.object({
   clientId: z.string().max(100),
-  spotifyProxy: z
-    .string()
-    .trim()
-    .max(1000)
-    .refine((value) => {
-      if (!value) return true
-      try {
-        const url = new URL(value)
-        return (
-          ['http:', 'https:', 'socks5:', 'socks5h:'].includes(url.protocol) &&
-          Boolean(url.hostname) &&
-          !url.username &&
-          !url.password &&
-          (!url.pathname || url.pathname === '/') &&
-          !url.search &&
-          !url.hash
-        )
-      } catch {
-        return false
-      }
-    }, 'Укажите HTTP или SOCKS5 адрес прокси без логина, пароля и пути.')
-    .default(''),
+  spotifyProxy: proxySchema,
   useProxyForVK: z.boolean().default(false),
-  vkProxy: z
-    .string()
-    .trim()
-    .max(1000)
-    .refine((value) => {
-      if (!value) return true
-      try {
-        const url = new URL(value)
-        return (
-          ['http:', 'https:', 'socks5:', 'socks5h:'].includes(url.protocol) &&
-          Boolean(url.hostname) &&
-          !url.username &&
-          !url.password &&
-          (!url.pathname || url.pathname === '/') &&
-          !url.search &&
-          !url.hash
-        )
-      } catch {
-        return false
-      }
-    }, 'Укажите HTTP или SOCKS5 адрес прокси без логина, пароля и пути.')
-    .default(''),
+  vkProxy: proxySchema,
   matchingRules: matchingRulesSchema.default(defaultMatchingRules),
   playlistName: z.string().min(1).max(200),
   searchDelayMs: z.number().int().min(1000).max(60000),

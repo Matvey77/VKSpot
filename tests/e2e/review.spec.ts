@@ -1,15 +1,9 @@
 import { openLibrary, confirmMatches } from './navigation'
-import {
-  test,
-  expect,
-  _electron as electron,
-  type ElectronApplication,
-  type Page,
-} from '@playwright/test'
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { mkdir, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { cleanupTestProfile, createTestProfile, launchTestApp as launch } from './support'
 
 async function mockSearch(app: ElectronApplication, autoResumeSearch = false): Promise<void> {
   await app.evaluate(async ({ session, shell }) => {
@@ -56,34 +50,10 @@ async function openReview(page: Page): Promise<void> {
   await openLibrary(page)
 }
 
-async function cleanup(directory: string): Promise<void> {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-review-')
-  )
-    throw new Error('Unsafe cleanup target')
-  await rm(directory, { recursive: true, force: true })
-}
-async function launch(directory: string): Promise<ElectronApplication> {
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  return electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
-}
+const cleanup = (directory: string) => cleanupTestProfile(directory, 'vkspot-review-')
 
 test('independent filters, exposed decisions and manual Spotify links preserve source, undo and restart', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   let app = await launch(directory)
   try {
     let page = await app.firstWindow()
@@ -262,7 +232,7 @@ test('independent filters, exposed decisions and manual Spotify links preserve s
 })
 
 test('review confirms repeated metadata matches, advances through versions and preserves file obligations', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -367,7 +337,7 @@ test('review confirms repeated metadata matches, advances through versions and p
 })
 
 test('collection runs a resumable background search without switching to jobs or confirming versions', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -449,7 +419,7 @@ test('collection runs a resumable background search without switching to jobs or
 })
 
 test('resumed search keeps decisions and repeated pause available, including after restart', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   let app = await launch(directory)
   try {
     await mockSearch(app)
@@ -547,7 +517,7 @@ test('resumed search keeps decisions and repeated pause available, including aft
 })
 
 test('collection filters support keyboard selection and preserve the visible table', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -580,7 +550,7 @@ test('collection filters support keyboard selection and preserve the visible tab
 })
 
 test('unavailable background search explains the connection requirement on hover and keyboard focus', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -620,7 +590,7 @@ test('unavailable background search explains the connection requirement on hover
 })
 
 test('Spotify quota wait preserves candidates, explains the deadline and unlocks manual continuation', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     await mockSearch(app)
@@ -751,7 +721,7 @@ test('Spotify quota wait preserves candidates, explains the deadline and unlocks
 })
 
 test('table opens first, filters statuses and confirms an entire virtualized matching selection with undo', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -890,7 +860,7 @@ test('table opens first, filters statuses and confirms an entire virtualized mat
 })
 
 test('automatic search is on by default, respects Spotify wait and supports a persistent off switch', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   let app = await launch(directory)
   try {
     let page = await app.firstWindow()
@@ -960,7 +930,7 @@ test('automatic search is on by default, respects Spotify wait and supports a pe
 })
 
 test('in-app audio comparison controls are available for VK source and Spotify candidates', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-'))
+  const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -1022,7 +992,7 @@ test('in-app audio comparison controls are available for VK source and Spotify c
 })
 
 test('table inspector supports resizing, layout toggle (parallel/sequential), reset decision and candidate audio preview', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-inspector-'))
+  const directory = await createTestProfile('vkspot-review-inspector-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -1102,7 +1072,7 @@ test('table inspector supports resizing, layout toggle (parallel/sequential), re
 })
 
 test('empty search explains the saved query and an individual local-file decision survives undo and restart', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-review-local-decision-'))
+  const directory = await createTestProfile('vkspot-review-local-decision-')
   let app = await launch(directory)
   try {
     let page = await app.firstWindow()

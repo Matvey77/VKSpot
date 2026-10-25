@@ -114,14 +114,17 @@ describe('Spotify connection evidence', () => {
       theme: 'light',
     }
     expect(settingsSchema.parse(settings).spotifyProxy).toBe('')
-    for (const spotifyProxy of ['', 'http://127.0.0.1:2080', 'socks5://[::1]:2080'])
-      expect(settingsSchema.safeParse({ ...settings, spotifyProxy }).success).toBe(true)
-    for (const spotifyProxy of [
-      'file:///tmp/proxy',
-      'http://user:secret@localhost:2080',
-      'http://localhost:2080/path',
-      'http://localhost:2080?token=test',
-    ])
-      expect(settingsSchema.safeParse({ ...settings, spotifyProxy }).success).toBe(false)
+    expect(settingsSchema.parse(settings).vkProxy).toBe('')
+    for (const field of ['spotifyProxy', 'vkProxy']) {
+      for (const value of ['', 'http://127.0.0.1:2080', 'socks5://[::1]:2080'])
+        expect(settingsSchema.safeParse({ ...settings, [field]: value }).success).toBe(true)
+      for (const value of [
+        'file:///tmp/proxy',
+        'http://user:secret@localhost:2080',
+        'http://localhost:2080/path',
+        'http://localhost:2080?token=test',
+      ])
+        expect(settingsSchema.safeParse({ ...settings, [field]: value }).success).toBe(false)
+    }
   })
 })

@@ -149,7 +149,7 @@ export function filterLibraryRows(
   return { baseRows, rows, matchingRows, resultCounts, destinationCounts }
 }
 
-export type CollectionSummary = {
+type CollectionSummary = {
   groups: Record<ReviewGroup, number>
   destinations: Record<LibraryFilter, number>
   unresolved: number

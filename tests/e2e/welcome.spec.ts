@@ -1,32 +1,9 @@
-import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
-
-async function cleanup(directory: string): Promise<void> {
-  const target = resolve(directory)
-  if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith('vkspot-welcome-'))
-    throw new Error('Unsafe test cleanup target')
-  await rm(target, { recursive: true, force: true })
-}
+import { test, expect } from '@playwright/test'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 test('welcome is the first view, explains the flow and links to working sections', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-welcome-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-welcome-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -136,6 +113,6 @@ test('welcome is the first view, explains the flow and links to working sections
     await expect(page.getByRole('table')).toBeVisible()
   } finally {
     await app.close()
-    await cleanup(directory)
+    await cleanupTestProfile(directory, 'vkspot-welcome-')
   }
 })

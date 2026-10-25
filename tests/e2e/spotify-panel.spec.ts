@@ -1,7 +1,5 @@
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { test, expect, type ElectronApplication } from '@playwright/test'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 type NativePanelState = {
   visible: boolean
@@ -9,26 +7,8 @@ type NativePanelState = {
   page: { text: string; node: string; bridge: string; process: string }
 }
 
-async function launch(directory: string): Promise<ElectronApplication> {
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  return electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
-}
-
 async function setup(directory: string) {
-  const app = await launch(directory)
+  const app = await launchTestApp(directory)
   await app.evaluate(async ({ session }) => {
     await session
       .fromPartition('persist:vkspot-spotify-browser')
@@ -44,15 +24,8 @@ async function setup(directory: string) {
   return app
 }
 
-async function cleanup(directory: string): Promise<void> {
-  const target = resolve(directory)
-  if (
-    dirname(target) !== resolve(tmpdir()) ||
-    !basename(target).startsWith('vkspot-spotify-panel-')
-  )
-    throw new Error('Unsafe Spotify panel cleanup target')
-  await rm(target, { recursive: true, force: true })
-}
+const cleanup = (directory: string) =>
+  cleanupTestProfile(directory, 'vkspot-spotify-panel-', 'Unsafe Spotify panel cleanup target')
 
 async function openFromConnections(page: Awaited<ReturnType<ElectronApplication['firstWindow']>>) {
   await page.getByRole('button', { name: 'Подключения', exact: true }).click()
@@ -125,7 +98,7 @@ async function expectVisiblePage(
 }
 
 test('Spotify native panel opens after the Radix portal mounts without resizing', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-spotify-panel-'))
+  const directory = await createTestProfile('vkspot-spotify-panel-')
   const app = await setup(directory)
   try {
     const page = await app.firstWindow()
@@ -138,7 +111,7 @@ test('Spotify native panel opens after the Radix portal mounts without resizing'
 })
 
 test('reopening the Spotify panel restores the native view without resizing', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-spotify-panel-'))
+  const directory = await createTestProfile('vkspot-spotify-panel-')
   const app = await setup(directory)
   try {
     const page = await app.firstWindow()

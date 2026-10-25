@@ -1,34 +1,11 @@
-import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
-
-async function cleanup(directory: string): Promise<void> {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-overview-')
-  )
-    throw new Error('Unsafe cleanup target')
-  await rm(directory, { recursive: true, force: true })
-}
+import { test, expect } from '@playwright/test'
+import { mkdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 test('overview scopes review queues, collection exports keep their owner and settings keep drafts across sections', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-overview-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-overview-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -198,6 +175,6 @@ test('overview scopes review queues, collection exports keep their owner and set
     expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
   } finally {
     await app.close()
-    await cleanup(directory)
+    await cleanupTestProfile(directory, 'vkspot-overview-')
   }
 })

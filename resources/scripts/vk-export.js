@@ -1,5 +1,5 @@
 /* Metadata only, in an isolated world. No network requests, playback URLs,
- * hashes, cookies or page globals leave the page. See docs/vk-extraction.md. */
+ * hashes, cookies or page globals leave the page. See docs/workflows.md. */
 ;(async () => {
   const state = {
     running: true,

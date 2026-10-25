@@ -1,7 +1,7 @@
 import type { Settings } from '../../../../shared/model'
 import { Preferences } from './Preferences'
 
-export interface SettingsViewProps {
+interface SettingsViewProps {
   settings: Settings
   dataPath: string
   busy: string

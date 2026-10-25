@@ -20,7 +20,7 @@ import { VKIcon } from '../../components/brand/BrandIcons'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
-export interface RepairDialogProps {
+interface RepairDialogProps {
   collection: Collection | null
   preview: ImportPreview | null
   busy: string

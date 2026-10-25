@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
+import { test, expect, type ElectronApplication } from '@playwright/test'
 import { modernVKPage } from '../fixtures/vk-pages'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 const sections = ['Обзор', 'Коллекции', 'Подключения', 'Задания', 'Настройки']
 const viewports = [
@@ -13,30 +13,9 @@ const viewports = [
   { width: 1440, height: 920 },
 ]
 
-async function launch(directory: string): Promise<ElectronApplication> {
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  return electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
-}
-
-async function cleanup(directory: string): Promise<void> {
-  const target = resolve(directory)
-  if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith('vkspot-sidebar-'))
-    throw new Error('Unsafe sidebar test cleanup target')
-  await rm(target, { recursive: true, force: true })
-}
+const launch = launchTestApp
+const cleanup = (directory: string) =>
+  cleanupTestProfile(directory, 'vkspot-sidebar-', 'Unsafe sidebar test cleanup target')
 
 async function mockBrowserSearch(app: ElectronApplication): Promise<void> {
   await app.evaluate(async ({ session }) => {
@@ -126,7 +105,7 @@ async function mockVKPage(app: ElectronApplication, library: string): Promise<vo
 }
 
 test('sidebar service and task status stays visible across sections and compact viewports', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-sidebar-'))
+  const directory = await createTestProfile('vkspot-sidebar-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()
@@ -207,7 +186,7 @@ test('sidebar service and task status stays visible across sections and compact 
 })
 
 test('latest sidebar task follows createdAt and reports live progress across views', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-sidebar-'))
+  const directory = await createTestProfile('vkspot-sidebar-')
   let app: ElectronApplication | null = await launch(directory)
   try {
     const initialPage = await app.firstWindow()
@@ -383,7 +362,7 @@ test('latest sidebar task follows createdAt and reports live progress across vie
 
 test('VK sidebar status follows synthetic library, window close and session reset', async () => {
   test.setTimeout(45000)
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-sidebar-'))
+  const directory = await createTestProfile('vkspot-sidebar-')
   const app = await launch(directory)
   try {
     const page = await app.firstWindow()

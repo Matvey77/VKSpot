@@ -1,8 +1,8 @@
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { test, expect, type ElectronApplication } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { classicVKPage, modernVKPage } from '../fixtures/vk-pages'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 const adapterPath = resolve('resources/scripts/vk-export.js')
 // Exercise real layout and scrolling. Only isolated-world timeouts and its
@@ -25,32 +25,13 @@ const progressClock = `${clock}; {
 }; undefined`
 
 test.beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'vkspot-extract-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  directory = await createTestProfile('vkspot-extract-')
+  app = await launchTestApp(directory)
   await app.firstWindow()
 })
 test.afterEach(async () => {
   await app?.close()
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-extract-')
-  )
-    throw new Error('Unsafe VK fixture cleanup target')
-  await rm(directory, { recursive: true, force: true })
+  await cleanupTestProfile(directory, 'vkspot-extract-', 'Unsafe VK fixture cleanup target')
 })
 
 async function fixture(html: string, library?: string, clockScript = clock): Promise<void> {

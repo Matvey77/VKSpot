@@ -42,7 +42,7 @@ function formatDate(iso: string): string {
   }
 }
 
-export interface CollectionsOverviewProps {
+interface CollectionsOverviewProps {
   collections: Collection[]
   matchingRules?: MatchingRules
   onOpenCollection: (id: string) => void

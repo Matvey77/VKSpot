@@ -1,36 +1,9 @@
-# Welcome Surface Specification
+# Руководство
 
-Mode: Read, inside the existing desktop Operate shell.
+Primary target: `src/renderer/src/features/start/Welcome.tsx`
+Mode: Read.
 
-## Brief
-
-First navigation item and initial view. Explain the application, show how the
-mixed workflow operates, then provide six ordered steps with actual interface
-captures and real navigation actions. Preserve existing typography, palette and controls.
-
-## Direction contract
-
-- THESIS: explain original evidence → reviewed destinations → ordered transfer.
-- OWN-WORLD: inherit ink-blue shell, paper reading surface and teal actions.
-- STORY: understand purpose, see both audio paths, start with an actual source.
-- FIRST VIEWPORT: compact annotation and actions, followed by a connected flow;
-  the illustrated ordered route follows in the same scroll area.
-- FORM: documented extension of the existing world; the explicit brief fixes the
-  structure. Twelve scenes use twenty-four light/dark captures of the actual application
-  with isolated synthetic records. Measured numbered markers open explanations;
-  images support enlargement. Service marks use original SVG assets.
-- FLOW: the Spotify step shows background search, explicit bulk confirmation
-  and sequential version review. Editing and local-file inspector links open
-  Table; search and selection links open Table, version comparison opens Review.
-  Automatic continuation is on by default and manual pause remains authoritative.
-  Capture generation uses a separate six-record
-  profile, mocked Spotify responses and hidden test windows.
-- FINISH: inspect desktop/compact/dark views, test navigation and retain honest
-  manual-action and integration limits.
-
-## Режим работы: Обзор и интерактивная инструкция
-
-Экран «Обзор» использует режим Operate (`StartPage.tsx`): выбор коллекции, три этапа,
-следующее действие по фактическому состоянию и переходы в очереди разбора. Инструкция открывается отдельной кнопкой.
-Иллюстрированная Read-поверхность руководства (`Welcome.tsx`) доступна по запросу с бесшовными
-переходами в рабочие разделы приложения.
+- Руководство загружается по запросу; объясняет два пути переноса и ведёт в рабочие разделы.
+- Снимки — настоящий интерфейс на синтетических данных в двух темах; сохранять подписи, измеренные маркеры, увеличение и provenance.
+- Не выдавать демонстрацию за проверку реальных аккаунтов.
+- Общий визуальный контракт — [DESIGN.md](../../DESIGN.md).

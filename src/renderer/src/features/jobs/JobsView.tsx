@@ -6,7 +6,7 @@ import { PlaylistRecovery } from './PlaylistRecovery'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
-export interface JobsViewProps {
+interface JobsViewProps {
   data: ViewState
   busy: string
   jobNow: number

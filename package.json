@@ -1,6 +1,6 @@
 {
   "name": "vkspot",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "description": "Local VK Music archive and reviewed Spotify migration",
   "main": "out/main/index.js",
   "author": "VKSpot contributors",
@@ -18,8 +18,8 @@
     "rebuild": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps",
     "lint": "eslint src tests",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"tools/**/*.cjs\" \"*.{md,json,ts,mjs}\" \"docs/**/*.md\" \"resources/**/*.{md,js}\" \"tools/**/*.md\" \".impeccable/surfaces/**/*.md\" \".github/**/*.yml\" \".impeccable/design.json\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,html}\" \"tests/**/*.ts\" \"tools/**/*.cjs\" \"*.{md,json,ts,mjs}\" \"docs/**/*.md\" \"resources/**/*.{md,js}\" \"tools/**/*.md\" \".impeccable/surfaces/**/*.md\" \".github/**/*.yml\" \".impeccable/design.json\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "audit": "npm audit --omit=dev",
     "perf": "node tools/performance/benchmark.cjs"
   },
@@ -69,8 +69,7 @@
         "to": "scripts",
         "filter": [
           "**/*.js",
-          "**/*.ps1",
-          "**/*.md"
+          "**/*.ps1"
         ]
       },
       {
@@ -89,7 +88,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true
     },
-    "npmRebuild": true
+    "npmRebuild": true,
+    "electronLanguages": [
+      "en-US",
+      "ru"
+    ]
   },
   "allowScripts": {
     "electron@44.7.2": true,

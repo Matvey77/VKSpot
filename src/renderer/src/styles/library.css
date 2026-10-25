@@ -504,3 +504,6 @@
   height: 30px;
   font-size: 11px;
 }
+.selection-bar button svg {
+  flex-shrink: 0;
+}

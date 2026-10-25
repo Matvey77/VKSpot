@@ -1,6 +1,6 @@
 import { Info, X } from 'lucide-react'
 
-export interface CompletenessNoticeProps {
+interface CompletenessNoticeProps {
   completeness: { expected: number | null; message: string; status: string }
   totalCount: number
   onDismiss: () => void

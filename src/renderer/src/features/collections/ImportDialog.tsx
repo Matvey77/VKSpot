@@ -5,7 +5,7 @@ import type { ImportPreview } from '../../../../shared/model'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
-export interface ImportDialogProps {
+interface ImportDialogProps {
   preview: ImportPreview | null
   busy: string
   onClose: () => void

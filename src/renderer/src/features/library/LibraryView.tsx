@@ -2,10 +2,17 @@ import { useCallback, useMemo } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
+  Ban,
   Check,
+  CheckCheck,
+  Clock,
+  FileAudio,
   FolderOpen,
+  ListPlus,
   Link2,
   ListFilter,
+  RefreshCw,
+  RotateCcw,
   ShieldCheck,
   Search,
   Undo2,
@@ -425,6 +432,7 @@ export function LibraryView({
                     }
                     onClick={() => void confirmSelection()}
                   >
+                    <CheckCheck size={14} aria-hidden="true" />
                     Подтвердить выбранные ({count(selectedMatches)})
                   </ExplainedButton>
                   <div
@@ -446,18 +454,21 @@ export function LibraryView({
                         })
                       }
                     >
+                      <RotateCcw size={14} aria-hidden="true" />
                       Сбросить решение
                     </button>
                     <button
                       disabled={!!busy}
                       onClick={() => void onPatch([...selected], { excluded: true })}
                     >
+                      <Ban size={14} aria-hidden="true" />
                       Исключить
                     </button>
                     <button
                       disabled={!!busy}
                       onClick={() => void onPatch([...selected], { excluded: false })}
                     >
+                      <ListPlus size={14} aria-hidden="true" />
                       Вернуть в перенос
                     </button>
                     <button
@@ -470,6 +481,7 @@ export function LibraryView({
                         })
                       }
                     >
+                      <Clock size={14} aria-hidden="true" />
                       Разобрать позже
                     </button>
                     <button
@@ -482,6 +494,7 @@ export function LibraryView({
                         })
                       }
                     >
+                      <FileAudio size={14} aria-hidden="true" />
                       Нужен локальный файл
                     </button>
                     <button
@@ -491,6 +504,7 @@ export function LibraryView({
                       }
                       onClick={() => void onSearch([...selected])}
                     >
+                      <RefreshCw size={14} aria-hidden="true" />
                       Повторить поиск
                     </button>
                   </div>

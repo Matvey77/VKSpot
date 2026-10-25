@@ -1,35 +1,10 @@
-import { _electron as electron, expect, test } from '@playwright/test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { expect, test } from '@playwright/test'
 import { openLibrary } from './navigation'
-
-async function cleanup(directory: string): Promise<void> {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-performance-')
-  )
-    throw new Error('Unsafe cleanup')
-  await rm(directory, { recursive: true, force: true })
-}
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 test('large library updates use bounded deltas and resizing keeps the table virtual', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-performance-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-performance-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     const fixture = await page.evaluate(async () => {
@@ -114,6 +89,6 @@ test('large library updates use bounded deltas and resizing keeps the table virt
     await expect(page.getByRole('alert')).toHaveCount(0)
   } finally {
     await app.close()
-    await cleanup(directory)
+    await cleanupTestProfile(directory, 'vkspot-performance-', 'Unsafe cleanup')
   }
 })

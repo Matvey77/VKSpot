@@ -1,35 +1,11 @@
-import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { test, expect } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
 import { openLibrary } from './navigation'
-
-async function cleanup(directory: string): Promise<void> {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-range-')
-  )
-    throw new Error('Unsafe cleanup target')
-  await rm(directory, { recursive: true, force: true })
-}
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 test('Shift selects and deselects filtered ranges across virtual rows without changing tracks', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-range-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-range-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -128,6 +104,6 @@ test('Shift selects and deselects filtered ranges across virtual rows without ch
     expect(final.value.collections[0]).toEqual(original)
   } finally {
     await app.close()
-    await cleanup(directory)
+    await cleanupTestProfile(directory, 'vkspot-range-')
   }
 })

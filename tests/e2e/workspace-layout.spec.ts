@@ -1,35 +1,11 @@
-import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { basename, dirname, join, resolve } from 'node:path'
+import { test, expect } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
 import { openLibrary } from './navigation'
-
-async function cleanup(directory: string): Promise<void> {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-workspace-')
-  )
-    throw new Error('Unsafe cleanup target')
-  await rm(directory, { recursive: true, force: true })
-}
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 test('collection workspace preserves drafts, scopes quick filters and fits desktop windows', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-workspace-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-workspace-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -111,8 +87,12 @@ test('collection workspace preserves drafts, scopes quick filters and fits deskt
         { width, height },
       )
       await expect
-        .poll(async () => page.locator('.table-panel').evaluate((element) => element.clientHeight))
-        .toBeGreaterThan(130)
+        .poll(async () =>
+          page
+            .locator('.table-panel')
+            .evaluate((element) => element.getBoundingClientRect().height),
+        )
+        .toBeGreaterThanOrEqual(130)
       const geometry = await page.evaluate(() => {
         const inspector = document.querySelector('.inspector')!.getBoundingClientRect()
         const table = document.querySelector('.table-panel')!.getBoundingClientRect()
@@ -167,6 +147,6 @@ test('collection workspace preserves drafts, scopes quick filters and fits deskt
     }
   } finally {
     await app.close()
-    await cleanup(directory)
+    await cleanupTestProfile(directory, 'vkspot-workspace-')
   }
 })

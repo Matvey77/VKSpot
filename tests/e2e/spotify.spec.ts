@@ -1,30 +1,9 @@
-import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
-
-async function cleanup(directory: string): Promise<void> {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-spotify-e2e-')
-  )
-    throw new Error('Unsafe test cleanup target')
-  await rm(directory, { recursive: true, force: true })
-}
+import { test, expect } from '@playwright/test'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 test('Spotify profile denial stays disconnected; saved proxy retries the existing session', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-spotify-e2e-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({ args: ['.'], env })
+  const directory = await createTestProfile('vkspot-spotify-e2e-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await app.evaluate(async ({ session, shell }) => {
@@ -90,6 +69,6 @@ test('Spotify profile denial stays disconnected; saved proxy retries the existin
     await page.screenshot({ path: '.local/evidence/e2e/spotify-proxy-compact.png' })
   } finally {
     await app.close()
-    await cleanup(directory)
+    await cleanupTestProfile(directory, 'vkspot-spotify-e2e-')
   }
 })

@@ -1,39 +1,18 @@
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { test, expect, type ElectronApplication } from '@playwright/test'
 import { vkAudioPage, modernVKAudioPage, silentWav } from '../fixtures/vk-audio-page'
 import { openLibrary } from './navigation'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
 let directory: string
 let app: ElectronApplication
 test.beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'vkspot-audio-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  directory = await createTestProfile('vkspot-audio-')
+  app = await launchTestApp(directory)
   await app.firstWindow()
 })
 test.afterEach(async () => {
   await app?.close()
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-audio-')
-  )
-    throw new Error('Unsafe audio test cleanup')
-  await rm(directory, { recursive: true, force: true })
+  await cleanupTestProfile(directory, 'vkspot-audio-', 'Unsafe audio test cleanup')
 })
 
 async function fixture(

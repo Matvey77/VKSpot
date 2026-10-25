@@ -1,33 +1,14 @@
 import { openLibrary } from './navigation'
-import { test, expect, _electron as electron } from '@playwright/test'
-import { mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises'
-import { join, resolve, dirname, basename } from 'node:path'
-import { tmpdir } from 'node:os'
+import { test, expect } from '@playwright/test'
+import { writeFile, readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
-async function cleanup(directory: string): Promise<void> {
-  const target = resolve(directory)
-  if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith('vkspot-'))
-    throw new Error('Unsafe test cleanup target')
-  await rm(target, { recursive: true, force: true })
-}
+const cleanup = (directory: string) => cleanupTestProfile(directory, 'vkspot-')
 
 test('archive, corrections, repeats, exclusion, undo, restart and settings', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-e2e-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  let app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-e2e-')
+  let app = await launchTestApp(directory)
   try {
     let page = await app.firstWindow()
     await openLibrary(page)
@@ -85,20 +66,25 @@ test('archive, corrections, repeats, exclusion, undo, restart and settings', asy
     await expect(
       page.getByRole('row', { name: 'Запись 1: Исправленная песня', exact: true }),
     ).toBeVisible()
-    await page.getByLabel('Исключить из переноса').check()
+    await page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Исключить', exact: true })
+      .click()
     const state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)
     expect(state.value.collections[0].rows).toHaveLength(3)
     expect(state.value.collections[0].rows[0].source.title).toBe('Песня (Remix)')
     expect(state.value.collections[0].rows[0].working.excluded).toBe(true)
     await page.getByRole('button', { name: 'Отменить последнюю правку' }).click()
-    await expect(page.getByLabel('Исключить из переноса')).not.toBeChecked()
+    await expect
+      .poll(async () => {
+        const result = await page.evaluate(() => window.vkspot.state())
+        if (!result.ok) throw new Error(result.error)
+        return result.value.collections[0].rows[0].working.excluded
+      })
+      .toBe(false)
     await app.close()
-    app = await electron.launch({
-      executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-      args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-      env,
-    })
+    app = await launchTestApp(directory)
     page = await app.firstWindow()
     await openLibrary(page)
     await expect(page.getByRole('heading', { name: 'Проверочная коллекция' })).toBeVisible()
@@ -122,22 +108,8 @@ test('archive, corrections, repeats, exclusion, undo, restart and settings', asy
 })
 
 test('native file import and export, local audio checksum and copying', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-files-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-files-')
+  const app = await launchTestApp(directory)
   try {
     const input = join(directory, 'tracks.json'),
       archive = join(directory, 'archive.json')
@@ -242,22 +214,8 @@ test('native file import and export, local audio checksum and copying', async ()
 })
 
 test('9000 occurrence collection stays complete and renders bounded rows', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-large-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+  const directory = await createTestProfile('vkspot-large-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await openLibrary(page)
@@ -309,28 +267,14 @@ test('9000 occurrence collection stays complete and renders bounded rows', async
   }
 })
 
-test('exclude checkbox responds while the database is pending and rolls back a rejected save', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-e2e-'))
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
+test('exclusion action stays disabled while saving and preserves the row after a rejected save', async () => {
+  const directory = await createTestProfile('vkspot-e2e-')
+  const app = await launchTestApp(directory)
   try {
     const page = await app.firstWindow()
     await page.evaluate(() =>
       window.vkspot.importCollection({
-        name: 'Checkbox regression',
+        name: 'Exclusion regression',
         origin: 'Synthetic',
         completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
         tracks: [{ artist: 'Artist', title: 'Song' }],
@@ -350,12 +294,13 @@ test('exclude checkbox responds while the database is pending and rolls back a r
           ),
       )
     })
-    const checkbox = page.getByRole('checkbox', { name: 'Исключить из переноса', exact: true })
-    await checkbox.check()
-    await expect(checkbox).toBeChecked()
-    await expect(checkbox).toBeDisabled()
+    const exclude = page
+      .locator('.selection-bar')
+      .getByRole('button', { name: 'Исключить', exact: true })
+    await exclude.click()
+    await expect(exclude).toBeDisabled()
     await app.evaluate(() => Reflect.get(globalThis, '__rejectPatch')())
-    await expect(checkbox).not.toBeChecked()
+    await expect(exclude).toBeEnabled()
     await expect(page.getByRole('alert')).toContainText('Synthetic write rejection')
     const state = await page.evaluate(() => window.vkspot.state())
     if (!state.ok) throw new Error(state.error)

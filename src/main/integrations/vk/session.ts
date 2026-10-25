@@ -4,7 +4,7 @@ import { classifyVKPage, readVKPageSignals } from './status'
 import { vkExportOptionsSchema, vkImportPreview, vkProgressSchema } from '../../../core/vk-import'
 import type { ImportPreview, VKStatus } from '../../../shared/model'
 
-export interface VKSessionOptions {
+interface VKSessionOptions {
   backgroundTest: boolean
   onChange: () => void
   onProgress: (progress: unknown) => void

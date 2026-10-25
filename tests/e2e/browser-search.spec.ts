@@ -1,26 +1,8 @@
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { test, expect, type ElectronApplication } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { openLibrary } from './navigation'
-
-async function launch(directory: string) {
-  const env: Record<string, string> = {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
-      ),
-    ),
-    VKSPOT_DATA_DIR: directory,
-    VKSPOT_BACKGROUND_TEST: '1',
-  }
-  delete env.ELECTRON_RUN_AS_NODE
-  return electron.launch({
-    executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
-    args: process.env.VKSPOT_TEST_EXECUTABLE ? [] : ['.'],
-    env,
-  })
-}
+import { cleanupTestProfile, createTestProfile, launchTestApp as launch } from './support'
 async function mockPages(app: ElectronApplication) {
   await app.evaluate(async ({ session }) => {
     Reflect.set(globalThis, '__browserQueries', [])
@@ -73,17 +55,11 @@ async function mockPages(app: ElectronApplication) {
     })
   })
 }
-async function cleanup(directory: string) {
-  if (
-    dirname(resolve(directory)) !== resolve(tmpdir()) ||
-    !basename(directory).startsWith('vkspot-browser-')
-  )
-    throw new Error('Unsafe cleanup target')
-  await rm(directory, { recursive: true, force: true })
-}
+const cleanup = (directory: string) =>
+  cleanupTestProfile(directory, 'vkspot-browser-', 'Unsafe cleanup target')
 
 test('inspector searches Spotify again after cached results and displays progress, empty results and errors', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await mockPages(app)
@@ -157,7 +133,7 @@ test('inspector searches Spotify again after cached results and displays progres
 })
 
 test('browser search needs no API login, caches repeats, keeps source and offers the next review step', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await mockPages(app)
@@ -246,7 +222,7 @@ test('browser search needs no API login, caches repeats, keeps source and offers
 })
 
 test('browser Retry-After resumes automatically without using the API or sending an early request', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await mockPages(app)
@@ -282,7 +258,7 @@ test('browser Retry-After resumes automatically without using the API or sending
 })
 
 test('page challenge keeps the current track pending and recovers inside the app', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await mockPages(app)
@@ -343,7 +319,7 @@ test('page challenge keeps the current track pending and recovers inside the app
 })
 
 test('a stale Spotify panel owner cannot hide the newer owner view', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await mockPages(app)
@@ -392,7 +368,7 @@ test('a stale Spotify panel owner cannot hide the newer owner view', async () =>
 })
 
 test('continuing a challenged job from its Jobs card resumes that collection only', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await mockPages(app)
@@ -476,7 +452,7 @@ test('continuing a challenged job from its Jobs card resumes that collection onl
 })
 
 test('file import starts search by default and a manual pause survives restart without repeating saved rows', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   let app = await launch(directory)
   try {
     await mockPages(app)
@@ -535,7 +511,7 @@ test('file import starts search by default and a manual pause survives restart w
 })
 
 test('a song title that looks like an error does not stop a valid search', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await app.evaluate(async ({ session }) => {
@@ -580,7 +556,7 @@ test('a song title that looks like an error does not stop a valid search', async
 })
 
 test('search handles hour-long track durations such as 1:12:28', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await app.evaluate(async ({ session }) => {
@@ -624,7 +600,7 @@ test('search handles hour-long track durations such as 1:12:28', async () => {
 })
 
 test('search handles Russian localized empty search results such as "Треки не найдены"', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'vkspot-browser-'))
+  const directory = await createTestProfile('vkspot-browser-')
   const app = await launch(directory)
   try {
     await app.evaluate(async ({ session }) => {

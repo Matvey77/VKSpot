@@ -7,7 +7,7 @@ import { VKSettings } from './VKSettings'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
-export interface ConnectionsViewProps {
+interface ConnectionsViewProps {
   data: ViewState
   busy: string
   collection: Collection | undefined

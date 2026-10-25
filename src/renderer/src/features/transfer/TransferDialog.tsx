@@ -3,7 +3,7 @@ import { ArrowRight, X } from 'lucide-react'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
-export interface TransferDialogProps {
+interface TransferDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   counts: {

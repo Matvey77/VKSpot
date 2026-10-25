@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export interface IconButtonProps {
+interface IconButtonProps {
   children: ReactNode
   title: string
   onClick: () => void
