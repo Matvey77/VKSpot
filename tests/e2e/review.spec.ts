@@ -531,14 +531,25 @@ test('collection filters support keyboard selection and preserve the visible tab
     )
     await openReview(page)
     const filter = page.getByRole('combobox', { name: 'Результат поиска' })
-    await filter.focus()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
+    const isMac = (await app.evaluate(() => process.platform)) === 'darwin'
+    const optionCount = await filter.locator('option').count()
+    const chooseWithKeyboard = async (end: boolean) => {
+      await filter.focus()
+      if (isMac) {
+        // macOS opens a native menu; Home and End do not select its first/last item.
+        await page.keyboard.press('Space')
+        for (let index = 1; index < optionCount; index++) {
+          await page.keyboard.press(end ? 'ArrowDown' : 'ArrowUp')
+        }
+      } else {
+        await page.keyboard.press(end ? 'End' : 'Home')
+      }
+      await page.keyboard.press('Enter')
+    }
+    await chooseWithKeyboard(true)
     await expect(filter).toHaveValue('missing')
     await expect(page.getByRole('table')).toBeVisible()
-    await filter.focus()
-    await page.keyboard.press('Home')
-    await page.keyboard.press('Enter')
+    await chooseWithKeyboard(false)
     await expect(filter).toHaveValue('all')
     await expect(page.getByRole('row', { name: 'Запись 1: Song', exact: true })).toBeVisible()
     await page.keyboard.press('Tab')
