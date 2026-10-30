@@ -1,13 +1,10 @@
 $ErrorActionPreference = 'Stop'
 
-Add-Type -AssemblyName System.Windows.Forms
-$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-if ($bounds.Width -lt 1920 -or $bounds.Height -lt 1080) {
-  if (Get-Command Set-DisplayResolution -ErrorAction SilentlyContinue) {
-    Set-DisplayResolution -Width 1920 -Height 1080 -Force
-  } else {
-    # Windows 11 ARM runners do not include the Windows Server display cmdlet.
-    Add-Type -TypeDefinition @"
+if (Get-Command Set-DisplayResolution -ErrorAction SilentlyContinue) {
+  Set-DisplayResolution -Width 1920 -Height 1080 -Force
+} else {
+  # Windows 11 ARM runners do not include the Windows Server display cmdlet.
+  Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 
@@ -42,10 +39,11 @@ public static class VkspotDisplay {
   }
 }
 "@
-    $result = [VkspotDisplay]::SetSize(1920, 1080)
-    if ($result -ne 0) { throw "Could not set desktop resolution: $result" }
-  }
+  $result = [VkspotDisplay]::SetSize(1920, 1080)
+  if ($result -ne 0) { throw "Could not set desktop resolution: $result" }
 }
+# Screen caches display dimensions, so initialize it only after the change.
+Add-Type -AssemblyName System.Windows.Forms
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 Write-Output "Desktop: $($bounds.Width)x$($bounds.Height)"
 if ($bounds.Width -lt 1920 -or $bounds.Height -lt 1080) {
