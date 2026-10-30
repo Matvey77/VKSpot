@@ -70,13 +70,7 @@ jobs:
       - name: Configure Windows desktop for Electron tests
         if: matrix.platform == 'win'
         shell: powershell
-        run: |
-          Set-DisplayResolution -Width 1920 -Height 1080 -Force
-          Add-Type -AssemblyName System.Windows.Forms
-          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          if ($bounds.Width -lt 1920 -or $bounds.Height -lt 1080) {
-            throw 'Electron desktop tests require a 1920x1080 display.'
-          }
+        run: ./tools/ci/configure-windows-display.ps1
       - name: Configure Linux desktop for Electron tests
         if: matrix.platform == 'linux'
         run: |
@@ -103,7 +97,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
           if ('${{ matrix.platform }}' -eq 'mac') {
-            npm run dist:mac -- --${{ matrix.arch }} --publish never -c.mac.identity=-
+            npm run dist:mac -- --${{ matrix.arch }} --publish never '--config.mac.identity=-'
           } else {
             npm run dist:${{ matrix.platform }} -- --${{ matrix.arch }} --publish never
           }
