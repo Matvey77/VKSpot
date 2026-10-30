@@ -132,7 +132,7 @@ export class SpotifyBrowser {
     })
     this.view = view
     // Spotify selects its mobile site for Electron's product user agent. Use
-    // the same Chromium desktop identity as the actual Windows web runtime.
+    // the Chromium desktop identity of the current platform.
     view.webContents.setUserAgent(
       view.webContents.getUserAgent().replace(/\s(?:Electron|VKSpot|vkspot)\/\S+/g, ''),
     )

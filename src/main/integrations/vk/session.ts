@@ -158,7 +158,13 @@ export class VKSessionManager {
       width: 1100,
       height: 800,
       show: !this.options.backgroundTest,
-      ...(this.options.backgroundTest ? { opacity: 0, skipTaskbar: true, focusable: false } : {}),
+      ...(this.options.backgroundTest
+        ? {
+            ...(process.platform === 'win32' ? { opacity: 0 } : {}),
+            skipTaskbar: true,
+            focusable: false,
+          }
+        : {}),
       title: 'VKSpot — VK Музыка',
       autoHideMenuBar: true,
       webPreferences: { sandbox: true, nodeIntegration: false, contextIsolation: true },

@@ -16,6 +16,12 @@ export class SpotifyError extends Error {
   }
 }
 export const redirectUri = 'http://127.0.0.1:43823/callback'
+export function secureTokenStorageAvailable(platform: NodeJS.Platform = process.platform): boolean {
+  if (!safeStorage.isEncryptionAvailable()) return false
+  if (platform !== 'linux') return true
+  const backend = safeStorage.getSelectedStorageBackend()
+  return backend !== 'basic_text' && backend !== 'unknown'
+}
 export class Spotify {
   private token: Token | null = null
   private verified = false
@@ -25,7 +31,7 @@ export class Spotify {
     private tokenPath: string,
     private fetchImplementation: (url: string, init?: RequestInit) => Promise<Response> = fetch,
   ) {
-    if (existsSync(tokenPath) && safeStorage.isEncryptionAvailable()) {
+    if (existsSync(tokenPath) && secureTokenStorageAvailable()) {
       try {
         this.token = JSON.parse(safeStorage.decryptString(readFileSync(tokenPath))) as Token
       } catch {
@@ -43,7 +49,7 @@ export class Spotify {
     this.verified = false
   }
   private persist(): void {
-    if (!safeStorage.isEncryptionAvailable())
+    if (!secureTokenStorageAvailable())
       throw new Error(
         'ОС не предоставила защищённое хранилище. Токены не будут записаны открытым текстом.',
       )

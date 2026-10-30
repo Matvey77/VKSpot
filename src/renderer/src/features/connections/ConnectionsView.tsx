@@ -211,15 +211,17 @@ export function ConnectionsView({
               <button disabled={!!busy} onClick={onOpenSpotifyHelper}>
                 Открыть Spotify
               </button>
-              <button disabled={!!busy} onClick={onInspectHelper}>
-                Проверить доступность управления
-              </button>
+              {window.vkspot.canInspectSpotify && (
+                <button disabled={!!busy} onClick={onInspectHelper}>
+                  Проверить доступность управления
+                </button>
+              )}
             </div>
             <details className="advanced-options">
               <summary>Как работают локальные файлы</summary>
               <p className="helper-text">
-                Добавление локальных файлов через API недоступно. Системное управление проходит
-                проверку; до её завершения файлы добавляются через приложение Spotify.
+                Добавление локальных файлов через API недоступно. Добавь подготовленные файлы через
+                приложение Spotify.
               </p>
             </details>
           </div>

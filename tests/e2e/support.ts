@@ -33,6 +33,7 @@ export async function launchTestApp(directory: string): Promise<ElectronApplicat
   delete env.ELECTRON_RUN_AS_NODE
   return electron.launch({
     ...(executablePath ? { executablePath } : {}),
+    chromiumSandbox: true,
     args: executablePath ? [] : ['.'],
     env,
   })

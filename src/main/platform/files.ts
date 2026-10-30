@@ -208,10 +208,20 @@ export async function prepareLocalDialog(
 }
 
 export async function executeSpotifyHelper(action: unknown): Promise<string> {
+  const a = z.enum(['inspect', 'open-spotify']).parse(action)
+  if (a === 'open-spotify') {
+    try {
+      await shell.openExternal('spotify:')
+      return 'Spotify открыт.'
+    } catch (error) {
+      throw new Error('Не удалось открыть Spotify. Установите настольное приложение Spotify.', {
+        cause: error,
+      })
+    }
+  }
   if (process.platform !== 'win32') {
     throw new Error('Системный помощник этой сборки доступен только на Windows.')
   }
-  const a = z.enum(['inspect', 'open-spotify']).parse(action)
   const result = await exec(
     'powershell.exe',
     [

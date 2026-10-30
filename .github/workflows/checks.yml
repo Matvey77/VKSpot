@@ -6,57 +6,176 @@ on:
 permissions:
   contents: read
 jobs:
-  windows:
-    runs-on: windows-latest
-    timeout-minutes: 30
+  desktop:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {
+              name: Windows x64,
+              runner: windows-latest,
+              platform: win,
+              arch: x64,
+              unpacked: win-unpacked,
+              executable: VKSpot.exe,
+            }
+          - {
+              name: Windows ARM64,
+              runner: windows-11-arm,
+              platform: win,
+              arch: arm64,
+              unpacked: win-arm64-unpacked,
+              executable: VKSpot.exe,
+            }
+          - {
+              name: macOS Intel,
+              runner: macos-15-intel,
+              platform: mac,
+              arch: x64,
+              unpacked: mac,
+              executable: VKSpot.app/Contents/MacOS/VKSpot,
+            }
+          - {
+              name: macOS Apple Silicon,
+              runner: macos-15,
+              platform: mac,
+              arch: arm64,
+              unpacked: mac-arm64,
+              executable: VKSpot.app/Contents/MacOS/VKSpot,
+            }
+          - {
+              name: Linux x64,
+              runner: ubuntu-24.04,
+              platform: linux,
+              arch: x64,
+              unpacked: linux-unpacked,
+              executable: vkspot,
+            }
+          - {
+              name: Linux ARM64,
+              runner: ubuntu-24.04-arm,
+              platform: linux,
+              arch: arm64,
+              unpacked: linux-arm64-unpacked,
+              executable: vkspot,
+            }
     defaults:
       run:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-      - name: Configure desktop for Electron tests
+      - name: Configure Windows desktop for Electron tests
+        if: matrix.platform == 'win'
         shell: powershell
         run: |
           Set-DisplayResolution -Width 1920 -Height 1080 -Force
           Add-Type -AssemblyName System.Windows.Forms
           $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-          Write-Output "Desktop: $($bounds.Width)x$($bounds.Height)"
           if ($bounds.Width -lt 1920 -or $bounds.Height -lt 1080) {
             throw 'Electron desktop tests require a 1920x1080 display.'
           }
+      - name: Configure Linux desktop for Electron tests
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libfuse2t64 gnome-keyring dbus-x11
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run audit
-      - run: npm run lint
-      - run: npm run format:check
+      - name: Audit and static checks
+        if: matrix.platform == 'win' && matrix.arch == 'x64'
+        run: |
+          npm run audit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run format:check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: npm test
-      - run: npm run dist:win -- --publish never
+      - name: Build installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          if ('${{ matrix.platform }}' -eq 'mac') {
+            npm run dist:mac -- --${{ matrix.arch }} --publish never -c.mac.identity=-
+          } else {
+            npm run dist:${{ matrix.platform }} -- --${{ matrix.arch }} --publish never
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test packaged application
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $env:VKSPOT_TEST_EXECUTABLE = (Resolve-Path "release/$version/win-unpacked/VKSpot.exe").Path
-          npm run test:e2e
-      - name: Checksum installer
+          $env:VKSPOT_TEST_EXECUTABLE = (Resolve-Path "release/$version/${{ matrix.unpacked }}/${{ matrix.executable }}").Path
+          if ('${{ matrix.platform }}' -eq 'linux') {
+            bash tools/ci/linux-e2e.sh
+          } else {
+            npm run test:e2e
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test Linux distribution packages
+        if: matrix.platform == 'linux'
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $installer = Get-Item "release/$version/VKSpot Setup $version.exe"
-          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer.FullName).Hash.ToLowerInvariant()
-          "$hash  $($installer.Name)" | Set-Content "release/$version/SHA256SUMS.txt" -Encoding utf8
+          $env:VKSPOT_TEST_EXECUTABLE = (Get-ChildItem "release/$version/*.AppImage").FullName
+          $env:APPIMAGE_EXTRACT_AND_RUN = '1'
+          bash tools/ci/linux-e2e.sh tests/e2e/platform.spec.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item Env:APPIMAGE_EXTRACT_AND_RUN
+          $deb = (Get-ChildItem "release/$version/*.deb").FullName
+          $unpacked = Join-Path $env:RUNNER_TEMP 'vkspot-deb'
+          New-Item -ItemType Directory -Force $unpacked | Out-Null
+          dpkg-deb --extract $deb $unpacked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:VKSPOT_TEST_EXECUTABLE = Join-Path $unpacked 'opt/VKSpot/vkspot'
+          bash tools/ci/linux-e2e.sh tests/e2e/platform.spec.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test macOS disk image
+        if: matrix.platform == 'mac'
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $image = (Get-ChildItem "release/$version/*.dmg").FullName
+          $mount = Join-Path $env:RUNNER_TEMP 'vkspot-dmg'
+          hdiutil attach -nobrowse -readonly -mountpoint $mount $image
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          try {
+            $env:VKSPOT_TEST_EXECUTABLE = Join-Path $mount 'VKSpot.app/Contents/MacOS/VKSpot'
+            npm run test:e2e -- tests/e2e/platform.spec.ts
+            $testResult = $LASTEXITCODE
+          } finally {
+            hdiutil detach $mount
+          }
+          if ($testResult -ne 0) { exit $testResult }
+      - name: Checksum installers
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $files = Get-ChildItem "release/$version" -File | Where-Object { $_.Extension -in '.exe', '.dmg', '.AppImage', '.deb' }
+          if (-not $files) { throw 'No installer was produced.' }
+          $lines = foreach ($file in $files) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName).Hash.ToLowerInvariant()
+            "$hash  $($file.Name)"
+          }
+          $lines | Set-Content "release/$version/SHA256SUMS.txt" -Encoding utf8
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: ${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             release/*/*.exe
+            release/*/*.dmg
+            release/*/*.AppImage
+            release/*/*.deb
             release/*/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: test-diagnostics
+          name: diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             .local/test-results
             .local/evidence/e2e/*.png

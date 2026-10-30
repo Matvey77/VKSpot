@@ -56,7 +56,8 @@ async function fixture(html: string, library?: string, clockScript = clock): Pro
   expect(
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().every(
-        (window) => window.getOpacity() === 0 && !window.isFocused(),
+        (window) =>
+          window.getOpacity() === (process.platform === 'win32' ? 0 : 1) && !window.isFocused(),
       ),
     ),
   ).toBe(true)

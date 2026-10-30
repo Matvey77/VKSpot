@@ -3,6 +3,7 @@ import type { Bridge } from '../shared/model'
 const invoke = (method: string, ...args: unknown[]) =>
   ipcRenderer.invoke('vkspot:' + method, ...args)
 const bridge: Bridge = {
+  canInspectSpotify: process.platform === 'win32',
   state: () => invoke('state'),
   syncState: (cursor) => invoke('syncState', cursor),
   previewImport: () => invoke('previewImport'),

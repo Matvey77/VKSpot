@@ -1,7 +1,9 @@
 {
   "name": "vkspot",
-  "version": "0.1.42",
+  "version": "0.2.0",
   "description": "Local VK Music archive and reviewed Spotify migration",
+  "homepage": "https://github.com/Matvey77/VKSpot",
+  "desktopName": "org.vkspot.desktop.desktop",
   "main": "out/main/index.js",
   "author": "VKSpot contributors",
   "license": "MIT",
@@ -15,6 +17,8 @@
     "test:e2e": "playwright test",
     "pack": "npm run build && electron-builder --dir",
     "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb",
     "rebuild": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps",
     "lint": "eslint src tests",
@@ -81,7 +85,25 @@
       "**/*.node"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "${productName} Setup ${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": "dmg",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo",
+      "maintainer": "VKSpot contributors <noreply@github.com>",
+      "syncDesktopName": true,
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+    },
+    "appImage": {
+      "executableArgs": []
     },
     "nsis": {
       "oneClick": false,

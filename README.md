@@ -14,16 +14,16 @@
     <img src="https://img.shields.io/github/v/release/Matvey77/VKSpot?style=flat-square&label=release&color=087f73" alt="Последний релиз">
   </a>
   <a href="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml">
-    <img src="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml/badge.svg?branch=main" alt="Проверки Windows">
+    <img src="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml/badge.svg?branch=main" alt="Проверки сборок">
   </a>
-  <img src="https://img.shields.io/badge/Windows-10%2F11_x64-162d3b?style=flat-square" alt="Windows 10/11 x64">
+  <img src="https://img.shields.io/badge/desktop-Windows%20%7C%20macOS%20%7C%20Linux-162d3b?style=flat-square" alt="Windows, macOS и Linux">
   <a href="LICENSE">
     <img src="https://img.shields.io/github/license/Matvey77/VKSpot?style=flat-square&color=087f73" alt="Лицензия MIT">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Matvey77/VKSpot/releases/latest"><strong>📦 Скачать для Windows</strong></a>
+  <a href="https://github.com/Matvey77/VKSpot/releases/latest"><strong>📦 Скачать VKSpot</strong></a>
 </p>
 
 <p align="center">
@@ -52,7 +52,7 @@ VKSpot — бесплатное приложение с открытым код�
 
 ## Что потребуется
 
-**Для запуска — Windows 10/11 x64.** Node.js для готового установщика не нужен.
+**Для запуска — Windows 10/11, macOS 13 или новее либо Linux на x64 или ARM64.** Node.js для готового приложения не нужен. Для Linux нужен графический рабочий стол; для сохранения сессии Spotify API — системное защищённое хранилище секретов.
 
 Остальное зависит от твоей задачи:
 
@@ -71,18 +71,22 @@ VKSpot — бесплатное приложение с открытым код�
 
 ## Скачивание и установка
 
-Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери установщик в разделе **Assets**:
+Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери установщик в разделе **Assets**, если он опубликован для твоей системы. Архитектура указана в имени файла:
 
-| Система       | Архитектура | Файл                        |
-| ------------- | ----------- | --------------------------- |
-| Windows 10/11 | x64         | `VKSpot.Setup.<версия>.exe` |
+| Система       | Архитектура          | Формат              |
+| ------------- | -------------------- | ------------------- |
+| Windows 10/11 | x64, ARM64           | `.exe`              |
+| macOS 13+     | Intel, Apple Silicon | `.dmg`              |
+| Linux         | x64, ARM64           | `.AppImage`, `.deb` |
 
 Установщик содержит среду выполнения приложения. Для проверки файла в том же релизе есть [SHA256SUMS.txt](https://github.com/Matvey77/VKSpot/releases/latest/download/SHA256SUMS.txt).
+
+На macOS для свободного запуска без предупреждений нужна сборка, подписанная и нотарифицированная Apple. В Linux приложение требует работающую песочницу Chromium; если AppImage не запускается из-за ограничений системы, используй DEB.
 
 ### Быстрый старт
 
 1. **📦 Установи приложение**<br>
-   Скачай файл `.exe` и запусти установщик.
+   Скачай сборку для своей системы и архитектуры и установи приложение.
 
 2. **📥 Добавь свою музыку**<br>
    В VKSpot открой **Подключения → VK → Открыть VK**, войди и нажми **Выгрузить мой список**. Для уже сохранённого файла выбери **Импорт списка**.
@@ -212,7 +216,7 @@ Get-FileHash -Algorithm SHA256 "$HOME\Downloads\VKSpot.Setup.<версия>.exe"
 <details>
 <summary><strong>Запуск из исходников и сборка установщика</strong></summary>
 
-Потребуются **Windows x64 и Node.js 24 LTS с npm**; для клонирования — Git. Склонируй этот репозиторий или распакуй **Code → Download ZIP**, затем открой PowerShell в папке проекта:
+Потребуются **Node.js 24 LTS с npm** и целевая настольная ОС; для клонирования — Git. Склонируй этот репозиторий или распакуй **Code → Download ZIP**, затем открой терминал в папке проекта:
 
 **Запуск в режиме разработки**
 
@@ -221,13 +225,15 @@ npm ci
 npm run dev
 ```
 
-**Сборка Windows-установщика**
+**Сборка установщика**
 
 ```powershell
-npm run dist:win
+npm run dist:win -- --x64
+npm run dist:mac -- --arm64
+npm run dist:linux -- --x64
 ```
 
-Результат — `release/<версия>/VKSpot Setup <версия>.exe`.
+Выбери команду для своей ОС и архитектуры (`--x64` или `--arm64`). Результат сохраняется в `release/<версия>/`; сборка macOS выполняется на macOS.
 
 Начни с [правил проекта](AGENTS.md) и [команд проверки](docs/maintenance.md).
 
@@ -247,7 +253,7 @@ npm run dist:win
 
 ## Обратная связь и участие
 
-Для ошибки создай [Issue](https://github.com/Matvey77/VKSpot/issues/new): укажи версию VKSpot, версию Windows, шаги и ожидаемый результат. Прикладывай только обезличенные примеры. Об уязвимостях сообщай по [SECURITY.md](SECURITY.md).
+Для ошибки создай [Issue](https://github.com/Matvey77/VKSpot/issues/new): укажи версию VKSpot, систему и архитектуру, шаги и ожидаемый результат. Прикладывай только обезличенные примеры. Об уязвимостях сообщай по [SECURITY.md](SECURITY.md).
 
 ---
 

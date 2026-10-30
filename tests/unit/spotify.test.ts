@@ -1,16 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 vi.mock('electron', () => ({
   safeStorage: {
     isEncryptionAvailable: () => true,
+    getSelectedStorageBackend: () => 'gnome_libsecret',
     decryptString: (value: Buffer) => value.toString('utf8'),
   },
   shell: {},
 }))
-import { Spotify, SpotifyError } from '../../src/main/integrations/spotify/api'
+import { safeStorage } from 'electron'
+import {
+  Spotify,
+  SpotifyError,
+  secureTokenStorageAvailable,
+} from '../../src/main/integrations/spotify/api'
 import { settingsSchema } from '../../src/shared/model'
 
 const directories: string[] = []
@@ -43,6 +49,48 @@ function savedSession(): string {
 }
 
 describe('Spotify connection evidence', () => {
+  it('requires a real secret store on Linux before using encrypted tokens', () => {
+    const backend = vi.spyOn(safeStorage, 'getSelectedStorageBackend')
+    for (const value of ['basic_text', 'unknown'] as const) {
+      backend.mockReturnValue(value)
+      expect(secureTokenStorageAvailable('linux')).toBe(false)
+    }
+    for (const value of ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'] as const) {
+      backend.mockReturnValue(value)
+      expect(secureTokenStorageAvailable('linux')).toBe(true)
+    }
+    backend.mockReturnValue('basic_text')
+    expect(secureTokenStorageAvailable('win32')).toBe(true)
+    expect(secureTokenStorageAvailable('darwin')).toBe(true)
+    vi.spyOn(safeStorage, 'isEncryptionAvailable').mockReturnValue(false)
+    expect(secureTokenStorageAvailable('linux')).toBe(false)
+    expect(secureTokenStorageAvailable('win32')).toBe(false)
+  })
+
+  it.runIf(process.platform === 'linux')(
+    'does not read a token using the basic Linux backend',
+    () => {
+      vi.spyOn(safeStorage, 'getSelectedStorageBackend').mockReturnValue('basic_text')
+      const decrypt = vi.spyOn(safeStorage, 'decryptString')
+      const spotify = new Spotify(savedSession())
+      expect(spotify.hasSession()).toBe(false)
+      expect(decrypt).not.toHaveBeenCalled()
+    },
+  )
+  it.runIf(process.platform === 'linux')(
+    'does not overwrite a token when the secret store becomes unavailable',
+    async () => {
+      const path = savedSession()
+      const original = readFileSync(path)
+      const spotify = new Spotify(path, async () =>
+        Response.json({ access_token: 'new-synthetic', expires_in: 3600 }),
+      )
+      vi.spyOn(safeStorage, 'getSelectedStorageBackend').mockReturnValue('basic_text')
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * 60 * 60 * 1000)
+      await expect(spotify.search('Test')).rejects.toThrow('защищённое хранилище')
+      expect(readFileSync(path)).toEqual(original)
+    },
+  )
   it.each([
     [{ error: { reason: 'QUOTA_EXCEEDED' } }, '19173', 'quota', 19173],
     [{ reason: 'QUOTA_EXCEEDED' }, '11704', 'quota', 11704],

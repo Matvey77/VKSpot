@@ -226,6 +226,7 @@ export type VKExportProgress = {
   message: string
 }
 export type Bridge = {
+  canInspectSpotify: boolean
   state(): Promise<Result<AppState>>
   syncState(
     cursor: import('./sync').StateCursor | null,

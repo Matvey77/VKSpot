@@ -42,6 +42,11 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 app
   .whenReady()
   .then(async () => {
+    if (process.platform === 'linux' && app.commandLine.hasSwitch('no-sandbox')) {
+      throw new Error(
+        'Системная песочница Chromium недоступна. Включите пользовательские пространства имён или установите пакет DEB.',
+      )
+    }
     if (process.env.VKSPOT_DATA_DIR) app.setPath('userData', process.env.VKSPOT_DATA_DIR)
     const dataPath = app.getPath('userData')
     mkdirSync(dataPath, { recursive: true })
@@ -75,7 +80,13 @@ app
       width: 1440,
       height: 920,
       show: !backgroundTest,
-      ...(backgroundTest ? { opacity: 0, skipTaskbar: true, focusable: false } : {}),
+      ...(backgroundTest
+        ? {
+            ...(process.platform === 'win32' ? { opacity: 0 } : {}),
+            skipTaskbar: true,
+            focusable: false,
+          }
+        : {}),
       minWidth: 940,
       minHeight: 640,
       title: 'VKSpot',

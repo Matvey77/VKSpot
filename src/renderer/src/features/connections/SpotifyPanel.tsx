@@ -89,7 +89,10 @@ export default function SpotifyPanel({
   }
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'F5' || (event.ctrlKey && event.key.toLowerCase() === 'r')) {
+      if (
+        event.key === 'F5' ||
+        ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r')
+      ) {
         event.preventDefault()
         void reload()
       }
@@ -122,7 +125,7 @@ export default function SpotifyPanel({
                 className="secondary"
                 disabled={reloading}
                 onClick={() => void reload()}
-                title="Обновить страницу Spotify (F5 или Ctrl+R)"
+                title="Обновить страницу Spotify (F5, Ctrl+R или ⌘R)"
               >
                 <RotateCcw size={15} className={reloading ? 'spinning' : ''} />
                 {reloading ? 'Обновляем…' : 'Обновить'}
