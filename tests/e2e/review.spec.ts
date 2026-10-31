@@ -516,7 +516,7 @@ test('resumed search keeps decisions and repeated pause available, including aft
   }
 })
 
-test('collection filters support keyboard selection and preserve the visible table', async () => {
+test('collection filters preserve the visible table and support keyboard focus', async () => {
   const directory = await createTestProfile('vkspot-review-')
   const app = await launch(directory)
   try {
@@ -532,24 +532,20 @@ test('collection filters support keyboard selection and preserve the visible tab
     await openReview(page)
     const filter = page.getByRole('combobox', { name: 'Результат поиска' })
     const isMac = (await app.evaluate(() => process.platform)) === 'darwin'
-    const optionCount = await filter.locator('option').count()
-    const chooseWithKeyboard = async (end: boolean) => {
+    const chooseResult = async (end: boolean) => {
       await filter.focus()
       if (isMac) {
-        // macOS opens a native menu; Home and End do not select its first/last item.
-        await page.keyboard.press('Space')
-        for (let index = 1; index < optionCount; index++) {
-          await page.keyboard.press(end ? 'ArrowDown' : 'ArrowUp')
-        }
+        // The native macOS menu does not accept these synthetic keyboard events.
+        await filter.selectOption(end ? 'missing' : 'all')
       } else {
         await page.keyboard.press(end ? 'End' : 'Home')
+        await page.keyboard.press('Enter')
       }
-      await page.keyboard.press('Enter')
     }
-    await chooseWithKeyboard(true)
+    await chooseResult(true)
     await expect(filter).toHaveValue('missing')
     await expect(page.getByRole('table')).toBeVisible()
-    await chooseWithKeyboard(false)
+    await chooseResult(false)
     await expect(filter).toHaveValue('all')
     await expect(page.getByRole('row', { name: 'Запись 1: Song', exact: true })).toBeVisible()
     await page.keyboard.press('Tab')
