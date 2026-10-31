@@ -16,7 +16,7 @@
   <a href="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml">
     <img src="https://github.com/Matvey77/VKSpot/actions/workflows/checks.yml/badge.svg?branch=main" alt="Проверки сборок">
   </a>
-  <img src="https://img.shields.io/badge/release-Windows%2010%2F11%20x64-162d3b?style=flat-square" alt="Релиз для Windows 10/11 x64">
+  <img src="https://img.shields.io/badge/desktop-Windows%20%7C%20macOS%20%7C%20Linux-162d3b?style=flat-square" alt="Windows, macOS и Linux">
   <a href="LICENSE">
     <img src="https://img.shields.io/github/license/Matvey77/VKSpot?style=flat-square&color=087f73" alt="Лицензия MIT">
   </a>
@@ -52,7 +52,7 @@ VKSpot — бесплатное приложение с открытым код�
 
 ## Что потребуется
 
-**Опубликованный релиз работает на Windows 10/11 x64.** Node.js для готового установщика не нужен. В исходниках также настроена сборка для Windows ARM64, macOS и Linux; их наличие в релизах проверяй в разделе Assets. Подробнее — [для разработчиков](#для-разработчиков).
+**Для запуска — Windows 10/11, macOS 13 или новее либо Linux на x64 или ARM64.** Node.js для готового приложения не нужен. Для Linux нужны графический рабочий стол и работающая песочница Chromium; для сохранения сессии Spotify API — системное защищённое хранилище секретов.
 
 Остальное зависит от твоей задачи:
 
@@ -71,14 +71,25 @@ VKSpot — бесплатное приложение с открытым код�
 
 ## Скачивание и установка
 
-Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери установщик в разделе **Assets**. В опубликованном релизе **0.1.42** доступен `VKSpot.Setup.0.1.42.exe` для Windows 10/11 x64. Сборки для других платформ пока не опубликованы.
+Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери файл в разделе **Assets**:
+
+| Система       | Архитектура   | Файл                                                                    |
+| ------------- | ------------- | ----------------------------------------------------------------------- |
+| Windows 10/11 | x64           | `VKSpot Setup 0.2.0-x64.exe`                                            |
+| Windows 10/11 | ARM64         | `VKSpot Setup 0.2.0-arm64.exe`                                          |
+| macOS 13+     | Intel         | `VKSpot-0.2.0-mac-x64.dmg`                                              |
+| macOS 13+     | Apple Silicon | `VKSpot-0.2.0-mac-arm64.dmg`                                            |
+| Linux         | x64           | `VKSpot-0.2.0-linux-x86_64.AppImage` или `VKSpot-0.2.0-linux-amd64.deb` |
+| Linux         | ARM64         | `VKSpot-0.2.0-linux-arm64.AppImage` или `VKSpot-0.2.0-linux-arm64.deb`  |
 
 Установщик содержит среду выполнения приложения. Для проверки файла в том же релизе есть [SHA256SUMS.txt](https://github.com/Matvey77/VKSpot/releases/latest/download/SHA256SUMS.txt).
+
+Установщики Windows не подписаны сертификатом издателя. Сборки macOS подписаны ad hoc и не нотарифицированы Apple, поэтому Gatekeeper может препятствовать запуску. В Linux при ограничениях песочницы для AppImage можно использовать DEB с системным профилем.
 
 ### Быстрый старт
 
 1. **📦 Установи приложение**<br>
-   Скачай файл `.exe` и запусти установщик.
+   Скачай сборку для своей системы и архитектуры и установи приложение.
 
 2. **📥 Добавь свою музыку**<br>
    В VKSpot открой **Подключения → VK → Открыть VK**, войди и нажми **Выгрузить мой список**. Для уже сохранённого файла выбери **Импорт списка**.
@@ -193,7 +204,7 @@ flowchart LR
 <details>
 <summary><strong>Почему Windows показывает неизвестного издателя?</strong></summary>
 
-Установщик релиза 0.1.42 не подписан сертификатом издателя. Скачивай его из [официальных релизов проекта](https://github.com/Matvey77/VKSpot/releases/latest). Сверить SHA-256 можно в PowerShell, указав фактический путь к скачанному файлу:
+Установщик релиза 0.2.0 не подписан сертификатом издателя. Скачивай его из [официальных релизов проекта](https://github.com/Matvey77/VKSpot/releases/latest). Сверить SHA-256 можно в PowerShell, указав фактический путь к скачанному файлу:
 
 ```powershell
 Get-FileHash -Algorithm SHA256 -LiteralPath "C:\путь\к\скачанному\установщику.exe"
