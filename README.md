@@ -73,18 +73,29 @@ VKSpot — бесплатное приложение с открытым код�
 
 Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери файл в разделе **Assets**:
 
-| Система       | Архитектура   | Файл                                                                    |
-| ------------- | ------------- | ----------------------------------------------------------------------- |
-| Windows 10/11 | x64           | `VKSpot.Setup.0.2.0-x64.exe`                                            |
-| Windows 10/11 | ARM64         | `VKSpot.Setup.0.2.0-arm64.exe`                                          |
-| macOS 13+     | Intel         | `VKSpot-0.2.0-mac-x64.dmg`                                              |
-| macOS 13+     | Apple Silicon | `VKSpot-0.2.0-mac-arm64.dmg`                                            |
-| Linux         | x64           | `VKSpot-0.2.0-linux-x86_64.AppImage` или `VKSpot-0.2.0-linux-amd64.deb` |
-| Linux         | ARM64         | `VKSpot-0.2.0-linux-arm64.AppImage` или `VKSpot-0.2.0-linux-arm64.deb`  |
+| Система       | Архитектура   | Файл                                                                                                                                                                                                         |
+| ------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Windows 10/11 | x64           | [Установщик .exe](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot.Setup.0.2.0-x64.exe)                                                                                                    |
+| Windows 10/11 | ARM64         | [Установщик .exe](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot.Setup.0.2.0-arm64.exe)                                                                                                  |
+| macOS 13+     | Intel         | [Образ .dmg](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-mac-x64.dmg)                                                                                                           |
+| macOS 13+     | Apple Silicon | [Образ .dmg](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-mac-arm64.dmg)                                                                                                         |
+| Linux         | x64           | [AppImage](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-x86_64.AppImage) · [DEB](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-amd64.deb) |
+| Linux         | ARM64         | [AppImage](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-arm64.AppImage) · [DEB](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-arm64.deb)  |
 
-Установщик содержит среду выполнения приложения. Для проверки файла в том же релизе есть [SHA256SUMS.txt](https://github.com/Matvey77/VKSpot/releases/latest/download/SHA256SUMS.txt).
+Все сборки содержат среду выполнения приложения. Для проверки файла в том же релизе есть [SHA256SUMS.txt](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/SHA256SUMS.txt). На macOS архитектуру можно посмотреть в меню Apple → «Об этом Mac»; в Linux команда `uname -m` показывает `x86_64` для x64 и `aarch64` для ARM64.
 
-Установщики Windows не подписаны сертификатом издателя. Сборки macOS подписаны ad hoc и не нотарифицированы Apple, поэтому Gatekeeper может препятствовать запуску. В Linux при ограничениях песочницы для AppImage можно использовать DEB с системным профилем.
+Установщики Windows не подписаны сертификатом издателя. Сборки macOS подписаны ad hoc и не нотарифицированы Apple, поэтому Gatekeeper может препятствовать запуску; см. [справку Apple](https://support.apple.com/ru-ru/102445). В Linux при ограничениях песочницы для AppImage можно использовать DEB с системным профилем.
+
+**Установка:**
+
+- **Windows:** запусти скачанный `.exe` и следуй инструкциям установщика.
+- **macOS:** открой `.dmg` и перенеси VKSpot в папку «Программы».
+- **Linux:** сделай AppImage исполняемым и запусти его либо установи DEB через менеджер пакетов Debian/Ubuntu. Например, для x64 в папке с файлом:
+
+  ```bash
+  chmod +x ./VKSpot-0.2.0-linux-x86_64.AppImage
+  ./VKSpot-0.2.0-linux-x86_64.AppImage
+  ```
 
 ### Быстрый старт
 
@@ -222,6 +233,8 @@ Get-FileHash -Algorithm SHA256 -LiteralPath "C:\путь\к\скачанному
 Потребуются **Node.js 24 LTS с npm** и целевая настольная ОС; для клонирования — Git. Склонируй этот репозиторий или распакуй **Code → Download ZIP**, затем открой терминал в папке проекта:
 
 В текущих исходниках настроены сборки Windows 10/11 x64 и ARM64, macOS 13+ для Intel и Apple Silicon, а также Linux x64 и ARM64. Наличие сборки в исходниках или артефактах CI не означает, что она опубликована в релизе.
+
+В проверке релиза 0.2.0 `npm audit` сообщил об уязвимости `minimatch` в инструментах разработки; подробности и результаты платформенных проверок — в [описании релиза](https://github.com/Matvey77/VKSpot/releases/tag/v0.2.0).
 
 **Запуск в режиме разработки**
 
