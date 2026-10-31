@@ -75,8 +75,8 @@ VKSpot — бесплатное приложение с открытым код�
 
 | Система       | Архитектура   | Файл                                                                    |
 | ------------- | ------------- | ----------------------------------------------------------------------- |
-| Windows 10/11 | x64           | `VKSpot Setup 0.2.0-x64.exe`                                            |
-| Windows 10/11 | ARM64         | `VKSpot Setup 0.2.0-arm64.exe`                                          |
+| Windows 10/11 | x64           | `VKSpot.Setup.0.2.0-x64.exe`                                            |
+| Windows 10/11 | ARM64         | `VKSpot.Setup.0.2.0-arm64.exe`                                          |
 | macOS 13+     | Intel         | `VKSpot-0.2.0-mac-x64.dmg`                                              |
 | macOS 13+     | Apple Silicon | `VKSpot-0.2.0-mac-arm64.dmg`                                            |
 | Linux         | x64           | `VKSpot-0.2.0-linux-x86_64.AppImage` или `VKSpot-0.2.0-linux-amd64.deb` |
