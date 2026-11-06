@@ -24,7 +24,7 @@
     "lint": "eslint src tests",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "audit": "npm audit",
+    "audit": "npm audit --audit-level=high",
     "perf": "node tools/performance/benchmark.cjs"
   },
   "dependencies": {
