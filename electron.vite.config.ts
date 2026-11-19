@@ -3,5 +3,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   main: { plugins: [externalizeDepsPlugin()] },
   preload: { plugins: [externalizeDepsPlugin()] },
-  renderer: { plugins: [react()], server: { host: '127.0.0.1' }, build: { minify: 'esbuild' } },
+  renderer: {
+    plugins: [react()],
+    server: { host: '127.0.0.1' },
+    build: { minify: 'esbuild', license: { fileName: 'THIRD-PARTY-LICENSES.md' } },
+  },
 })

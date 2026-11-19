@@ -56,6 +56,17 @@ describe('conservative metadata review', () => {
     expect(metadataMatch(entry)).toBeNull()
     expect(reviewGroup(entry)).toBe('review')
   })
+  it('prefers the first studio release when equally close releases are available', () => {
+    const entry = row()
+    const live = { ...candidate, uri: 'spotify:track:' + 'b'.repeat(22), album: 'Live' }
+    const second = { ...candidate, uri: 'spotify:track:' + 'c'.repeat(22) }
+    entry.working.candidates = [live, candidate, second]
+    expect(metadataMatch(entry)).toBe(candidate)
+
+    entry.source.duration = null
+    live.duration = 260
+    expect(metadataMatch(entry)).toBe(candidate)
+  })
   it('sends version mismatches, custom bracket tags and ambiguous recordings to review', () => {
     // When VK track is a remix/live/slowed version but Spotify candidate is an original release:
     for (const title of [

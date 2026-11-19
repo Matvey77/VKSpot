@@ -195,6 +195,23 @@ const relaxPunctuation = (s: string) =>
     .replace(/\s+/g, ' ')
     .trim()
 
+function transliteratedTitlesMatch(rowTitle: string, candidateTitle: string, rules: MatchingRules) {
+  if (rules.transliteration === false) return false
+  const rawRules = { ...rules, homoglyphs: false }
+  const row = normalized(rowTitle, rawRules)
+  const candidate = normalized(candidateTitle, rawRules)
+  const rowIsCyrillic = /[а-яё]/i.test(row)
+  const candidateIsCyrillic = /[а-яё]/i.test(candidate)
+  if (rowIsCyrillic === candidateIsCyrillic) return false
+  const transliterated = transliterateRuToEn(rowIsCyrillic ? row : candidate)
+  const latin = rowIsCyrillic ? candidate : row
+  return (
+    transliterated === latin ||
+    normalizeTranslit(transliterated) === normalizeTranslit(latin) ||
+    relaxPunctuation(transliterated) === relaxPunctuation(latin)
+  )
+}
+
 export function candidateEvidence(
   row: TrackRow,
   candidate: SpotifyTrack,
@@ -207,23 +224,23 @@ export function candidateEvidence(
     ? extractFeatures(candidate.title)
     : { baseTitle: candidate.title, featured: [], producers: [] }
 
+  const rowHasCredits = rowFeat.featured.length > 0 || rowFeat.producers.length > 0
+  const candHasCredits = candFeat.featured.length > 0 || candFeat.producers.length > 0
   const rowBaseArtists = artists([row.working.artist], rules)
-  const rowAllArtists = artists(
-    [row.working.artist, ...rowFeat.featured, ...rowFeat.producers],
-    rules,
-  )
+  const rowAllArtists = rowHasCredits
+    ? artists([row.working.artist, ...rowFeat.featured, ...rowFeat.producers], rules)
+    : rowBaseArtists
   const candBaseArtists = artists(candidate.artists, rules)
-  const candAllArtists = artists(
-    [...candidate.artists, ...candFeat.featured, ...candFeat.producers],
-    rules,
-  )
-
-  const remixArtists = candidate.artists.map((a) => normalized(a, rules))
-  const isRemixerInCandidate =
-    row.working.title.toLowerCase().includes('remix') &&
-    remixArtists.some((a) => normalized(row.working.title, rules).includes(a))
-
+  const candAllArtists = candHasCredits
+    ? artists([...candidate.artists, ...candFeat.featured, ...candFeat.producers], rules)
+    : candBaseArtists
+  const rowNorm = normalized(row.working.title, rules)
+  const candNorm = normalized(candidate.title, rules)
   const relaxArtist = (s: string) => s.replace(/[\s\-._']/g, '')
+  const equivalentArtist = (left: string, right: string) => {
+    const relaxed = relaxArtist(left)
+    return Boolean(relaxed) && relaxed === relaxArtist(right)
+  }
 
   const artistMatches =
     Boolean(row.working.artist.trim()) &&
@@ -231,49 +248,20 @@ export function candidateEvidence(
       rowAllArtists === candBaseArtists ||
       rowBaseArtists === candAllArtists ||
       rowAllArtists === candAllArtists ||
-      (Boolean(relaxArtist(rowBaseArtists)) &&
-        relaxArtist(rowBaseArtists) === relaxArtist(candBaseArtists)) ||
-      (Boolean(relaxArtist(rowAllArtists)) &&
-        relaxArtist(rowAllArtists) === relaxArtist(candBaseArtists)) ||
-      (Boolean(relaxArtist(rowBaseArtists)) &&
-        relaxArtist(rowBaseArtists) === relaxArtist(candAllArtists)) ||
-      (Boolean(relaxArtist(rowAllArtists)) &&
-        relaxArtist(rowAllArtists) === relaxArtist(candAllArtists)) ||
-      isRemixerInCandidate)
-
-  const rowNorm = normalized(row.working.title, rules)
-  const candNorm = normalized(candidate.title, rules)
-  const rowClean = normalized(rowFeat.baseTitle, rules)
-  const candClean = normalized(candFeat.baseTitle, rules)
-  const rawRowClean = normalized(rowFeat.baseTitle, { ...rules, homoglyphs: false })
-  const rawCandClean = normalized(candFeat.baseTitle, { ...rules, homoglyphs: false })
-
-  const hasCyrillic = (s: string) => /[а-яё]/i.test(s)
-  const translitMatches =
-    Boolean(rules.transliteration ?? true) &&
-    ((hasCyrillic(rawRowClean) &&
-      !hasCyrillic(rawCandClean) &&
-      (transliterateRuToEn(rawRowClean) === rawCandClean ||
-        normalizeTranslit(transliterateRuToEn(rawRowClean)) === normalizeTranslit(rawCandClean) ||
-        relaxPunctuation(transliterateRuToEn(rawRowClean)) === relaxPunctuation(rawCandClean))) ||
-      (hasCyrillic(rawCandClean) &&
-        !hasCyrillic(rawRowClean) &&
-        (transliterateRuToEn(rawCandClean) === rawRowClean ||
-          normalizeTranslit(transliterateRuToEn(rawCandClean)) === normalizeTranslit(rawRowClean) ||
-          relaxPunctuation(transliterateRuToEn(rawCandClean)) === relaxPunctuation(rawRowClean))))
-
-  const hasFeaturesOrProducers =
-    rowFeat.featured.length > 0 ||
-    candFeat.featured.length > 0 ||
-    rowFeat.producers.length > 0 ||
-    candFeat.producers.length > 0
+      equivalentArtist(rowBaseArtists, candBaseArtists) ||
+      (rowHasCredits && equivalentArtist(rowAllArtists, candBaseArtists)) ||
+      (candHasCredits && equivalentArtist(rowBaseArtists, candAllArtists)) ||
+      (rowHasCredits && candHasCredits && equivalentArtist(rowAllArtists, candAllArtists)) ||
+      (row.working.title.toLowerCase().includes('remix') &&
+        candidate.artists.some((artist) => rowNorm.includes(normalized(artist, rules)))))
 
   const titleMatches =
     Boolean(row.working.title.trim()) &&
     (rowNorm === candNorm ||
-      (rules.featDeduplication && rowClean === candClean && hasFeaturesOrProducers) ||
+      ((rowHasCredits || candHasCredits) &&
+        normalized(rowFeat.baseTitle, rules) === normalized(candFeat.baseTitle, rules)) ||
       (rules.remixPunctuation && relaxPunctuation(rowNorm) === relaxPunctuation(candNorm)) ||
-      translitMatches)
+      transliteratedTitlesMatch(rowFeat.baseTitle, candFeat.baseTitle, rules))
 
   return {
     artistMatches,
@@ -324,70 +312,62 @@ export function hasVersionConflict(
 }
 
 export const MATCH_DURATION_TOLERANCE_SECONDS = 5
+const liveAlbum = /live|лайв|concert|концерт/i
+const alternateAlbum = /live|лайв|concert|концерт|remix|rmx|ремикс/i
 
 export function metadataMatch(
   row: TrackRow,
   rules: MatchingRules = defaultMatchingRules,
 ): SpotifyTrack | null {
-  if (row.working.candidates.some((candidate) => !candidate.artists.length)) return null
+  const { candidates } = row.working
+  if (candidates.some((candidate) => !candidate.artists.length)) return null
 
   const tolerance = rules.extendedDurationTolerance ? MATCH_DURATION_TOLERANCE_SECONDS : 2
 
   if (row.source.duration !== null) {
-    const matches: { candidate: SpotifyTrack; diff: number; index: number }[] = []
-    for (let i = 0; i < row.working.candidates.length; i++) {
-      const candidate = row.working.candidates[i]
+    let closest: SpotifyTrack | null = null
+    let closestDifference = Infinity
+    for (const candidate of candidates) {
+      const difference = Math.abs(row.source.duration - candidate.duration)
+      const withinTolerance = Math.round(difference) <= tolerance
+      if (!withinTolerance || difference > closestDifference) continue
+      // At equal distance, replace a live release with a studio release and preserve search order otherwise.
+      if (
+        closest &&
+        difference === closestDifference &&
+        (!liveAlbum.test(closest.album) || liveAlbum.test(candidate.album))
+      )
+        continue
       if (hasVersionConflict(row, candidate, rules)) continue
       const evidence = candidateEvidence(row, candidate, rules)
-      if (
-        evidence.artistMatches &&
-        evidence.titleMatches &&
-        evidence.durationDifference !== null &&
-        Math.round(evidence.durationDifference) <= tolerance
-      ) {
-        matches.push({ candidate, diff: evidence.durationDifference, index: i })
+      if (evidence.artistMatches && evidence.titleMatches) {
+        closest = candidate
+        closestDifference = difference
       }
     }
-    if (!matches.length) return null
-    matches.sort((a, b) => {
-      if (a.diff !== b.diff) return a.diff - b.diff
-      const aLive = /live|лайв|concert|концерт/i.test(a.candidate.album) ? 1 : 0
-      const bLive = /live|лайв|concert|концерт/i.test(b.candidate.album) ? 1 : 0
-      if (aLive !== bLive) return aLive - bLive
-      return a.index - b.index
-    })
-    return matches[0].candidate
+    return closest
   }
 
-  // row.source.duration === null (unknown VK duration)
-  const matches: { candidate: SpotifyTrack; index: number }[] = []
-  for (let i = 0; i < row.working.candidates.length; i++) {
-    const candidate = row.working.candidates[i]
+  const matches: SpotifyTrack[] = []
+  for (const candidate of candidates) {
     if (hasVersionConflict(row, candidate, rules)) continue
     const evidence = candidateEvidence(row, candidate, rules)
-    if (evidence.artistMatches && evidence.titleMatches) {
-      matches.push({ candidate, index: i })
-    }
+    if (evidence.artistMatches && evidence.titleMatches) matches.push(candidate)
   }
   if (!matches.length) return null
 
   // Prioritize non-live/non-remix albums if available
-  const regularMatches = matches.filter(
-    (m) => !/live|лайв|concert|концерт|remix|rmx|ремикс/i.test(m.candidate.album),
-  )
+  const regularMatches = matches.filter((candidate) => !alternateAlbum.test(candidate.album))
   const candidatePool = regularMatches.length ? regularMatches : matches
 
   // Verify that all candidate releases have consistent durations (within tolerance)
-  const durations = candidatePool.map((m) => m.candidate.duration)
-  const minDuration = Math.min(...durations)
-  const maxDuration = Math.max(...durations)
-
-  if (maxDuration - minDuration <= tolerance) {
-    candidatePool.sort((a, b) => a.index - b.index)
-    return candidatePool[0].candidate
+  let minDuration = Infinity
+  let maxDuration = -Infinity
+  for (const candidate of candidatePool) {
+    minDuration = Math.min(minDuration, candidate.duration)
+    maxDuration = Math.max(maxDuration, candidate.duration)
   }
-
-  return null
+  return maxDuration - minDuration <= tolerance ? candidatePool[0] : null
 }
 
 export function reviewGroup(

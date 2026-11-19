@@ -18,7 +18,8 @@ import type { Database } from './database'
 import type { Preferences } from './preferences'
 
 type CachedCollection = { collection: Collection; rows: Map<string, TrackRow> }
-type WorkingChange = { id: string; before: Working; after: Working }
+type WorkingUpdate = { id: string; after: Working }
+type WorkingChange = WorkingUpdate & { before: Working }
 type RepairHistory = { kind: 'repair'; collection: Collection }
 
 export class CollectionRepository {
@@ -128,10 +129,7 @@ export class CollectionRepository {
     const trimmed = name.trim()
     if (!trimmed) throw new Error('Название коллекции не может быть пустым.')
     const collection = { ...this.get(id), name: trimmed }
-    const { rows: _rows, ...metadata } = collection
-    this.db
-      .prepare('UPDATE collections SET metadata=? WHERE id=?')
-      .run(JSON.stringify(metadata), id)
+    this.saveMetadata(collection)
     this.cache.get(id)!.collection = collection
     this.changes.record(id, 'metadata')
   }
@@ -213,9 +211,7 @@ export class CollectionRepository {
   private commitWorking(collectionId: string, changes: WorkingChange[], history: boolean): void {
     if (!changes.length) return
     this.db.transaction(() => {
-      const update = this.db.prepare('UPDATE entries SET working=? WHERE id=? AND collection_id=?')
-      for (const change of changes)
-        update.run(JSON.stringify(change.after), change.id, collectionId)
+      this.writeWorkingRows(collectionId, changes)
       if (history)
         this.db
           .prepare('INSERT INTO history(collection_id,changes,at) VALUES(?,?,?)')
@@ -225,6 +221,15 @@ export class CollectionRepository {
             new Date().toISOString(),
           )
     })
+    this.publishWorkingRows(collectionId, changes)
+  }
+
+  private writeWorkingRows(collectionId: string, changes: WorkingUpdate[]): void {
+    const update = this.db.prepare('UPDATE entries SET working=? WHERE id=? AND collection_id=?')
+    for (const { id, after } of changes) update.run(JSON.stringify(after), id, collectionId)
+  }
+
+  private publishWorkingRows(collectionId: string, changes: WorkingUpdate[]): void {
     const cached = this.cache.get(collectionId)!
     const nextRows = cached.collection.rows.slice()
     for (const change of changes) {
@@ -317,34 +322,15 @@ export class CollectionRepository {
       // Older repair records used an array without before/id. Never apply them as row edits.
       if (history.some((change) => !change.id || !change.before))
         throw new Error('Эту старую синхронизацию можно отменить только восстановлением архива.')
-      const changes = history.map((change) => ({
-        id: change.id,
-        before: this.row(collectionId, change.id).working,
-        after: workingSchema.parse(change.before),
-      }))
+      const changes = history.map(({ id, before }) => {
+        this.row(collectionId, id)
+        return { id, after: workingSchema.parse(before) }
+      })
       this.db.transaction(() => {
-        const update = this.db.prepare(
-          'UPDATE entries SET working=? WHERE id=? AND collection_id=?',
-        )
-        for (const change of changes)
-          update.run(JSON.stringify(change.after), change.id, collectionId)
+        this.writeWorkingRows(collectionId, changes)
         this.db.prepare('DELETE FROM history WHERE id=?').run(item.id)
       })
-      // Reuse the same cache update path after the durable transaction succeeds.
-      const cached = this.cache.get(collectionId)!
-      const nextRows = cached.collection.rows.slice()
-      for (const change of changes) {
-        const row = cached.rows.get(change.id)!
-        const next = { ...row, working: change.after }
-        cached.rows.set(change.id, next)
-        nextRows[row.position - 1] = next
-      }
-      cached.collection = { ...cached.collection, rows: nextRows }
-      this.changes.record(
-        collectionId,
-        'rows',
-        changes.map((change) => change.id),
-      )
+      this.publishWorkingRows(collectionId, changes)
     }
     return true
   }

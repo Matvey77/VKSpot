@@ -63,6 +63,7 @@ const percentile = (values, fraction) =>
       return { id: imported.value, ids }
     }, count)
     const importMs = performance.now() - importStart
+    const openStart = performance.now()
     await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
     await page
       .locator('.collection-card')
@@ -70,6 +71,7 @@ const percentile = (values, fraction) =>
       .getByRole('button', { name: 'Открыть', exact: true })
       .click()
     await expect(page.getByRole('table')).toBeVisible()
+    const openLibraryMs = performance.now() - openStart
     const transport = await page.evaluate(async () => {
       const timings = []
       let bytes = 0
@@ -145,6 +147,7 @@ const percentile = (values, fraction) =>
       version: await app.evaluate(({ app }) => app.getVersion()),
       count,
       importMs,
+      openLibraryMs,
       fullStateBytes: transport.bytes,
       stateMedianMs: percentile(transport.timings, 0.5),
       ...(transport.sync

@@ -118,9 +118,9 @@ export function LibraryView({
     [collection, focusId],
   )
   const {
-    baseRows,
+    baseCount,
     rows,
-    matchingRows,
+    matchingIds,
     resultCounts,
     destinationCounts,
     selectedMatches,
@@ -365,7 +365,7 @@ export function LibraryView({
                       onResultFilterChange(event.target.value as typeof resultFilter)
                     }
                   >
-                    <option value="all">Все результаты ({count(baseRows.length)})</option>
+                    <option value="all">Все результаты ({count(baseCount)})</option>
                     {Object.entries(searchResultLabels).map(([group, label]) => (
                       <option key={group} value={group}>
                         {label} ({count(resultCounts[group as SearchResultGroup])})
@@ -398,16 +398,16 @@ export function LibraryView({
                   reason={
                     busy
                       ? 'Дождись завершения текущего действия.'
-                      : !matchingRows.length
+                      : !matchingIds.length
                         ? 'В этой выборке пока нет записей «Совпадают данные». Можно изменить фильтры или дождаться результатов поиска.'
                         : undefined
                   }
                   onClick={() => {
-                    onSelectedChange(new Set(matchingRows.map((row) => row.id)))
+                    onSelectedChange(new Set(matchingIds))
                     onResultFilterChange('exact')
                   }}
                 >
-                  Выделить совпадения ({count(matchingRows.length)})
+                  Выделить совпадения ({count(matchingIds.length)})
                 </ExplainedButton>
                 <span className="selection-help">
                   Shift + клик — выделить диапазон. Подтверждаются только записи без решения.

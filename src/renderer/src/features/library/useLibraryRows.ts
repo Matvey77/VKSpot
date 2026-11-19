@@ -22,14 +22,19 @@ export function useLibraryRows(
     () => filterLibraryRows(collection, rules, deferredQuery, filter, resultFilter),
     [collection, rules, deferredQuery, filter, resultFilter],
   )
-  const selection = useMemo(() => {
-    let selectedMatches = 0,
-      visibleSelected = 0
+  const selectedMatches = useMemo(() => {
+    if (!selected.size) return 0
+    let count = 0
     for (const row of collection?.rows ?? []) {
-      if (selected.has(row.id) && analyzeRow(row, rules).group === 'exact') selectedMatches++
+      if (selected.has(row.id) && analyzeRow(row, rules).group === 'exact') count++
     }
+    return count
+  }, [collection, rules, selected])
+  const hiddenSelected = useMemo(() => {
+    if (!selected.size) return 0
+    let visibleSelected = 0
     for (const row of filtered.rows) if (selected.has(row.id)) visibleSelected++
-    return { selectedMatches, hiddenSelected: selected.size - visibleSelected }
-  }, [collection, rules, selected, filtered.rows])
-  return { ...filtered, ...selection, summary, deferredQuery }
+    return selected.size - visibleSelected
+  }, [selected, filtered.rows])
+  return { ...filtered, selectedMatches, hiddenSelected, summary }
 }

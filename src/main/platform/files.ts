@@ -5,7 +5,6 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
-import { parseFile } from 'music-metadata'
 import type { Store } from '../storage'
 import { exportText, parseImport } from '../../core/collection'
 import type { ImportPreview } from '../../shared/model'
@@ -104,6 +103,7 @@ export async function linkFileDialog(
   if (!localExtensions.has(extname(path).toLowerCase())) {
     throw new Error('Выберите аудиофайл поддерживаемого формата.')
   }
+  const { parseFile } = await import('music-metadata')
   const metadata = await parseFile(path)
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(path)) hash.update(chunk)

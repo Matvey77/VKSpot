@@ -43,7 +43,7 @@ describe('independent library filters', () => {
     const collection = fixture()
     const exact = filterLibraryRows(collection, defaultMatchingRules, 'Song Artist', 'all', 'exact')
     expect(exact.rows.map((row) => row.position)).toEqual([1, 2, 3, 4, 5])
-    expect(exact.matchingRows.map((row) => row.position)).toEqual([1])
+    expect(exact.matchingIds).toEqual([collection.rows[0].id])
     expect(exact.destinationCounts).toMatchObject({
       all: 5,
       spotify: 1,
@@ -64,7 +64,7 @@ describe('independent library filters', () => {
       filterLibraryRows(collection, defaultMatchingRules, '', 'blocked', 'missing').rows,
     ).toEqual([collection.rows[5]])
     expect(
-      filterLibraryRows(collection, defaultMatchingRules, '', 'all', 'missing').matchingRows,
+      filterLibraryRows(collection, defaultMatchingRules, '', 'all', 'missing').matchingIds,
     ).toEqual([])
   })
 
@@ -90,7 +90,7 @@ describe('independent library filters', () => {
             )
           }
           for (const choice of groups) {
-            expect(choice === 'all' ? result.baseRows.length : result.resultCounts[choice]).toBe(
+            expect(choice === 'all' ? result.baseCount : result.resultCounts[choice]).toBe(
               filterLibraryRows(collection, defaultMatchingRules, query, filter, choice).rows
                 .length,
             )

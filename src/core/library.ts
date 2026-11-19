@@ -76,7 +76,10 @@ export function analyzeRow(
   row: TrackRow,
   rules: MatchingRules = defaultMatchingRules,
 ): RowAnalysis {
-  const key = rulesKey(rules)
+  return analyzeRowWithKey(row, rules, rulesKey(rules))
+}
+
+function analyzeRowWithKey(row: TrackRow, rules: MatchingRules, key: string): RowAnalysis {
   const cache = rowCache.get(row)
   let result = cache?.key === key ? cache.result : undefined
   if (!result) {
@@ -122,12 +125,13 @@ export function filterLibraryRows(
     missing: 0,
   }
   const destinationCounts = emptyDestinations()
-  const baseRows: TrackRow[] = [],
-    rows: TrackRow[] = [],
-    matchingRows: TrackRow[] = []
+  const key = rulesKey(rules)
+  let baseCount = 0
+  const rows: TrackRow[] = []
+  const matchingIds: string[] = []
   for (const row of collection?.rows ?? []) {
-    const item = analyzeRow(row, rules)
-    if (!terms.every((term) => item.search.includes(term))) continue
+    const item = analyzeRowWithKey(row, rules, key)
+    if (terms.length && !terms.every((term) => item.search.includes(term))) continue
     const matchesDestination =
       filter === 'all' ||
       (filter === 'blocked' ? row.source.availability === 'blocked' : item.destination === filter)
@@ -138,15 +142,15 @@ export function filterLibraryRows(
       if (row.source.availability === 'blocked') destinationCounts.blocked++
     }
     if (matchesDestination) {
-      baseRows.push(row)
+      baseCount++
       resultCounts[item.searchGroup]++
     }
     if (matchesDestination && matchesResult) {
       rows.push(row)
-      if (item.group === 'exact') matchingRows.push(row)
+      if (item.group === 'exact') matchingIds.push(row.id)
     }
   }
-  return { baseRows, rows, matchingRows, resultCounts, destinationCounts }
+  return { baseCount, rows, matchingIds, resultCounts, destinationCounts }
 }
 
 type CollectionSummary = {
@@ -184,7 +188,7 @@ export function summarizeCollection(
     }
     result.destinations.all = collection.rows.length
     for (const row of collection.rows) {
-      const item = analyzeRow(row, rules)
+      const item = analyzeRowWithKey(row, rules, key)
       result.groups[item.group]++
       result.destinations[item.destination]++
       if (row.source.availability === 'blocked') result.destinations.blocked++
