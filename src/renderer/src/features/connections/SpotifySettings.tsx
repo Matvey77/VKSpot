@@ -91,7 +91,7 @@ export function SpotifySettings({
               onClick={handleTestProxy}
               title="Проверить сетевое подключение через этот прокси"
             >
-              {testingProxy ? <Loader2 size={13} className="spin" /> : null}
+              {testingProxy ? <Loader2 size={13} className="spinning" /> : null}
               <span>{testingProxy ? 'Проверка…' : 'Проверить прокси'}</span>
             </button>
           </div>

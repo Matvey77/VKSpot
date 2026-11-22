@@ -83,7 +83,7 @@ export function VKSettings({
                 onClick={handleTestVKProxy}
                 title="Проверить доступность серверов VK через этот прокси"
               >
-                {testingVKProxy ? <Loader2 size={13} className="spin" /> : null}
+                {testingVKProxy ? <Loader2 size={13} className="spinning" /> : null}
                 <span>{testingVKProxy ? 'Проверка…' : 'Проверить VK'}</span>
               </button>
             </div>

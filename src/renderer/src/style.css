@@ -1,19 +1,17 @@
-/* Cascade order is intentional: shared primitives, features, then feature extensions. */
+/* Cascade order is intentional: shared primitives, features, then responsive overrides. */
 @import './styles/foundations.css';
 @import './styles/shell.css';
+@import './styles/forms-and-dialogs.css';
+@import './styles/service-status.css';
 @import './styles/library.css';
 @import './styles/inspector.css';
-@import './styles/forms-and-dialogs.css';
-@import './styles/responsive.css';
-@import './styles/guide.css';
-@import './styles/connections.css';
-@import './styles/start-and-browser.css';
-@import './styles/service-status.css';
 @import './styles/audio.css';
-@import './styles/settings.css';
 @import './styles/feedback.css';
-@import './styles/search-provider.css';
 @import './styles/collections.css';
 @import './styles/repair.css';
-@import './styles/workspace.css';
+@import './styles/connections.css';
+@import './styles/settings.css';
+@import './styles/start-and-browser.css';
+@import './styles/guide.css';
 @import './styles/overview-and-preferences.css';
+@import './styles/responsive.css';

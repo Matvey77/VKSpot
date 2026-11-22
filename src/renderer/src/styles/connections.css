@@ -1,15 +1,50 @@
-/* VK metadata collection stays next to its source controls. */
+/* VK metadata collection and Connections grid layout. */
+.connections-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-xl);
+  max-width: 1440px;
+}
+.connections-grid .connection-section {
+  max-width: none;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.connections-grid .connection-section:last-child {
+  grid-column: 1 / -1;
+}
+.connections-grid .section-symbol {
+  width: 44px;
+  height: 44px;
+}
+.connections-grid .button-row button {
+  white-space: normal;
+  height: auto;
+  min-height: 36px;
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
+}
+.connections-grid .helper-text {
+  font-size: 12px;
+}
 .vk-export-count {
   max-width: 290px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 .vk-extraction {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
 }
 .vk-extraction p {
   margin: 6px 0 0;
@@ -17,8 +52,8 @@
 .checkbox-field {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
   line-height: 1.5;
 }
 .checkbox-field input {

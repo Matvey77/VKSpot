@@ -155,47 +155,17 @@ export function CollectionsOverview({
       </header>
 
       {!collections.length ? (
-        <section
-          className="empty-library"
-          style={{
-            background: 'var(--surface)',
-            border: '1.5px dashed var(--line)',
-            borderRadius: '16px',
-            padding: '56px 32px',
-            textAlign: 'center',
-          }}
-        >
-          <div style={{ maxWidth: '480px', margin: '0 auto' }}>
-            <div
-              style={{
-                width: '72px',
-                height: '72px',
-                borderRadius: '50%',
-                background: 'var(--selected)',
-                color: 'var(--accent)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px',
-              }}
-            >
+        <section className="empty-library collections-empty">
+          <div className="collections-empty-inner">
+            <div className="collections-empty-icon">
               <Music2 size={36} />
             </div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 10px' }}>
-              Нет сохранённых коллекций
-            </h2>
-            <p
-              style={{
-                color: 'var(--muted)',
-                fontSize: '14px',
-                lineHeight: '1.6',
-                margin: '0 0 24px',
-              }}
-            >
+            <h2>Нет сохранённых коллекций</h2>
+            <p>
               Выгрузите аудиозаписи из вашей VK Музыки или импортируйте готовый файл (JSON, CSV,
               TXT). Вся музыка будет сохранена локально без потери данных.
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div className="collections-empty-actions">
               <button type="button" className="primary" onClick={onOpenVK} disabled={!!busy}>
                 <VKIcon size={16} />
                 Выгрузить из VK
@@ -272,9 +242,10 @@ export function CollectionsOverview({
                 <div className="collection-info-col">
                   <div className="collection-title-row">
                     {isEditing ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div className="collection-rename-row">
                         <input
                           type="text"
+                          className="collection-rename-input"
                           value={editName}
                           autoFocus
                           onChange={(e) => setEditName(e.target.value)}
@@ -282,27 +253,17 @@ export function CollectionsOverview({
                             if (e.key === 'Enter') void handleSaveRename(c.id)
                             if (e.key === 'Escape') setEditingId(null)
                           }}
-                          style={{
-                            fontSize: '16px',
-                            fontWeight: 650,
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            border: '1.5px solid var(--accent)',
-                            background: 'var(--control)',
-                            color: 'var(--ink)',
-                          }}
                         />
                         <button
                           type="button"
-                          className="primary"
-                          style={{ height: '30px', padding: '0 8px' }}
+                          className="primary collection-rename-btn"
                           onClick={() => void handleSaveRename(c.id)}
                         >
                           <Check size={14} />
                         </button>
                         <button
                           type="button"
-                          style={{ height: '30px', padding: '0 8px' }}
+                          className="collection-rename-btn"
                           onClick={() => setEditingId(null)}
                         >
                           <X size={14} />
@@ -431,8 +392,7 @@ export function CollectionsOverview({
               </button>
               <button
                 type="button"
-                className="primary"
-                style={{ background: 'var(--error-ink)', borderColor: 'var(--error-ink)' }}
+                className="primary danger-button"
                 onClick={async () => {
                   if (confirmDeleteId) {
                     await onDeleteCollection(confirmDeleteId)

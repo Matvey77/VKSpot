@@ -58,6 +58,7 @@ function detailsEqual(cached: Details, rowIds: string[], plan?: PlanItem[]): boo
 /** Large immutable queue inputs are stored once, separately from the changing cursor. */
 export class JobRepository {
   private details = new Map<string, Details>()
+  private persistedDetails = new Set<string>()
 
   constructor(private db: Database) {
     db.connection.exec(
@@ -87,6 +88,7 @@ export class JobRepository {
     if (cached) return cached
     const row = this.db.prepare('SELECT row_ids,plan FROM job_details WHERE id=?').get(id) as
       { row_ids: string; plan: string | null } | undefined
+    if (row) this.persistedDetails.add(id)
     const rowIds = row ? (JSON.parse(row.row_ids) as string[]) : []
     const plan = row?.plan ? (JSON.parse(row.plan) as PlanItem[]) : undefined
     const value: Details = {
@@ -142,6 +144,13 @@ export class JobRepository {
   }
 
   putProgress(job: Job): void {
+    if (!this.persistedDetails.has(job.id)) {
+      this.loadDetails(job.id)
+      if (!this.persistedDetails.has(job.id)) {
+        this.put(job)
+        return
+      }
+    }
     job.updatedAt = new Date().toISOString()
     const { rowIds: _rowIds, plan, ...runtime } = job
     const localCount = plan ? countLocal(plan) : this.loadDetails(job.id).localCount
@@ -152,7 +161,8 @@ export class JobRepository {
     job.updatedAt = new Date().toISOString()
     const { rowIds, plan, ...runtime } = job
     const cached = this.details.get(job.id)
-    const changedDetails = !cached || !detailsEqual(cached, rowIds, plan)
+    const changedDetails =
+      !this.persistedDetails.has(job.id) || !cached || !detailsEqual(cached, rowIds, plan)
     const localCount = countLocal(plan)
     this.db.transaction(() => {
       this.writeRuntimePayload(runtime, localCount)
@@ -164,6 +174,7 @@ export class JobRepository {
           .run(job.id, JSON.stringify(rowIds), plan ? JSON.stringify(plan) : null)
     })
     if (changedDetails) {
+      this.persistedDetails.add(job.id)
       this.details.set(job.id, {
         rowIds: [...rowIds],
         ...(plan ? { plan: clonePlan(plan) } : {}),
@@ -177,11 +188,13 @@ export class JobRepository {
       (this.db.prepare('SELECT id FROM jobs').all() as { id: string }[]).map((row) => row.id),
     )
     for (const id of this.details.keys()) if (!ids.has(id)) this.details.delete(id)
+    for (const id of this.persistedDetails) if (!ids.has(id)) this.persistedDetails.delete(id)
   }
 
   remove(id: string): void {
     this.db.prepare('DELETE FROM jobs WHERE id=?').run(id)
     this.details.delete(id)
+    this.persistedDetails.delete(id)
   }
 
   removeFinished(): number {

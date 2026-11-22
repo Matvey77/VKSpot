@@ -19,85 +19,184 @@
   flex: none;
 }
 .status-badge.connected {
-  background: #e6f9f0;
-  color: #0b7239;
-  border: 1px solid #9ae2be;
+  background: var(--success-bg);
+  color: var(--success-ink);
+  border: 1px solid var(--success-border);
 }
 .status-badge.connected .status-dot {
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  background: var(--success-dot);
+  box-shadow: 0 0 6px var(--success-glow);
 }
 .status-badge.attention {
-  background: #fef8eb;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border: 1px solid var(--warning-border);
 }
 .status-badge.attention .status-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+  background: var(--warning-dot);
+  box-shadow: 0 0 6px var(--warning-glow);
 }
 .status-badge.error {
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fca5a5;
+  background: var(--error-bg);
+  color: var(--error-ink);
+  border: 1px solid var(--error-border);
 }
 .status-badge.error .status-dot {
-  background: #ef4444;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+  background: var(--error-dot);
+  box-shadow: 0 0 6px var(--error-glow);
 }
 .status-badge.unknown,
 .status-badge.checking {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
+  background: var(--hover);
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 .status-badge.unknown .status-dot,
 .status-badge.checking .status-dot {
-  background: #94a3b8;
+  background: var(--neutral-dot);
 }
 
-[data-theme='dark'] .status-badge.connected {
-  background: rgba(16, 185, 129, 0.16);
-  color: #6ee7b7;
-  border-color: rgba(16, 185, 129, 0.35);
+/* Inline Warnings & Workspace Notices */
+.inline-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border-radius: var(--radius-control);
+  padding: 10px var(--space-md);
+  font-size: 12px;
+  line-height: 1.5;
 }
-[data-theme='dark'] .status-badge.attention {
-  background: rgba(245, 158, 11, 0.16);
-  color: #fde047;
-  border-color: rgba(245, 158, 11, 0.35);
+.workspace > .inline-warning {
+  margin: 0 var(--space-xxl) var(--space-lg);
+  flex: none;
 }
-[data-theme='dark'] .status-badge.error {
-  background: rgba(239, 68, 68, 0.16);
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.35);
+.inline-warning svg {
+  margin-top: 1px;
 }
-[data-theme='dark'] .status-badge.unknown,
-[data-theme='dark'] .status-badge.checking {
-  background: rgba(148, 163, 184, 0.12);
-  color: #94a3b8;
-  border-color: rgba(148, 163, 184, 0.25);
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin: var(--space-lg) var(--space-xxl) 0;
+  background: var(--selected);
+  color: var(--accent);
+  padding: 10px var(--space-md);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  flex: none;
+  max-height: 200px;
+  overflow: auto;
+}
+.notice.error {
+  background: var(--error-bg);
+  color: var(--error-ink);
+}
+.workspace > .notice:not(.error) {
+  position: fixed;
+  right: var(--space-xl);
+  bottom: 20px;
+  z-index: 30;
+  max-width: min(440px, calc(100vw - 48px));
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--selected);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-navigation);
+  box-shadow: var(--shadow-toast);
+}
+
+/* Completeness Notice */
+.completeness-notice-wrapper {
+  background: var(--surface);
+  padding: 0 var(--space-page) var(--space-md);
+  flex: none;
+}
+.review-source-status {
+  background: var(--warning-bg);
+  color: var(--warning-ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-navigation);
+  padding: 10px var(--space-md);
+}
+.review-source-status summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  user-select: none;
+}
+.review-source-status summary::-webkit-details-marker {
+  display: none;
+}
+.review-source-status summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-tag);
+}
+.review-source-status-icon {
+  color: var(--warning-ink);
+  flex: none;
+}
+.review-source-status-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warning-ink);
+  min-width: 0;
+}
+.review-source-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-tag);
+  background: var(--surface);
+  color: var(--warning-ink);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  flex: none;
+}
+.review-source-status-content {
+  margin-top: var(--space-sm);
+  padding-left: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.review-source-status-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.review-source-status-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--warning-ink);
 }
 
 /* Completeness Notice Dismiss Button */
 .notice-dismiss-btn {
   margin-left: auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex: none;
   background: transparent;
   border: 0;
-  color: var(--muted);
+  color: var(--warning-ink);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-tag);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.notice-dismiss-btn:hover {
-  background: rgba(0, 0, 0, 0.07);
+.notice-dismiss-btn:hover:not(:disabled) {
+  background: var(--subtle-tint);
   color: var(--ink);
-}
-[data-theme='dark'] .notice-dismiss-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
 }
 
 /* Job Archive Buttons */
@@ -111,11 +210,11 @@
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.archive-finished-btn:hover {
+.archive-finished-btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--canvas);
@@ -130,12 +229,12 @@
   border: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
-  border-radius: 5px;
+  border-radius: var(--radius-tag);
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.archive-job-btn:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.05);
+.archive-job-btn:hover:not(:disabled) {
+  border-color: var(--error-ink);
+  color: var(--error-ink);
+  background: var(--error-bg);
 }

@@ -1,7 +1,7 @@
 .sidebar-status {
   flex: none;
-  border-top: 1px solid #38515e;
-  margin-top: 16px;
+  border-top: 1px solid var(--nav-divider);
+  margin-top: var(--space-lg);
   padding-top: 10px;
 }
 .sidebar-connections {
@@ -19,8 +19,8 @@
   height: auto;
   border: 0;
   background: transparent;
-  color: #c6d7df;
-  border-radius: 6px;
+  color: var(--nav-text);
+  border-radius: var(--radius-control);
   padding: 7px 6px;
   font-size: 11px;
   text-align: left;
@@ -28,17 +28,17 @@
   flex-direction: column;
   gap: 5px;
 }
-.sidebar-status button:hover {
-  background: #264655;
+.sidebar-status button:hover:not(:disabled) {
+  background: var(--nav-hover);
 }
 .sidebar-status button:focus-visible {
-  outline-color: #84dcc0;
+  outline-color: var(--nav-focus);
 }
 .sidebar-service-name {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #edf5f5;
+  color: var(--nav-heading);
 }
 .sidebar-service-name .connection-light {
   margin-left: auto;
@@ -48,38 +48,38 @@
   height: 7px;
   flex: none;
   border-radius: 50%;
-  background: #9aaeb8;
+  background: var(--nav-dot-idle);
 }
 .connection-light.connected {
-  background: #34d399;
-  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+  background: var(--nav-status-connected);
+  box-shadow: 0 0 6px var(--nav-status-connected-glow);
 }
 .connection-light.attention {
-  background: #fbbf24;
-  box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+  background: var(--nav-status-attention);
+  box-shadow: 0 0 6px var(--nav-status-attention-glow);
 }
 .connection-light.error {
-  background: #f87171;
-  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+  background: var(--nav-status-error);
+  box-shadow: 0 0 6px var(--nav-status-error-glow);
 }
 .sidebar-service-value {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.4;
-  color: #a0b6c2;
+  color: var(--nav-label);
   font-size: 11px;
 }
 .sidebar-service-value.connected {
-  color: #a7f3d0;
+  color: var(--nav-status-connected-ink);
   font-weight: 500;
 }
 .sidebar-service-value.attention {
-  color: #fde68a;
+  color: var(--nav-status-attention-ink);
   font-weight: 500;
 }
 .sidebar-service-value.error {
-  color: #fca5a5;
+  color: var(--nav-status-error-ink);
 }
 .sidebar-status .sidebar-job {
   gap: 6px;
@@ -90,21 +90,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-sm);
   min-width: 0;
 }
 .sidebar-job-heading > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #edf5f5;
+  color: var(--nav-heading);
 }
 .sidebar-job-heading > span:last-child {
   flex: none;
-  color: #c6d7df;
+  color: var(--nav-text);
 }
 .sidebar-job-count {
-  color: #b1c3cb;
+  color: var(--nav-label);
   font-variant-numeric: tabular-nums;
 }
 .sidebar-job progress {
@@ -113,54 +113,15 @@
   margin: 0;
   border: 0;
   border-radius: 2px;
-  background: #38515e;
+  background: var(--nav-divider);
   overflow: hidden;
 }
 .sidebar-job progress::-webkit-progress-bar {
-  background: #38515e;
+  background: var(--nav-divider);
 }
 .sidebar-job progress::-webkit-progress-value {
-  background: #84dcc0;
+  background: var(--nav-focus);
 }
 .sidebar-job-empty {
-  color: #b1c3cb;
-}
-@media (max-height: 760px) {
-  .sidebar {
-    padding-top: 20px;
-    padding-bottom: 12px;
-  }
-  .connection-line {
-    margin-top: 16px;
-    margin-bottom: 20px;
-  }
-  .nav-button {
-    height: 38px;
-  }
-  .collection-nav {
-    margin-top: 20px;
-    min-height: 0;
-  }
-  .sidebar-status {
-    margin-top: 12px;
-  }
-}
-@media (max-height: 680px) {
-  .sidebar {
-    padding-top: 16px;
-  }
-  .connection-line {
-    margin-top: 12px;
-    margin-bottom: 16px;
-  }
-  .nav-button {
-    height: 34px;
-  }
-  .collection-nav {
-    margin-top: 16px;
-  }
-  .sidebar-status {
-    margin-top: 10px;
-    padding-top: 8px;
-  }
+  color: var(--nav-label);
 }

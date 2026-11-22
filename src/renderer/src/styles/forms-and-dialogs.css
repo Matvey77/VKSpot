@@ -1,3 +1,16 @@
+.empty-library {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  margin: 0 var(--space-xxl) var(--space-xxl);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  padding: 48px var(--space-xxl);
+  text-align: center;
+}
 .empty-path {
   display: flex;
   align-items: center;
@@ -5,24 +18,17 @@
   color: var(--muted);
   width: 310px;
   max-width: 100%;
-  margin-bottom: 32px;
+  margin-bottom: var(--space-xxl);
 }
 .source-icon,
 .destination-icon {
   width: 57px;
   height: 57px;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   display: grid;
   place-items: center;
-  background: #e8f1fc;
-  color: #3467a0;
-  font-size: 22px;
-  font-weight: 750;
+  background: transparent;
   flex: none;
-}
-.destination-icon {
-  background: var(--selected);
-  color: var(--accent);
 }
 .path-line {
   height: 1px;
@@ -34,7 +40,7 @@
 }
 .empty-library > p {
   max-width: 520px;
-  margin-top: 12px;
+  margin-top: var(--space-md);
   font-size: 13px;
 }
 .empty-actions {
@@ -60,7 +66,7 @@
   color: var(--accent);
 }
 .content-page {
-  padding: 32px;
+  padding: 28px var(--space-page) 40px;
   overflow: auto;
   flex: 1;
 }
@@ -69,12 +75,12 @@
 }
 .page-description {
   max-width: 680px;
-  margin-bottom: 32px;
+  margin-bottom: var(--space-xxl);
   font-size: 13px;
 }
 .connection-section {
   display: flex;
-  gap: 24px;
+  gap: var(--space-xl);
   border-top: 1px solid var(--line);
   padding: 28px 0;
   max-width: 920px;
@@ -82,20 +88,14 @@
 .section-symbol {
   width: 54px;
   height: 54px;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   display: grid;
   place-items: center;
   flex: none;
 }
-.vk-symbol {
-  background: #e8f1fc;
-  color: #3467a0;
-  font-weight: 750;
-  font-size: 20px;
-}
+.vk-symbol,
 .spotify-symbol {
-  background: var(--selected);
-  color: var(--accent);
+  background: transparent;
 }
 .neutral-symbol {
   background: var(--hover);
@@ -106,22 +106,16 @@
   min-width: 0;
 }
 .section-main h2 {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 .section-main > p {
   max-width: 720px;
   font-size: 13px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 .section-main > .helper-text {
   font-size: 11px;
   margin-bottom: 0;
-}
-.subtle-tag {
-  margin-left: 8px;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted);
 }
 .client-id {
   max-width: 420px;
@@ -130,7 +124,7 @@
 .redirect-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: 11px;
   color: var(--muted);
   margin-bottom: 18px;
@@ -140,15 +134,15 @@
   width: fit-content;
   padding: 7px 10px;
   background: var(--hover);
-  border-radius: 4px;
+  border-radius: var(--radius-tag);
   user-select: all;
 }
 .heading-with-status {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-sm);
 }
 .heading-with-status h2 {
   margin: 0;
@@ -157,81 +151,28 @@
   margin-top: 10px;
   font-size: 12px;
 }
-.settings-section {
-  max-width: 680px;
-  padding: 24px 0;
-  border-top: 1px solid var(--line);
-}
-.settings-section h2 {
-  margin-bottom: 20px;
-}
-.settings-section .field {
-  max-width: 440px;
-}
-.settings-section .helper-text {
-  margin: 0 0 18px;
-}
-.settings-section > p {
-  font-size: 13px;
-}
-.data-path {
-  display: block;
-  padding: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  margin: 12px 0;
-  overflow-wrap: anywhere;
-}
-.archive-context {
+.field {
   display: flex;
-  gap: 13px;
-  align-items: center;
-  padding: 18px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 20px;
-  max-width: 960px;
-}
-.archive-context svg {
-  color: var(--accent);
-}
-.archive-context strong,
-.archive-context span {
-  display: block;
-}
-.archive-context span {
+  flex-direction: column;
+  gap: 6px;
   font-size: 12px;
   color: var(--muted);
-  margin-top: 5px;
+  margin-bottom: var(--space-md);
 }
-.export-list {
-  max-width: 960px;
+.field input,
+.field select {
+  width: 100%;
+  color: var(--ink);
 }
-.export-option {
+.check-field {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 22px 0;
-  border-bottom: 1px solid var(--line);
-}
-.export-option > svg {
-  color: var(--muted);
-}
-.export-option > div {
-  flex: 1;
-  min-width: 0;
-}
-.export-option h2 {
-  font-size: 14px;
-  margin-bottom: 5px;
-}
-.export-option p {
+  gap: var(--space-sm);
+  margin-top: 15px;
   font-size: 12px;
-  max-width: 630px;
 }
 .job {
-  padding: 24px 0;
+  padding: var(--space-xl) 0;
   border-top: 1px solid var(--line);
   max-width: 960px;
 }
@@ -255,7 +196,7 @@ progress {
   width: 100%;
   border: 0;
   accent-color: var(--accent);
-  margin: 18px 0 12px;
+  margin: 18px 0 var(--space-md);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -271,8 +212,8 @@ progress::-webkit-progress-value {
 .job-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 16px;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
 }
 .job-actions > span:not(.explained-button) {
   margin-right: auto;
@@ -293,12 +234,12 @@ progress::-webkit-progress-value {
 .simple-empty {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   min-height: 280px;
 }
 .simple-empty h2,
 .filtered-empty h2 {
-  margin: 15px 0 8px;
+  margin: 15px 0 var(--space-sm);
   color: var(--ink);
 }
 .simple-empty p,
@@ -309,38 +250,18 @@ progress::-webkit-progress-value {
 .simple-empty button {
   margin-top: 18px;
 }
-.notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 16px 32px 0;
-  background: var(--selected);
-  color: var(--accent);
-  padding: 10px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-  flex: none;
-  max-height: 200px;
-  overflow: auto;
-}
-.notice.error {
-  background: var(--error-bg);
-  color: var(--error-ink);
-}
 .activity {
   position: absolute;
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   align-items: center;
   padding: 9px 13px;
   background: var(--ink);
   color: var(--surface);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   font-size: 12px;
   z-index: 10;
 }
@@ -352,18 +273,10 @@ progress::-webkit-progress-value {
   gap: 15px;
   color: var(--muted);
 }
-.spinning {
-  animation: spin 1.2s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: #13262c80;
+  background: var(--overlay-bg);
   z-index: 50;
 }
 .dialog {
@@ -378,13 +291,13 @@ progress::-webkit-progress-value {
   padding: 28px;
   background: var(--surface);
   color: var(--ink);
-  border-radius: 12px;
+  border-radius: var(--radius-dialog);
   z-index: 51;
-  box-shadow: 0 12px 48px #081b2b35;
+  box-shadow: var(--shadow-dialog);
 }
 .dialog h2 {
   font-size: 20px;
-  padding-right: 24px;
+  padding-right: var(--space-xl);
   margin-bottom: 10px;
 }
 .dialog > p {
@@ -407,7 +320,7 @@ progress::-webkit-progress-value {
 }
 .dialog-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-sm);
   justify-content: flex-end;
   margin-top: 25px;
 }
@@ -461,42 +374,4 @@ progress::-webkit-progress-value {
 .transfer-counts strong {
   font-size: 22px;
   color: var(--ink);
-}
-@media (max-width: 1250px) {
-  .with-inspector .inspector {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 5;
-    width: 340px;
-    box-shadow: -10px 4px 25px #102a361f;
-  }
-  .summary-strip {
-    gap: 22px;
-  }
-  .summary-strip .summary-end button {
-    font-size: 11px;
-  }
-  .summary-strip strong {
-    font-size: 18px;
-  }
-  .summary-strip span {
-    font-size: 11px;
-  }
-  .page-heading {
-    gap: 14px;
-  }
-  .heading-actions button {
-    font-size: 12px;
-  }
-  .sidebar {
-    width: 206px;
-  }
-  .collection-footer > span {
-    max-width: 350px;
-  }
-  .page-heading h1 {
-    font-size: 23px;
-  }
 }

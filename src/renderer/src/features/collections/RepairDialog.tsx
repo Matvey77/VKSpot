@@ -76,7 +76,7 @@ export function RepairDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content className="dialog repair-dialog">
-          <Dialog.Title style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Dialog.Title className="repair-dialog-title">
             <Wrench size={22} className="brand-accent-icon" />
             Починить и синхронизировать коллекцию
           </Dialog.Title>
@@ -86,30 +86,14 @@ export function RepairDialog({
           </Dialog.Description>
 
           {!preview ? (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-                margin: '18px 0 10px',
-              }}
-            >
+            <div className="repair-dialog-body">
               {/* Current Status Box */}
-              <div
-                style={{
-                  background: 'var(--canvas)',
-                  border: '1px solid var(--line)',
-                  borderRadius: '10px',
-                  padding: '14px 16px',
-                  fontSize: '13px',
-                  lineHeight: '1.5',
-                }}
-              >
-                <div style={{ fontWeight: 650, color: 'var(--ink)', marginBottom: '4px' }}>
+              <div className="repair-current-box">
+                <div className="repair-current-title">
                   Текущее состояние: {count(collection.rows.length)} записей ({count(resolvedCount)}{' '}
                   с решениями)
                 </div>
-                <div style={{ color: 'var(--muted)' }}>
+                <div className="repair-current-desc">
                   Если прошлая выгрузка пропустила часть аудиозаписей из-за скролла VK или выгрузила
                   их не полностью, запустите выгрузку заново или укажите файл списка. Все
                   подтверждённые треки Spotify, локальные файлы, пометки и исключения перенесутся
@@ -127,7 +111,11 @@ export function RepairDialog({
                     {vkProgress?.expected ? ` из ${count(vkProgress.expected)}` : ''} ·{' '}
                     {vkProgress?.message ?? 'Прокручиваем список…'}
                   </div>
-                  <button type="button" onClick={onCancelVKExtraction} style={{ marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    className="repair-extract-cancel"
+                    onClick={onCancelVKExtraction}
+                  >
                     Остановить выгрузку
                   </button>
                 </div>
@@ -250,11 +238,10 @@ export function RepairDialog({
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                    <div className="repair-vk-actions">
                       <button
                         type="button"
-                        className="primary"
-                        style={{ height: '42px', flex: 1, justifyContent: 'center' }}
+                        className="primary repair-vk-extract-btn"
                         disabled={!!busy}
                         onClick={() => {
                           if (rangeMode === 'all') {
@@ -279,7 +266,7 @@ export function RepairDialog({
                       </button>
                       <button
                         type="button"
-                        style={{ height: '42px', justifyContent: 'center' }}
+                        className="repair-vk-open-btn"
                         disabled={!!busy}
                         onClick={onOpenVK}
                         title="Показать или открыть окно VK Музыки"
@@ -290,36 +277,13 @@ export function RepairDialog({
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      textAlign: 'center',
-                      color: 'var(--muted)',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                    }}
-                  >
-                    — или —
-                  </div>
+                  <div className="repair-or-divider">— или —</div>
 
                   {/* Option 2: From file */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '14px 18px',
-                      background: 'var(--surface)',
-                      border: '1px solid var(--line)',
-                      borderRadius: '10px',
-                    }}
-                  >
+                  <div className="repair-file-box">
                     <div>
-                      <div style={{ fontWeight: 650, fontSize: '13px', color: 'var(--ink)' }}>
-                        Файл списка (JSON / CSV / TXT)
-                      </div>
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
-                        Импортируйте полный список из файла
-                      </div>
+                      <div className="repair-file-title">Файл списка (JSON / CSV / TXT)</div>
+                      <div className="repair-file-desc">Импортируйте полный список из файла</div>
                     </div>
                     <button type="button" disabled={!!busy} onClick={onSelectFile}>
                       <Upload size={15} />
@@ -330,46 +294,14 @@ export function RepairDialog({
               )}
             </div>
           ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
-                margin: '18px 0 10px',
-              }}
-            >
+            <div className="repair-preview-body">
               {/* Preview Comparison Card */}
-              <div
-                style={{
-                  background: 'var(--selected)',
-                  border: '1px solid var(--accent)',
-                  borderRadius: '10px',
-                  padding: '16px 18px',
-                  fontSize: '13px',
-                  lineHeight: '1.5',
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 700,
-                    color: 'var(--accent)',
-                    marginBottom: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
+              <div className="repair-preview-card">
+                <div className="repair-preview-heading">
                   <Check size={16} />
                   Сравнение списков:
                 </div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '10px',
-                    color: 'var(--ink)',
-                  }}
-                >
+                <div className="repair-preview-grid">
                   <div>
                     В коллекции сейчас: <strong>{count(collection.rows.length)}</strong>
                   </div>
@@ -402,7 +334,7 @@ export function RepairDialog({
                     ) : (
                       <>
                         Новых треков:{' '}
-                        <strong style={{ color: '#0f7b32' }}>
+                        <strong className="repair-new-tracks-count">
                           +{count(Math.max(0, preview.tracks.length - collection.rows.length))}
                         </strong>
                       </>
@@ -411,32 +343,12 @@ export function RepairDialog({
                 </div>
               </div>
 
-              <div
-                style={{
-                  background: 'var(--canvas)',
-                  border: '1px solid var(--line)',
-                  borderRadius: '8px',
-                  padding: '10px 14px',
-                  fontSize: '12.5px',
-                  color: 'var(--muted)',
-                  lineHeight: '1.4',
-                }}
-              >
+              <div className="repair-preview-note">
                 ✓ Все подтверждённые совпадения Spotify, привязанные файлы и исключения останутся в
                 силе. Новые найденные треки добавятся со статусом «Нужен выбор».
               </div>
 
-              <label
-                className="checkbox"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  marginTop: '4px',
-                }}
-              >
+              <label className="check-field repair-confirm-check">
                 <input
                   type="checkbox"
                   checked={accept}
@@ -448,7 +360,7 @@ export function RepairDialog({
                 </span>
               </label>
 
-              <div className="dialog-actions" style={{ marginTop: '8px' }}>
+              <div className="dialog-actions repair-dialog-actions">
                 <button type="button" disabled={!!busy} onClick={onClose}>
                   Отмена
                 </button>

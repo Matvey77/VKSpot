@@ -187,7 +187,7 @@ export function Inspector({
           {row.source.id || 'Нет ID'} · {duration(row.source.duration)}
         </dd>
       </dl>
-      <div className="review-audio-bar" style={{ marginTop: '10px' }}>
+      <div className="review-audio-bar">
         <button
           type="button"
           className={`audio-listen-button ${vkPlaying ? 'playing' : ''}`}
@@ -204,7 +204,7 @@ export function Inspector({
           }
         >
           {vkLoading ? (
-            <Loader2 size={14} className="spin" />
+            <Loader2 size={14} className="spinning" />
           ) : vkPlaying ? (
             <Pause size={14} />
           ) : (
@@ -266,7 +266,7 @@ export function Inspector({
         </button>
       </form>
       {modified && (
-        <p className="helper-text" style={{ marginTop: '8px' }}>
+        <p className="helper-text inspector-save-hint">
           Не забудьте сохранить правки перед повторным поиском.
         </p>
       )}
@@ -292,13 +292,13 @@ export function Inspector({
                   : 'не выбрано'}
         </strong>
       </p>
-      <div className="button-row" style={{ marginBottom: '12px' }}>
+      <div className="button-row inspector-action-row">
         <button
           type="button"
           disabled={busy || searching || !spotifyConnected || modified || excluded}
           onClick={() => void handleSearch()}
         >
-          {searching ? <Loader2 size={15} className="spin" /> : <Search size={15} />}
+          {searching ? <Loader2 size={15} className="spinning" /> : <Search size={15} />}
           {searching ? 'Поиск в Spotify…' : 'Найти в Spotify'}
         </button>
         <button
@@ -342,7 +342,7 @@ export function Inspector({
           setPlayingSpotifyId(null)
         }}
       />
-      <div className="button-row" style={{ marginBottom: '12px' }}>
+      <div className="button-row inspector-action-row">
         <button type="button" disabled={busy} onClick={onLink}>
           <FileAudio size={15} />
           Привязать файл
@@ -364,20 +364,20 @@ export function Inspector({
             </small>
             <strong>{row.working.spotify.title}</strong>
             <span>{row.working.spotify.artists.join(', ')}</span>
-            <small style={{ color: 'var(--muted)', display: 'block', marginTop: '2px' }}>
+            <small className="chosen-match-meta">
               {row.working.spotify.album} · {duration(row.working.spotify.duration)}
             </small>
             {row.working.destination !== 'spotify' && (
               <button
+                className="chosen-match-use-btn"
                 disabled={busy || modified}
                 onClick={() => onPatch({ destination: 'spotify' })}
-                style={{ marginTop: '6px' }}
               >
                 Использовать Spotify
               </button>
             )}
             {spotifyTrackId(row.working.spotify.uri || row.working.spotify.url) && (
-              <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div className="chosen-match-audio-actions">
                 <button
                   type="button"
                   className={`audio-listen-button ${playingSpotifyId === spotifyTrackId(row.working.spotify.uri || row.working.spotify.url) ? 'active' : ''}`}
@@ -406,7 +406,7 @@ export function Inspector({
             )}
             {playingSpotifyId ===
               spotifyTrackId(row.working.spotify.uri || row.working.spotify.url) && (
-              <div className="spotify-embed-card" style={{ marginTop: '8px' }}>
+              <div className="spotify-embed-card">
                 <iframe
                   src={`https://open.spotify.com/embed/track/${spotifyTrackId(row.working.spotify.uri || row.working.spotify.url)}?utm_source=generator&theme=0`}
                   width="100%"
@@ -468,7 +468,7 @@ export function Inspector({
                 </span>
                 <small>{candidate.album}</small>
                 {isCandPlaying && candTrackId && (
-                  <div className="spotify-embed-card" style={{ marginTop: '8px' }}>
+                  <div className="spotify-embed-card">
                     <iframe
                       src={`https://open.spotify.com/embed/track/${candTrackId}?utm_source=generator&theme=0`}
                       width="100%"
