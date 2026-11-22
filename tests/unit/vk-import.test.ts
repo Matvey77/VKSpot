@@ -62,5 +62,56 @@ describe('VK extraction evidence', () => {
     }
     const preview = vkImportPreview(res, options)
     expect(preview.tracks).toHaveLength(50)
+    expect(preview.completeness.reason).toBe('verified')
+  })
+
+  it('rejects inverted ranges in options and extraction result', () => {
+    expect(() => vkExportOptionsSchema.parse({ rangeFrom: 50, rangeTo: 10 })).toThrow('превышать')
+    const inverted = { ...result(3, 3), range: { from: 10, to: 5 } }
+    expect(() => vkImportPreview(inverted)).toThrow('превышать')
+  })
+
+  it('sanitizes invalid DOM durations and does not flag partial range conflict against full aria-setsize', () => {
+    const options = vkExportOptionsSchema.parse({ rangeFrom: 11, rangeTo: 20 })
+    const res = {
+      tracks: Array.from({ length: 10 }, (_, i) => ({
+        id: `vk-${i}`,
+        artist: `Artist ${i}`,
+        title: `Track ${i}`,
+        duration: i === 0 ? Number.NaN : i === 1 ? -10 : 180,
+      })),
+      expectedCount: 500,
+      range: { from: 11, to: 20 },
+      extraction: {
+        reason: 'limit',
+        missingMetadata: 0,
+        reachedEnd: true,
+      },
+    }
+    const preview = vkImportPreview(res, options)
+    expect(preview.tracks[0].duration).toBeNull()
+    expect(preview.tracks[1].duration).toBeNull()
+    expect(preview.tracks[2].duration).toBe(180)
+    expect(preview.completeness.status).toBe('verified-count')
+    expect(preview.completeness.reason).toBe('verified')
+    expect(preview.completeness.message).not.toContain('VK сообщает другое число')
+
+    const shorterLibrary = vkImportPreview({ ...res, expectedCount: 5 }, options)
+    expect(shorterLibrary.completeness.status).toBe('unverified')
+    expect(shorterLibrary.completeness.message).toContain('VK сообщает другое число: 5')
+  })
+
+  it('assigns structured completeness.reason for all unverified outcomes', () => {
+    expect(vkImportPreview(result(3, 3), 3).completeness.reason).toBe('verified')
+    expect(vkImportPreview(result(3, 3, 'cancelled'), 3).completeness.reason).toBe('cancelled')
+    expect(vkImportPreview(result(3, 3, 'timeout'), 3).completeness.reason).toBe('timeout')
+    expect(vkImportPreview(result(3, 3, 'gap'), 3).completeness.reason).toBe('gap')
+    expect(vkImportPreview(result(3, 3, 'page-changed'), 3).completeness.reason).toBe(
+      'page-changed',
+    )
+    expect(vkImportPreview(result(3, 3, 'limit'), 3).completeness.reason).toBe('limit')
+    expect(vkImportPreview(result(3, 10), null).completeness.reason).toBe('count-mismatch')
+    expect(vkImportPreview(result(3, null), null).completeness.reason).toBe('end-of-list')
+    expect(vkImportPreview(result(3, 300), 3).completeness.reason).toBe('end-of-list')
   })
 })

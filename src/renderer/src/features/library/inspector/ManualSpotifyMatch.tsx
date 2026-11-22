@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { Headphones } from 'lucide-react'
 import { manualSpotifyTrack, parseSpotifyTrackLink } from '../../../../../core/spotify-link'
 import { formatDuration } from '../../../../../core/library'
-import type { TrackRow, Working } from '../../../../../shared/model'
+import type { TrackRow, Working } from '../../../../../shared/types'
 
 export default function ManualSpotifyMatch({
   open,

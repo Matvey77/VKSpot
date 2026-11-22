@@ -300,6 +300,37 @@ describe('migration recovery', () => {
       expect(mixedOrder(plan, [uri, uri, local])).toEqual([uri, local, uri])
       expect(() => mixedOrder(plan, [uri, uri])).toThrow('Добавьте')
       expect(() => mixedOrder(plan, [uri, uri, 'spotify:local:C::Other:180'])).toThrow('не начата')
+      expect(() => mixedOrder(plan, [uri, uri, 'spotify:local:100%::D:180'])).toThrow('не начата')
+    } finally {
+      store.close()
+    }
+  })
+
+  it('handles NFC/case differences and rejects empty local URI durations in mixedOrder', () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(parseImport('Café - Song', '.txt', 'NFC'))
+      const row = store.get(id).rows[0]
+      store.patch(id, [row.id], {
+        destination: 'local',
+        local: {
+          path: 'D:/cafe.mp3',
+          sha256: 'test',
+          artist: 'Cafe\u0301',
+          title: 'Song',
+          duration: 0,
+          codec: 'MP3',
+          bitrate: null,
+          size: 1,
+        },
+      })
+      const plan = makePlan(store.get(id))
+      expect(() => mixedOrder(plan, ['spotify:local:Cafe%CC%81::Song:'])).toThrow('не начата')
+      expect(
+        mixedOrder(plan, [
+          `spotify:local:${encodeURIComponent('café')}::${encodeURIComponent('SONG')}:0`,
+        ]),
+      ).toHaveLength(1)
     } finally {
       store.close()
     }

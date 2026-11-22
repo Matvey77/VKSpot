@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { Settings } from '../../../../shared/model'
+import type { Settings } from '../../../../shared/types'
 import { SpotifyIcon } from '../../components/brand/BrandIcons'
 
 export function SpotifySettings({

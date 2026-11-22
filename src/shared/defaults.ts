@@ -1,4 +1,12 @@
-import type { MatchingRules } from './model'
+export type MatchingRules = {
+  diacritics: boolean
+  homoglyphs: boolean
+  featDeduplication: boolean
+  identicalVersions: boolean
+  remixPunctuation: boolean
+  extendedDurationTolerance: boolean
+  transliteration: boolean
+}
 
 /** Runtime defaults are schema-free so the renderer does not bundle server validators. */
 export const defaultMatchingRules: MatchingRules = {

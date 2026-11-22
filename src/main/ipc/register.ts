@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   collectionSchema,
   completenessSchema,
+  proxySchema,
   rawTrackSchema,
   settingsSchema,
   workingPatchSchema,
@@ -28,9 +29,9 @@ import { VKSessionManager } from '../integrations/vk/session'
 import { createHandler } from './router'
 const uuid = z.string().uuid()
 const previewSchema = z.object({
-  name: z.string().min(1),
-  origin: z.string(),
-  tracks: z.array(rawTrackSchema),
+  name: z.string().min(1).max(200),
+  origin: z.string().max(200),
+  tracks: z.array(rawTrackSchema).max(200_000),
   completeness: completenessSchema,
   restored: z.preprocess((v) => (v === null ? undefined : v), collectionSchema.optional()),
   range: z.preprocess(
@@ -40,6 +41,7 @@ const previewSchema = z.object({
         from: z.number().int().positive(),
         to: z.number().int().positive(),
       })
+      .refine((r) => r.to >= r.from, 'Начальная позиция диапазона не может превышать конечную.')
       .optional(),
   ),
 })
@@ -310,7 +312,9 @@ export function registerIpc(services: IpcServices): void {
   handler('pauseVKTrack', async () => await vkAudio.pause())
   handler('resumeVKTrack', async () => await vkAudio.resume())
 
-  handler('testProxy', (proxyUrl, target) => testProxy(proxyUrl, target))
+  handler('testProxy', (proxyUrl, target) =>
+    testProxy(proxySchema.parse(proxyUrl), z.enum(['spotify', 'vk']).optional().parse(target)),
+  )
 
   handler('openVK', () => vkSession.openVK())
   handler('extractVK', (options) => vkSession.extractVK(options))

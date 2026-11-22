@@ -1,7 +1,27 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Bridge } from '../shared/model'
-const invoke = (method: string, ...args: unknown[]) =>
-  ipcRenderer.invoke('vkspot:' + method, ...args)
+import type { Bridge, IpcEventMap, IpcInvokeMap } from '../shared/ipc'
+import type { Result } from '../shared/types'
+
+function invoke<K extends keyof IpcInvokeMap>(
+  method: K,
+  ...args: IpcInvokeMap[K]['args']
+): Promise<Result<IpcInvokeMap[K]['result']>> {
+  return ipcRenderer.invoke('vkspot:' + method, ...args)
+}
+
+function subscribe<K extends keyof IpcEventMap>(
+  channel: K,
+  callback: (...args: IpcEventMap[K]) => void,
+): () => void {
+  if (typeof callback !== 'function') return () => {}
+  const eventName = 'vkspot:' + channel
+  const listener = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => {
+    callback(...(args as IpcEventMap[K]))
+  }
+  ipcRenderer.on(eventName, listener)
+  return () => ipcRenderer.removeListener(eventName, listener)
+}
+
 const bridge: Bridge = {
   canInspectSpotify: process.platform === 'win32',
   state: () => invoke('state'),
@@ -40,24 +60,9 @@ const bridge: Bridge = {
   playVKTrack: (track) => invoke('playVKTrack', track),
   pauseVKTrack: () => invoke('pauseVKTrack'),
   resumeVKTrack: () => invoke('resumeVKTrack'),
-  onVKAudioProgress: (callback) => {
-    const listener = (_event: Electron.IpcRendererEvent, message: string) => callback(message)
-    ipcRenderer.on('vkspot:vk-audio-progress', listener)
-    return () => ipcRenderer.removeListener('vkspot:vk-audio-progress', listener)
-  },
   testProxy: (url, target) => invoke('testProxy', url, target),
-  onChange: (callback) => {
-    const listener = () => callback()
-    ipcRenderer.on('vkspot:change', listener)
-    return () => ipcRenderer.removeListener('vkspot:change', listener)
-  },
-  onVKProgress: (callback) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      progress: Parameters<typeof callback>[0],
-    ) => callback(progress)
-    ipcRenderer.on('vkspot:vk-progress', listener)
-    return () => ipcRenderer.removeListener('vkspot:vk-progress', listener)
-  },
+  onChange: (callback) => subscribe('change', callback),
+  onVKProgress: (callback) => subscribe('vk-progress', callback),
+  onVKAudioProgress: (callback) => subscribe('vk-audio-progress', callback),
 }
 contextBridge.exposeInMainWorld('vkspot', bridge)

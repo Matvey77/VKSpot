@@ -1,4 +1,4 @@
-import type { Collection } from '../../../shared/model'
+import type { Collection } from '../../../shared/types'
 import type { StateCursor, StateSync, ViewState } from '../../../shared/sync'
 
 /** Small control objects are reconciled recursively; collection contents are never deep-compared. */

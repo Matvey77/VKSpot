@@ -1,4 +1,4 @@
-import type { SpotifyTrack } from '../shared/model'
+import type { SpotifyTrack } from '../shared/types'
 
 /** Accept only a track's public Spotify URL or URI, never a playlist or an arbitrary host. */
 export function parseSpotifyTrackLink(
@@ -11,18 +11,24 @@ export function parseSpotifyTrackLink(
       const url = new URL(input)
       if (
         url.protocol !== 'https:' ||
-        url.hostname !== 'open.spotify.com' ||
+        (url.hostname !== 'open.spotify.com' && url.hostname !== 'play.spotify.com') ||
         url.username ||
         url.password ||
         url.port
       )
         return null
-      id = url.pathname.match(/^\/(?:intl-[a-z]{2}\/)?track\/([A-Za-z0-9]{22})\/?$/)?.[1]
+      id = url.pathname.match(
+        /^\/(?:intl-[a-z]{2}(?:-[a-z0-9]+)*\/)?track\/([A-Za-z0-9]{22})\/?$/,
+      )?.[1]
     } catch {
       return null
     }
   }
   return id ? { id, uri: `spotify:track:${id}`, url: `https://open.spotify.com/track/${id}` } : null
+}
+
+export function spotifyTrackId(uriOrUrl: string | null | undefined): string | null {
+  return uriOrUrl ? (parseSpotifyTrackLink(uriOrUrl)?.id ?? null) : null
 }
 
 export function manualSpotifyTrack(input: {
@@ -51,6 +57,7 @@ export function manualSpotifyTrack(input: {
     .map(Number)
     .reduce((total, part) => total * 60 + part, 0)
   if (!duration) throw new Error('Длительность должна быть больше нуля.')
+  if (duration > 86400) throw new Error('Длительность не может превышать 24 часа.')
   return {
     uri: track.uri,
     url: track.url,

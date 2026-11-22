@@ -10,7 +10,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { Collection } from '../../../../shared/model'
+import type { Collection } from '../../../../shared/types'
 
 export type ExportFormat = 'archive' | 'raw-json' | 'csv' | 'm3u8' | 'plan'
 

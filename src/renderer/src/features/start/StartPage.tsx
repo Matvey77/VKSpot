@@ -8,7 +8,7 @@ import {
   SearchX,
   Upload,
 } from 'lucide-react'
-import type { Collection } from '../../../../shared/model'
+import type { Collection } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import { summarizeCollection, type LibraryFilter } from '../../../../core/library'
 import type { SearchResultGroup } from '../../../../core/matching'

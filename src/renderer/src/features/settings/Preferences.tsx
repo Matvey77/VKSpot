@@ -8,7 +8,7 @@ import {
   Undo2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { Settings } from '../../../../shared/model'
+import type { Settings } from '../../../../shared/types'
 
 const sections = [
   { id: 'search', label: 'Поиск', icon: Search },

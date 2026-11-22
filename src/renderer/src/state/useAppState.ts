@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Bridge } from '../../../shared/model'
+import type { Bridge } from '../../../shared/ipc'
 import type { ViewState } from '../../../shared/sync'
 import { StateReplica } from './replica'
 

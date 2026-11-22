@@ -1,4 +1,4 @@
-import type { Settings } from '../../../../shared/model'
+import type { Settings } from '../../../../shared/types'
 import { Preferences } from './Preferences'
 
 interface SettingsViewProps {

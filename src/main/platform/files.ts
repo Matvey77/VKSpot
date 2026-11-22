@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { z } from 'zod'
 import type { Store } from '../storage'
 import { exportText, parseImport } from '../../core/collection'
-import type { ImportPreview } from '../../shared/model'
+import { exportFormatSchema, type ImportPreview } from '../../shared/model'
 
 const uuid = z.string().uuid()
 const exec = promisify(execFile)
@@ -70,7 +70,7 @@ export async function exportCollectionDialog(
   format: unknown,
 ): Promise<string | null> {
   const collection = store.get(uuid.parse(id))
-  const f = z.enum(['archive', 'raw-json', 'csv', 'm3u8', 'plan']).parse(format)
+  const f = exportFormatSchema.parse(format)
   const text = exportText(collection, f)
   const extension = f === 'csv' ? 'csv' : f === 'm3u8' ? 'm3u8' : 'json'
   const result = await dialog.showSaveDialog(main, {

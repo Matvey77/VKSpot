@@ -14,4 +14,21 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['src/renderer/**/*.ts', 'src/renderer/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['zod', 'zod/*', '**/shared/model', '**/shared/model.ts'],
+              message:
+                'Renderer must import pure types from shared/types, shared/sync, shared/ipc, or runtime constants from shared/defaults (never zod or shared/model).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 )

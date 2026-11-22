@@ -1,5 +1,5 @@
 import { stringify } from 'csv-stringify/sync'
-import type { Collection } from '../../shared/model'
+import type { Collection, ExportFormat } from '../../shared/types'
 import { makePlan } from './transfer-plan'
 
 export function csvExport(collection: Collection): string {
@@ -27,7 +27,7 @@ export function csvExport(collection: Collection): string {
   )
 }
 
-export function exportText(collection: Collection, format: string): string {
+export function exportText(collection: Collection, format: ExportFormat): string {
   if (format === 'archive')
     return JSON.stringify({ format: 'vkspot', version: 1, collection }, null, 2)
   if (format === 'raw-json')
@@ -42,8 +42,8 @@ export function exportText(collection: Collection, format: string): string {
       2,
     )
   if (format === 'csv') return csvExport(collection)
-  const plan = makePlan(collection)
-  if (format === 'plan')
+  if (format === 'plan') {
+    const plan = makePlan(collection)
     return JSON.stringify(
       {
         format: 'vkspot-plan',
@@ -55,14 +55,24 @@ export function exportText(collection: Collection, format: string): string {
       null,
       2,
     )
-  return (
-    '#EXTM3U\n' +
-    plan
-      .map(
-        (r) =>
-          `#EXTINF:${r.local?.duration ?? -1},${r.artist.replace(/[\r\n]/g, ' ')} - ${r.title.replace(/[\r\n]/g, ' ')}\n${r.local?.path ?? r.uri}`,
-      )
-      .join('\n') +
-    '\n'
-  )
+  }
+  if (format === 'm3u8') {
+    const plan = makePlan(collection)
+    const clean = (value: string) => value.replace(/[\r\n]/g, ' ')
+    return (
+      '#EXTM3U\n' +
+      plan
+        .map((r) => {
+          const duration = r.local?.duration != null ? Math.round(r.local.duration) : -1
+          const version = clean(r.version).trim()
+          const displayTitle = version ? `${clean(r.title)} (${version})` : clean(r.title)
+          const target = clean(r.local?.path ?? r.uri ?? '')
+          return `#EXTINF:${duration},${clean(r.artist)} - ${displayTitle}\n${target}`
+        })
+        .join('\n') +
+      '\n'
+    )
+  }
+  const exhaustive: never = format
+  throw new Error(`Неизвестный формат экспорта: ${String(exhaustive)}.`)
 }

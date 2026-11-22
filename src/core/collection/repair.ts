@@ -1,11 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import {
-  rawTrackSchema,
-  type Collection,
-  type ImportPreview,
-  type RawTrack,
-  type TrackRow,
-} from '../../shared/model'
+import { rawTrackSchema } from '../../shared/model'
+import type { Collection, ImportPreview, RawTrack, TrackRow } from '../../shared/types'
 
 const titleKey = (track: RawTrack) =>
   `${track.artist.trim().toLocaleLowerCase()}\u0000${track.title.trim().toLocaleLowerCase()}`
@@ -54,12 +49,22 @@ export function mergeRepairedCollection(
   preview: ImportPreview,
 ): { rows: TrackRow[]; preservedCount: number; addedCount: number } {
   const range = preview.range
-  if (range && (range.to < range.from || range.from > existing.rows.length + 1))
+  if (
+    range &&
+    (!Number.isInteger(range.from) ||
+      !Number.isInteger(range.to) ||
+      range.from < 1 ||
+      range.to < range.from ||
+      range.from > existing.rows.length + 1)
+  )
     throw new Error('Диапазон синхронизации находится за пределами коллекции.')
+  const sources = preview.tracks.map((raw) => rawTrackSchema.parse(raw))
+  if (range && sources.length > range.to - range.from + 1)
+    throw new Error('Количество записей превышает выбранный диапазон синхронизации.')
   const from = range ? range.from - 1 : 0
   // Cancellation or a short partial export must not erase the unread suffix of the range.
   const to = range
-    ? Math.min(existing.rows.length, range.to, from + preview.tracks.length)
+    ? Math.min(existing.rows.length, range.to, from + sources.length)
     : existing.rows.length
   const target = existing.rows.slice(from, to)
   const byId = index(target, (row) => row.source.id)
@@ -87,37 +92,65 @@ export function mergeRepairedCollection(
         second++
       ) {
         const timed = queue.durations.get(second)
-        const row = timed && peek(timed)
-        const duration = row?.working.spotify?.duration ?? row?.source.duration
-        if (
-          row &&
-          duration != null &&
-          Math.abs(duration - source.duration) <= 5 &&
-          (!exact || row.position < exact.position)
-        )
-          exact = row
+        if (!timed) continue
+        peek(timed)
+        for (let idx = timed.head; idx < timed.rows.length; idx++) {
+          const row = timed.rows[idx]
+          if (used.has(row.id)) continue
+          const duration = row.working.spotify?.duration ?? row.source.duration
+          if (duration != null && Math.abs(duration - source.duration) <= 5) {
+            if (!exact || row.position < exact.position) exact = row
+            break
+          }
+        }
       }
     }
     return exact ?? peek(queue)
   }
 
-  const repaired = preview.tracks.map((raw, index): TrackRow => {
-    const source = rawTrackSchema.parse(raw)
-    const positional = range && target.length === preview.tracks.length ? target[index] : undefined
-    const matched =
-      (source.id ? take(byId.get(source.id), source) : undefined) ??
-      (source.rawText ? take(byText.get(source.rawText), source) : undefined) ??
-      take(byTitle.get(titleKey(source)), source, true) ??
-      (positional &&
-      !source.id &&
-      !positional.source.id &&
-      !used.has(positional.id) &&
-      source.artist.trim().toLocaleLowerCase() ===
-        positional.source.artist.trim().toLocaleLowerCase()
-        ? positional
-        : undefined)
+  const matches: (TrackRow | undefined)[] = new Array(sources.length)
+  const claim = (index: number, matched: TrackRow | undefined): void => {
+    if (!matched) return
+    used.add(matched.id)
+    matches[index] = matched
+  }
+
+  // Match across passes from strongest evidence to weakest so fuzzy hits never steal exact IDs.
+  for (let i = 0; i < sources.length; i++) {
+    const source = sources[i]
+    if (source.id) claim(i, take(byId.get(source.id), source))
+  }
+  for (let i = 0; i < sources.length; i++) {
+    if (matches[i]) continue
+    const source = sources[i]
+    if (source.rawText) claim(i, take(byText.get(source.rawText), source))
+  }
+  for (let i = 0; i < sources.length; i++) {
+    if (matches[i]) continue
+    const source = sources[i]
+    claim(i, take(byTitle.get(titleKey(source)), source, true))
+  }
+  if (range && target.length === sources.length) {
+    for (let i = 0; i < sources.length; i++) {
+      if (matches[i]) continue
+      const source = sources[i]
+      const positional = target[i]
+      if (
+        positional &&
+        !source.id &&
+        !positional.source.id &&
+        !used.has(positional.id) &&
+        source.artist.trim().toLocaleLowerCase() ===
+          positional.source.artist.trim().toLocaleLowerCase()
+      ) {
+        claim(i, positional)
+      }
+    }
+  }
+
+  const repaired = sources.map((source, index): TrackRow => {
+    const matched = matches[index]
     if (matched) {
-      used.add(matched.id)
       preservedCount++
       return { ...matched, source }
     }

@@ -15,7 +15,7 @@ import type {
   ImportPreview,
   VKExportProgress,
   VKStatus,
-} from '../../../../shared/model'
+} from '../../../../shared/types'
 import { VKIcon } from '../../components/brand/BrandIcons'
 
 const count = (number: number) => number.toLocaleString('ru-RU')

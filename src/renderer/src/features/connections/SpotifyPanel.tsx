@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowLeft, Play, RotateCcw, ExternalLink, LoaderCircle } from 'lucide-react'
-import type { AppState, Result } from '../../../../shared/model'
+import type { AppState, Result } from '../../../../shared/types'
 
 type BrowserPageState = {
   state: 'idle' | 'loading' | 'ready' | 'error'

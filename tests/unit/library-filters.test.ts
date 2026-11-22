@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createCollection, parseImport } from '../../src/core/collection'
 import { defaultMatchingRules } from '../../src/shared/defaults'
-import { destinationLabels, filterLibraryRows } from '../../src/core/library'
+import {
+  destinationLabels,
+  filterLibraryRows,
+  formatDuration,
+  summarizeCollection,
+} from '../../src/core/library'
 import { searchResultLabels, searchText, type SearchResultGroup } from '../../src/core/matching'
 
 function fixture() {
@@ -98,5 +103,29 @@ describe('independent library filters', () => {
         }
       }
     }
+  })
+
+  it('counts summary.localPending consistently with destinations and excludes excluded rows', () => {
+    const collection = createCollection(parseImport('A - One\nA - Two', '.txt', 'Summary'))
+    collection.rows[0].working.localPending = true
+    collection.rows[1].working.localPending = true
+    collection.rows[1].working.excluded = true
+
+    const summary = summarizeCollection(collection, defaultMatchingRules)
+    expect(summary.localPending).toBe(1)
+    expect(summary.destinations['local-pending']).toBe(1)
+    expect(summary.destinations.excluded).toBe(1)
+  })
+
+  it('formats durations safely including invalid values and >= 1 hour tracks', () => {
+    expect(formatDuration(null)).toBe('—')
+    expect(formatDuration(Number.NaN)).toBe('—')
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—')
+    expect(formatDuration(-5)).toBe('—')
+    expect(formatDuration(0)).toBe('0:00')
+    expect(formatDuration(65)).toBe('1:05')
+    expect(formatDuration(3599)).toBe('59:59')
+    expect(formatDuration(3600)).toBe('1:00:00')
+    expect(formatDuration(3900)).toBe('1:05:00')
   })
 })

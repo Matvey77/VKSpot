@@ -17,9 +17,9 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
-import type { TrackRow, Working } from '../../../../../shared/model'
+import type { TrackRow, Working } from '../../../../../shared/types'
 import type { JobStatus } from '../../../../../shared/job-status'
-import { spotifyTrackId } from '../../../../../core/matching'
+import { spotifyTrackId } from '../../../../../core/spotify-link'
 import { formatDuration as duration } from '../../../../../core/library'
 import { SpotifyIcon } from '../../../components/brand/BrandIcons'
 import IconButton from '../../../components/ui/IconButton'

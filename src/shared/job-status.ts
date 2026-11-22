@@ -1,6 +1,6 @@
-import type { Job } from './model'
+import type { JobStatus } from './types'
 
-export type JobStatus = Omit<Job, 'rowIds' | 'plan'>
+export type { JobStatus }
 
 export function waitingJob<T extends JobStatus>(jobs: T[], now: number): T | undefined {
   return jobs.reduce<T | undefined>(

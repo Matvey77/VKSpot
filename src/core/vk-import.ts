@@ -1,12 +1,18 @@
 import { z } from 'zod'
-import { rawTrackSchema, type ImportPreview } from '../shared/model'
+import { rawTrackSchema } from '../shared/model'
+import type { CompletenessReason, ImportPreview } from '../shared/types'
 
-export const vkExportOptionsSchema = z.object({
-  expectedCount: z.number().int().nonnegative().max(1_000_000).nullish().default(null),
-  rangeFrom: z.number().int().positive().max(1_000_000).nullish().default(null),
-  rangeTo: z.number().int().positive().max(1_000_000).nullish().default(null),
-  limit: z.number().int().positive().max(1_000_000).nullish().default(null),
-})
+export const vkExportOptionsSchema = z
+  .object({
+    expectedCount: z.number().int().nonnegative().max(1_000_000).nullish().default(null),
+    rangeFrom: z.number().int().positive().max(1_000_000).nullish().default(null),
+    rangeTo: z.number().int().positive().max(1_000_000).nullish().default(null),
+    limit: z.number().int().positive().max(1_000_000).nullish().default(null),
+  })
+  .refine((o) => o.rangeFrom == null || o.rangeTo == null || o.rangeFrom <= o.rangeTo, {
+    message: 'Начальная позиция диапазона не может превышать конечную.',
+    path: ['rangeTo'],
+  })
 export type VKExportOptions = z.infer<typeof vkExportOptionsSchema>
 
 export const vkProgressSchema = z.object({
@@ -14,8 +20,16 @@ export const vkProgressSchema = z.object({
   expected: z.number().int().nonnegative().nullish().default(null),
   message: z.string().max(1000).default(''),
 })
+
+const domTrackSchema = rawTrackSchema.extend({
+  duration: z.preprocess(
+    (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null),
+    z.number().finite().nonnegative().nullable(),
+  ),
+})
+
 const resultSchema = z.object({
-  tracks: z.array(rawTrackSchema).min(1),
+  tracks: z.array(domTrackSchema).min(1),
   expectedCount: z.preprocess(
     (v) => (v === undefined ? null : v),
     z.number().int().nonnegative().nullable(),
@@ -26,6 +40,10 @@ const resultSchema = z.object({
       .object({
         from: z.number().int().positive(),
         to: z.number().int().positive(),
+      })
+      .refine((r) => r.from <= r.to, {
+        message: 'Начальная позиция диапазона не может превышать конечную.',
+        path: ['to'],
       })
       .optional(),
   ),
@@ -58,7 +76,10 @@ export function vkImportPreview(
   const missing = data.tracks.filter((track) => !track.artist.trim() || !track.title.trim()).length
   const countMatches = expected !== null && data.tracks.length === expected
   const conflictingCount =
-    requestedCount !== null && data.expectedCount !== null && requestedCount !== data.expectedCount
+    requestedCount !== null &&
+    data.expectedCount !== null &&
+    requestedCount !== data.expectedCount &&
+    !(isPartialRange && data.expectedCount > requestedCount)
   const verified =
     countMatches &&
     !conflictingCount &&
@@ -79,11 +100,7 @@ export function vkImportPreview(
   if (expected !== null)
     details.push(`Собрано ${data.tracks.length} из ожидаемых ${expected} записей.`)
   else details.push('Счётчик общего числа записей в разметке VK не указан.')
-  if (
-    requestedCount !== null &&
-    data.expectedCount !== null &&
-    requestedCount !== data.expectedCount
-  )
+  if (conflictingCount)
     details.push(`VK сообщает другое число: ${data.expectedCount}. Проверьте выбранный список.`)
   if (missing) details.push(`У ${missing} записей не прочитано название или исполнитель.`)
   details.push(
@@ -93,6 +110,21 @@ export function vkImportPreview(
         : 'Количество совпало. Сверьте первые и последние записи с VK.'
       : 'Рекомендуем сверить количество с «Моя музыка» в VK.',
   )
+  const completenessReason: CompletenessReason = verified
+    ? 'verified'
+    : data.extraction.reason === 'cancelled'
+      ? 'cancelled'
+      : data.extraction.reason === 'timeout'
+        ? 'timeout'
+        : data.extraction.reason === 'gap'
+          ? 'gap'
+          : data.extraction.reason === 'page-changed'
+            ? 'page-changed'
+            : data.extraction.reason === 'limit'
+              ? 'limit'
+              : expected !== null && data.tracks.length !== expected
+                ? 'count-mismatch'
+                : 'end-of-list'
   return {
     name: 'Моя музыка VK',
     origin: 'VK DOM',
@@ -102,6 +134,7 @@ export function vkImportPreview(
       expected: expected ?? null,
       status: verified ? 'verified-count' : 'unverified',
       message: details.join(' '),
+      reason: completenessReason,
     },
   }
 }

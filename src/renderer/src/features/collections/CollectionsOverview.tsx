@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
-import type { Collection, MatchingRules } from '../../../../shared/model'
+import type { Collection, MatchingRules } from '../../../../shared/types'
 import { summarizeCollection } from '../../../../core/library'
 import IconButton from '../../components/ui/IconButton'
 import { VKIcon } from '../../components/brand/BrandIcons'

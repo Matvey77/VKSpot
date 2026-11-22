@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import type { Settings } from '../../../../shared/model'
+import type { Settings } from '../../../../shared/types'
 
 export function VKSettings({
   settings,

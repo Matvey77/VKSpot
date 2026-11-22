@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo } from 'react'
-import type { Collection, MatchingRules } from '../../../../shared/model'
+import type { Collection, MatchingRules } from '../../../../shared/types'
 import {
   analyzeRow,
   filterLibraryRows,

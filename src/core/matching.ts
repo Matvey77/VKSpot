@@ -1,5 +1,5 @@
 import { defaultMatchingRules } from '../shared/defaults'
-import { type MatchingRules, type SpotifyTrack, type TrackRow, type Working } from '../shared/model'
+import { type MatchingRules, type SpotifyTrack, type TrackRow, type Working } from '../shared/types'
 
 export type ReviewGroup =
   'pending' | 'exact' | 'review' | 'missing' | 'local-pending' | 'deferred' | 'ready'
@@ -9,16 +9,6 @@ export const searchResultLabels: Record<SearchResultGroup, string> = {
   exact: 'Совпадают данные',
   review: 'Проверить версию',
   missing: 'Ничего не найдено',
-}
-
-export const reviewLabels: Record<ReviewGroup, string> = {
-  pending: 'Не искали',
-  exact: 'Совпадают данные',
-  review: 'Проверить версию',
-  missing: 'Ничего не найдено',
-  'local-pending': 'Нужен файл',
-  deferred: 'На потом',
-  ready: 'Решено',
 }
 
 export const searchText = (working: Pick<Working, 'artist' | 'title' | 'version'>): string =>
@@ -104,25 +94,54 @@ function foldConfusables(s: string): string {
   return s.replace(/[авекмнорстхуіј]/g, (c) => HOMOGLYPHS[c] || c)
 }
 
-export const normalized = (value: string, rules: MatchingRules = defaultMatchingRules): string => {
+function hasNonAscii(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    if (value.charCodeAt(i) > 127) return true
+  }
+  return false
+}
+
+function normalizeInternal(value: string, rules: MatchingRules, preserveYo: boolean): string {
+  const nonAscii = hasNonAscii(value)
   let res = value
-  if (rules.diacritics) {
-    res = res
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .normalize('NFKC')
+  if (rules.diacritics && nonAscii) {
+    const nfd = res.normalize('NFD')
+    // Preserve Russian й/Й (distinct letter) and optionally ё/Ё for transliteration while stripping diacritics.
+    res = (
+      preserveYo
+        ? nfd.replace(
+            /([\u0418\u0438])\u0306|([\u0415\u0435])\u0308|[\u0300-\u036f]/g,
+            (_match, yi: string | undefined, yo: string | undefined) =>
+              yi
+                ? yi === '\u0418'
+                  ? '\u0419'
+                  : '\u0439'
+                : yo
+                  ? yo === '\u0415'
+                    ? '\u0401'
+                    : '\u0451'
+                  : '',
+          )
+        : nfd.replace(
+            /([\u0418\u0438])\u0306|[\u0300-\u036f]/g,
+            (_match, yi: string | undefined) => (yi ? (yi === '\u0418' ? '\u0419' : '\u0439') : ''),
+          )
+    ).normalize('NFKC')
   }
   res = res
-    .toLocaleLowerCase()
+    .toLowerCase()
     .replace(/[’‘`]/g, "'")
     .replace(/[‐‑–—]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()
-  if (rules.homoglyphs) {
+  if (rules.homoglyphs && nonAscii) {
     res = foldConfusables(res)
   }
   return res
 }
+
+export const normalized = (value: string, rules: MatchingRules = defaultMatchingRules): string =>
+  normalizeInternal(value, rules, false)
 
 export function extractFeatures(title: string): {
   baseTitle: string
@@ -146,14 +165,20 @@ export function extractFeatures(title: string): {
       return ''
     },
   )
-  base = base.replace(/\s+(?:feat\.?|ft\.?)\s+(.+)$/i, (_, guests) => {
-    featured.push(...splitArtists(guests))
-    return ''
-  })
-  base = base.replace(/\s+(?:prod\.?|produced|beat)\s+(?:by\s+)?(.+)$/i, (_, prods) => {
-    producers.push(...splitArtists(prods))
-    return ''
-  })
+  base = base.replace(
+    /\s+(?:feat\.?|ft\.?)\s+(.+?)(?=\s*[([\]]|\s+[-–—]\s+|\s+(?:prod\.?|produced|beat)\b|$)/gi,
+    (_, guests) => {
+      featured.push(...splitArtists(guests))
+      return ''
+    },
+  )
+  base = base.replace(
+    /\s+(?:prod\.?|produced|beat)\s+(?:by\s+)?(.+?)(?=\s*[([\]]|\s+[-–—]\s+|\s+(?:feat\.?|ft\.?)\b|$)/gi,
+    (_, prods) => {
+      producers.push(...splitArtists(prods))
+      return ''
+    },
+  )
   return {
     baseTitle: base.trim(),
     featured: featured.map((s) => s.trim()).filter(Boolean),
@@ -161,7 +186,7 @@ export function extractFeatures(title: string): {
   }
 }
 
-function artists(value: string[], rules: MatchingRules = defaultMatchingRules): string {
+function splitArtistsList(value: string[], rules: MatchingRules = defaultMatchingRules): string[] {
   return [
     ...new Set(
       value
@@ -169,24 +194,50 @@ function artists(value: string[], rules: MatchingRules = defaultMatchingRules): 
         .map((a) => normalized(a, rules))
         .filter(Boolean),
     ),
-  ]
-    .sort()
-    .join('|')
+  ].sort()
 }
 
-export function hasVersionHint(
-  row: TrackRow,
-  rules: MatchingRules = defaultMatchingRules,
-): boolean {
-  return (
-    Boolean(row.working.version.trim()) ||
-    /\[[^\]]+\]|\b(remix|rmx|mix|edit|mash[\s-]*up|cover|live|sped[\s-]*up|sped|speed[\s-]*up|speedup|slowed|slow[\s-]*down|remaster(?:ed)?|instrumental|acoustic|rework|bootleg|vip|version)\b|ремикс|кавер|лайв|ремастер|м[эе]ш[\s-]*ап|ускоренн|замедленн|инструментал|акустич/i.test(
-      normalized(
-        [row.source.title, row.working.title, row.working.version].join(' '),
-        rules,
-      ).replace(/_/g, ' '),
-    )
-  )
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+function hasTokenPhrase(haystack: string, phrase: string): boolean {
+  if (!haystack || !phrase) return false
+  const prefix = /^[\p{L}\p{N}]/u.test(phrase) ? '(?:^|[^\\p{L}\\p{N}])' : ''
+  const suffix = /[\p{L}\p{N}]$/u.test(phrase) ? '(?=$|[^\\p{L}\\p{N}])' : ''
+  return new RegExp(`${prefix}${escapeRegExp(phrase)}${suffix}`, 'u').test(haystack)
+}
+
+const LATIN_VERSION_RE =
+  /(?:^|[^\p{L}\p{N}])(remix|rmx|mix|edit|mash[\s-]*up|cover|live|sped[\s-]*up|sped|speed[\s-]*up|speedup|slowed|slow[\s-]*down|remaster(?:ed)?|instrumental|acoustic|rework|bootleg|vip)(?=$|[^\p{L}\p{N}])/giu
+
+const CYRILLIC_VERSION_RE =
+  /(?:^|[^\p{L}\p{N}])(ремикс\p{L}*|кавер|лайв|ремастер\p{L}*|м[эе]ш[\s-]*ап\p{L}*|ускоренн\p{L}*|замедленн\p{L}*|инструментал\p{L}*|акусти(?:ч|к)\p{L}*)(?=$|[^\p{L}\p{N}])/giu
+
+function canonicalVersionToken(raw: string): string {
+  if (/^(?:remix|rmx|ремикс)/u.test(raw)) return 'remix'
+  if (/^(?:cover|кавер)/u.test(raw)) return 'cover'
+  if (/^(?:live|лайв)/u.test(raw)) return 'live'
+  if (/^(?:remaster|ремастер)/u.test(raw)) return 'remaster'
+  if (/^(?:mash|м[эе]ш)/u.test(raw)) return 'mashup'
+  if (/^(?:sped|speed|ускоренн)/u.test(raw)) return 'sped_up'
+  if (/^(?:slow|замедленн)/u.test(raw)) return 'slowed'
+  if (/^(?:instrumental|инструментал)/u.test(raw)) return 'instrumental'
+  if (/^(?:acoustic|акусти)/u.test(raw)) return 'acoustic'
+  return raw
+}
+
+function extractVersionTokens(text: string, rules: MatchingRules): Set<string> {
+  const tokens = new Set<string>()
+  const latinNorm = normalized(text, rules)
+  for (const match of latinNorm.matchAll(LATIN_VERSION_RE)) {
+    tokens.add(canonicalVersionToken(match[1]))
+  }
+  const cyrillicNorm = rules.homoglyphs
+    ? normalized(text, { ...rules, homoglyphs: false })
+    : latinNorm
+  for (const match of cyrillicNorm.matchAll(CYRILLIC_VERSION_RE)) {
+    tokens.add(canonicalVersionToken(match[1]))
+  }
+  return tokens
 }
 
 const relaxPunctuation = (s: string) =>
@@ -198,18 +249,38 @@ const relaxPunctuation = (s: string) =>
 function transliteratedTitlesMatch(rowTitle: string, candidateTitle: string, rules: MatchingRules) {
   if (rules.transliteration === false) return false
   const rawRules = { ...rules, homoglyphs: false }
-  const row = normalized(rowTitle, rawRules)
-  const candidate = normalized(candidateTitle, rawRules)
+  const row = normalizeInternal(rowTitle, rawRules, true)
+  const candidate = normalizeInternal(candidateTitle, rawRules, true)
   const rowIsCyrillic = /[а-яё]/i.test(row)
   const candidateIsCyrillic = /[а-яё]/i.test(candidate)
   if (rowIsCyrillic === candidateIsCyrillic) return false
-  const transliterated = transliterateRuToEn(rowIsCyrillic ? row : candidate)
+  const cyrillic = rowIsCyrillic ? row : candidate
   const latin = rowIsCyrillic ? candidate : row
-  return (
-    transliterated === latin ||
-    normalizeTranslit(transliterated) === normalizeTranslit(latin) ||
-    relaxPunctuation(transliterated) === relaxPunctuation(latin)
-  )
+  const variants = cyrillic.includes('ё')
+    ? [transliterateRuToEn(cyrillic), transliterateRuToEn(cyrillic.replace(/ё/g, 'е'))]
+    : [transliterateRuToEn(cyrillic)]
+  const matchesLatin = (transliterated: string) => {
+    if (
+      transliterated === latin ||
+      normalizeTranslit(transliterated) === normalizeTranslit(latin)
+    ) {
+      return true
+    }
+    if (!rules.remixPunctuation) return false
+    const relaxedTranslit = relaxPunctuation(transliterated)
+    const relaxedLatin = relaxPunctuation(latin)
+    return (
+      relaxedTranslit === relaxedLatin ||
+      normalizeTranslit(relaxedTranslit) === normalizeTranslit(relaxedLatin)
+    )
+  }
+  return variants.some(matchesLatin)
+}
+
+const relaxArtist = (s: string) => s.replace(/[\s\-._']/g, '')
+const equivalentArtist = (left: string, right: string) => {
+  const relaxed = relaxArtist(left)
+  return Boolean(relaxed) && relaxed === relaxArtist(right)
 }
 
 export function candidateEvidence(
@@ -224,43 +295,89 @@ export function candidateEvidence(
     ? extractFeatures(candidate.title)
     : { baseTitle: candidate.title, featured: [], producers: [] }
 
-  const rowHasCredits = rowFeat.featured.length > 0 || rowFeat.producers.length > 0
-  const candHasCredits = candFeat.featured.length > 0 || candFeat.producers.length > 0
-  const rowBaseArtists = artists([row.working.artist], rules)
-  const rowAllArtists = rowHasCredits
-    ? artists([row.working.artist, ...rowFeat.featured, ...rowFeat.producers], rules)
-    : rowBaseArtists
-  const candBaseArtists = artists(candidate.artists, rules)
-  const candAllArtists = candHasCredits
-    ? artists([...candidate.artists, ...candFeat.featured, ...candFeat.producers], rules)
-    : candBaseArtists
+  const rowWithFeaturedList = splitArtistsList([row.working.artist, ...rowFeat.featured], rules)
+  const rowWithFeatured = rowWithFeaturedList.join('|')
+  const rowHasProducers = rowFeat.producers.length > 0
+  const rowAllArtists = rowHasProducers
+    ? splitArtistsList([row.working.artist, ...rowFeat.featured, ...rowFeat.producers], rules).join(
+        '|',
+      )
+    : rowWithFeatured
+
+  const candWithFeaturedList = splitArtistsList([...candidate.artists, ...candFeat.featured], rules)
+  const candWithFeatured = candWithFeaturedList.join('|')
+  const candHasProducers = candFeat.producers.length > 0
+  const candAllArtists = candHasProducers
+    ? splitArtistsList(
+        [...candidate.artists, ...candFeat.featured, ...candFeat.producers],
+        rules,
+      ).join('|')
+    : candWithFeatured
+
   const rowNorm = normalized(row.working.title, rules)
   const candNorm = normalized(candidate.title, rules)
-  const relaxArtist = (s: string) => s.replace(/[\s\-._']/g, '')
-  const equivalentArtist = (left: string, right: string) => {
-    const relaxed = relaxArtist(left)
-    return Boolean(relaxed) && relaxed === relaxArtist(right)
-  }
+  const versionTrimmed = row.working.version.trim()
+  const rowTitleAndVersion = versionTrimmed ? `${row.working.title} ${versionTrimmed}` : ''
+  const rowWithVersionNorm = rowTitleAndVersion ? normalized(rowTitleAndVersion, rules) : ''
+  const rowFeatAndVersion =
+    versionTrimmed && (rowFeat.featured.length > 0 || rowHasProducers)
+      ? `${rowFeat.baseTitle} ${versionTrimmed}`
+      : ''
+
+  const artistPairMatches = (left: string, right: string) =>
+    left === right || equivalentArtist(left, right)
+
+  const isRemixTitle =
+    /(?:^|[^\p{L}\p{N}])(?:remix|rmx|ремикс\p{L}*)(?=$|[^\p{L}\p{N}])/iu.test(
+      normalized(row.working.title, { ...rules, homoglyphs: false }),
+    ) || /(?:^|[^\p{L}\p{N}])(?:remix|rmx)(?=$|[^\p{L}\p{N}])/iu.test(rowNorm)
+
+  const remixCheckText = rowWithVersionNorm || rowNorm
+  const remixArtistMatches =
+    isRemixTitle &&
+    rowWithFeaturedList.length > 0 &&
+    candWithFeaturedList.length > 0 &&
+    rowWithFeaturedList.every((rowArtist) =>
+      candWithFeaturedList.some((candArtist) => artistPairMatches(candArtist, rowArtist)),
+    ) &&
+    (() => {
+      const extraArtists = candWithFeaturedList.filter(
+        (candArtist) =>
+          !rowWithFeaturedList.some((rowArtist) => artistPairMatches(candArtist, rowArtist)),
+      )
+      return (
+        extraArtists.length > 0 &&
+        extraArtists.every((extraArtist) => hasTokenPhrase(remixCheckText, extraArtist))
+      )
+    })()
 
   const artistMatches =
     Boolean(row.working.artist.trim()) &&
-    (rowBaseArtists === candBaseArtists ||
-      rowAllArtists === candBaseArtists ||
-      rowBaseArtists === candAllArtists ||
-      rowAllArtists === candAllArtists ||
-      equivalentArtist(rowBaseArtists, candBaseArtists) ||
-      (rowHasCredits && equivalentArtist(rowAllArtists, candBaseArtists)) ||
-      (candHasCredits && equivalentArtist(rowBaseArtists, candAllArtists)) ||
-      (rowHasCredits && candHasCredits && equivalentArtist(rowAllArtists, candAllArtists)) ||
-      (row.working.title.toLowerCase().includes('remix') &&
-        candidate.artists.some((artist) => rowNorm.includes(normalized(artist, rules)))))
+    (artistPairMatches(rowWithFeatured, candWithFeatured) ||
+      (rowHasProducers && artistPairMatches(rowAllArtists, candWithFeatured)) ||
+      (candHasProducers && artistPairMatches(rowWithFeatured, candAllArtists)) ||
+      (rowHasProducers && candHasProducers && artistPairMatches(rowAllArtists, candAllArtists)) ||
+      remixArtistMatches)
+
+  const rowHasCredits = rowFeat.featured.length > 0 || rowHasProducers
+  const candHasCredits = candFeat.featured.length > 0 || candHasProducers
+  const rowBaseTitleNorm = normalized(rowFeat.baseTitle, rules)
+  const candBaseTitleNorm = normalized(candFeat.baseTitle, rules)
 
   const titleMatches =
     Boolean(row.working.title.trim()) &&
     (rowNorm === candNorm ||
-      ((rowHasCredits || candHasCredits) &&
-        normalized(rowFeat.baseTitle, rules) === normalized(candFeat.baseTitle, rules)) ||
+      ((rowHasCredits || candHasCredits) && rowBaseTitleNorm === candBaseTitleNorm) ||
       (rules.remixPunctuation && relaxPunctuation(rowNorm) === relaxPunctuation(candNorm)) ||
+      (Boolean(rowWithVersionNorm) &&
+        (rowWithVersionNorm === candNorm ||
+          (rules.remixPunctuation &&
+            relaxPunctuation(rowWithVersionNorm) === relaxPunctuation(candNorm)))) ||
+      (Boolean(rowFeatAndVersion) &&
+        ((rules.remixPunctuation &&
+          relaxPunctuation(normalized(rowFeatAndVersion, rules)) ===
+            relaxPunctuation(candBaseTitleNorm)) ||
+          transliteratedTitlesMatch(rowFeatAndVersion, candFeat.baseTitle, rules))) ||
       transliteratedTitlesMatch(rowFeat.baseTitle, candFeat.baseTitle, rules))
 
   return {
@@ -278,34 +395,53 @@ export function hasVersionConflict(
 ): boolean {
   if (!rules.identicalVersions) return false
 
+  const candTitleNorm = normalized(candidate.title, rules)
+  const candAlbumNorm = normalized(candidate.album, rules)
+  const candTokens = extractVersionTokens(`${candidate.title} ${candidate.album}`, rules)
+
   if (row.working.version.trim()) {
-    const vNorm = normalized(row.working.version, rules)
-    const candTitleNorm = normalized(candidate.title, rules)
-    const candAlbumNorm = normalized(candidate.album, rules)
-    if (!candTitleNorm.includes(vNorm) && !candAlbumNorm.includes(vNorm)) return true
-  }
-
-  const customTagMatch = row.working.title.match(/\[([^\]]+)\]/)
-  if (customTagMatch) {
-    const tag = normalized(customTagMatch[1], rules)
-    const isStandardVersion = /(?:remix|rmx|mix|edit|live|version|cover|remaster|prod)/i.test(tag)
-    if (!isStandardVersion && !normalized(candidate.title, rules).includes(tag)) {
+    const versionTokens = extractVersionTokens(row.working.version, rules)
+    for (const token of versionTokens) {
+      if (!candTokens.has(token)) return true
+    }
+    const strippedVersion = normalized(
+      normalized(row.working.version, { ...rules, homoglyphs: false }).replace(
+        CYRILLIC_VERSION_RE,
+        ' ',
+      ),
+      rules,
+    )
+      .replace(LATIN_VERSION_RE, ' ')
+      .replace(/^[()[\]\-–—\s]+|[()[\]\-–—\s]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (
+      strippedVersion &&
+      !hasTokenPhrase(candTitleNorm, strippedVersion) &&
+      !hasTokenPhrase(candAlbumNorm, strippedVersion)
+    ) {
       return true
     }
   }
 
-  const versionKeywords =
-    /\b(remix|rmx|mix|edit|mash[\s-]*up|cover|live|sped[\s-]*up|sped|speed[\s-]*up|speedup|slowed|slow[\s-]*down|remaster(?:ed)?|instrumental|acoustic|rework|bootleg|vip)\b|ремикс|кавер|лайв|ремастер|м[эе]ш[\s-]*ап|ускоренн|замедленн|инструментал|акустич/i
-
-  const rowMatches = normalized([row.source.title, row.working.title].join(' '), rules).match(
-    versionKeywords,
-  )
-  if (rowMatches) {
-    const keyword = rowMatches[0]
-    const candText = normalized([candidate.title, candidate.album].join(' '), rules)
-    if (!candText.includes(keyword)) {
+  for (const customTagMatch of row.working.title.matchAll(/\[([^\]]+)\]/g)) {
+    const rawTag = customTagMatch[1]
+    const tagTokens = extractVersionTokens(rawTag, rules)
+    const tag = normalized(rawTag, rules)
+    const isStandardTag =
+      tagTokens.size > 0 ||
+      /(?:^|[^\p{L}\p{N}])(?:version|prod\.?|produced|beat|версия)(?=$|[^\p{L}\p{N}])/iu.test(
+        normalized(rawTag, { ...rules, homoglyphs: false }),
+      ) ||
+      (rules.featDeduplication && /^(?:feat\.?|ft\.?|with)\s+/i.test(rawTag.trim()))
+    if (!isStandardTag && !hasTokenPhrase(candTitleNorm, tag)) {
       return true
     }
+  }
+
+  // Only inspect working.title so user-corrected titles are not blocked by stale tags in source.title.
+  for (const token of extractVersionTokens(row.working.title, rules)) {
+    if (!candTokens.has(token)) return true
   }
 
   return false
@@ -393,10 +529,4 @@ export function searchResultGroup(
   if (!searched) return 'pending'
   if (!working.candidates.length) return 'missing'
   return metadataMatch(row, rules) ? 'exact' : 'review'
-}
-
-export function spotifyTrackId(uriOrUrl: string | null | undefined): string | null {
-  if (!uriOrUrl) return null
-  const match = uriOrUrl.match(/(?:spotify:track:|\/track\/)([A-Za-z0-9]{22})/)
-  return match ? match[1] : null
 }

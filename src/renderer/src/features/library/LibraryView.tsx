@@ -19,7 +19,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import type { Collection, Working } from '../../../../shared/model'
+import type { Collection, Working } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import { searchResultLabels, type SearchResultGroup } from '../../../../core/matching'
 import ExplainedButton from '../../components/ui/ExplainedButton'

@@ -1,4 +1,5 @@
-import { defaultMatchingRules, type Settings } from '../../shared/model'
+import { defaultMatchingRules } from '../../shared/defaults'
+import type { Settings } from '../../shared/types'
 import type { Database } from './database'
 
 export class Preferences {

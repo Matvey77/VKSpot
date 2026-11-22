@@ -8,7 +8,7 @@ import type {
   Result,
   VKExportProgress,
   Working,
-} from '../../../shared/model'
+} from '../../../shared/types'
 import { type Draft, type Filter } from '../features/library/LibraryView'
 import { api } from '../state/api'
 import { useAppState } from '../state/useAppState'

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ShieldCheck, X } from 'lucide-react'
-import type { ImportPreview } from '../../../../shared/model'
+import type { ImportPreview } from '../../../../shared/types'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 

@@ -1,5 +1,5 @@
 import { defaultMatchingRules } from '../shared/defaults'
-import { type Collection, type MatchingRules, type TrackRow } from '../shared/model'
+import { type Collection, type MatchingRules, type TrackRow } from '../shared/types'
 import {
   reviewGroup,
   searchResultGroup,
@@ -58,10 +58,17 @@ export const destinationStatus = (row: TrackRow): LibraryFilter =>
       : row.working.reviewDeferred && row.working.destination === 'unresolved'
         ? 'deferred'
         : row.working.destination
-export const formatDuration = (seconds: number | null): string =>
-  seconds === null
-    ? '—'
-    : `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+export const formatDuration = (seconds: number | null): string => {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return '—'
+  const total = Math.floor(seconds)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(secs).padStart(2, '0')}`
+}
 
 type RowAnalysis = {
   group: ReviewGroup
@@ -193,7 +200,7 @@ export function summarizeCollection(
       result.destinations[item.destination]++
       if (row.source.availability === 'blocked') result.destinations.blocked++
       if (!row.working.excluded && row.working.destination === 'unresolved') result.unresolved++
-      if (row.working.localPending) result.localPending++
+      if (item.destination === 'local-pending') result.localPending++
     }
     cache.set(key, result)
   }

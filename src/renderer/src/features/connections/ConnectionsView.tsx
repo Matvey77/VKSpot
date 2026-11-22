@@ -1,5 +1,5 @@
 import { ArrowRight, Download, FileAudio, FolderOpen, LoaderCircle } from 'lucide-react'
-import type { Collection, Settings, VKExportProgress } from '../../../../shared/model'
+import type { Collection, Settings, VKExportProgress } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import { SpotifyIcon, VKIcon } from '../../components/brand/BrandIcons'
 import { SpotifySettings } from './SpotifySettings'

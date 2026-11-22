@@ -67,6 +67,84 @@ describe('lossless occurrence archive', () => {
     const c = createCollection(parseImport('A - B', '.txt', 'Test'))
     expect(c.completeness.status).toBe('unverified')
   })
+  it('rejects empty imports, malformed JSON/CSV, invalid durations, and bad archive versions', () => {
+    expect(() => parseImport('[]', '.json', 'Empty')).toThrow('не содержит записей')
+    expect(() => parseImport('{"tracks":[]}', '.json', 'Empty')).toThrow('не содержит записей')
+    expect(() => parseImport('', '.csv', 'Empty')).toThrow('не содержит записей')
+    expect(() => parseImport('artist,title\n', '.csv', 'Empty')).toThrow('не содержит записей')
+    expect(() => parseImport('   \n  \r\n', '.txt', 'Empty')).toThrow('не содержит записей')
+
+    expect(() => parseImport('null', '.json', 'Null')).toThrow('массив записей')
+    expect(() => parseImport('123', '.json', 'Num')).toThrow('массив записей')
+    expect(() => parseImport('"str"', '.json', 'Str')).toThrow('массив записей')
+    expect(() => parseImport('[null]', '.json', 'NullItem')).toThrow('ожидается объект')
+    expect(() =>
+      parseImport(JSON.stringify([{ artist: { name: 'X' }, title: 'Song' }]), '.json', 'Obj'),
+    ).toThrow('artist')
+    expect(() =>
+      parseImport(JSON.stringify([{ id: ['1'], artist: 'A', title: 'Song' }]), '.json', 'ArrId'),
+    ).toThrow('id')
+    expect(() =>
+      parseImport(JSON.stringify([{ url: {}, artist: 'A', title: 'Song' }]), '.json', 'ObjUrl'),
+    ).toThrow('url')
+
+    const whitespaceDuration = parseImport(
+      JSON.stringify([{ artist: 'A', title: 'B', duration: '   ' }]),
+      '.json',
+      'Dur',
+    )
+    expect(whitespaceDuration.tracks[0].duration).toBeNull()
+    expect(
+      parseImport(JSON.stringify([{ artist: 'A', title: 'B', duration: '01:02:03' }]), '.json', 'D')
+        .tracks[0].duration,
+    ).toBe(3723)
+    for (const bad of [true, ':', '1:99', '1:60:00', '1:2:3:4', '-5']) {
+      expect(() =>
+        parseImport(JSON.stringify([{ artist: 'A', title: 'B', duration: bad }]), '.json', 'Bad'),
+      ).toThrow('длительность')
+    }
+
+    const csvParsed = parseImport(
+      'artist,title,"note;extra",availability,blocked\nArt,"One;Two","h;1","",false\nArt,"Three","h;2","",0\nArt,"Four","h;3","",true\nArt,"Five","h;4","",1\n',
+      '.csv',
+      'CSV',
+    )
+    expect(csvParsed.tracks).toHaveLength(4)
+    expect(csvParsed.tracks[0]).toMatchObject({
+      artist: 'Art',
+      title: 'One;Two',
+      availability: 'unknown',
+    })
+    expect(csvParsed.tracks[1].availability).toBe('unknown')
+    expect(csvParsed.tracks[2].availability).toBe('blocked')
+    expect(csvParsed.tracks[3].availability).toBe('blocked')
+
+    const bomTxt = parseImport('\uFEFFArtist X - Title Y\n', '.txt', 'BOM')
+    expect(bomTxt.tracks[0].artist).toBe('Artist X')
+    expect(bomTxt.tracks[0].title).toBe('Title Y')
+    expect(bomTxt.completeness.reason).toBe('file-import')
+
+    const verifiedJson = parseImport(
+      JSON.stringify({ expectedCount: 1, tracks: [{ artist: 'A', title: 'B' }] }),
+      '.json',
+      'Raw',
+    )
+    expect(verifiedJson.completeness.status).toBe('verified-count')
+    expect(verifiedJson.completeness.reason).toBe('verified')
+
+    const baseCollection = createCollection(verifiedJson)
+    const rawExported = exportText(baseCollection, 'raw-json')
+    const reimportedRaw = parseImport(rawExported, '.json', 'ReRaw')
+    expect(reimportedRaw.completeness.expected).toBe(1)
+    expect(reimportedRaw.completeness.status).toBe('verified-count')
+
+    const archiveObj = JSON.parse(exportText(baseCollection, 'archive'))
+    expect(() => parseImport(JSON.stringify({ ...archiveObj, version: 2 }), '.json', 'V2')).toThrow(
+      'Неподдерживаемая версия архива',
+    )
+    archiveObj.collection.rows[0].source.duration = -1
+    expect(() => parseImport(JSON.stringify(archiveObj), '.json', 'NegDur')).toThrow()
+  })
 })
 describe('reviewed transfer plan', () => {
   it('keeps repeated Spotify URIs, omits only explicitly excluded entries, retains archive', () => {
@@ -287,5 +365,76 @@ describe('mergeRepairedCollection', () => {
     expect(result.rows[3].source.title).toBe('Track 4')
     expect(result.rows[3].working.note).toBe('Keep intact')
     expect(result.rows[4].source.title).toBe('Track 5')
+  })
+
+  it('uses multi-pass matching so earlier fuzzy hits never steal exact source IDs', () => {
+    const existing = createCollection(
+      parseImport(
+        JSON.stringify([
+          { id: 'vk-1', artist: 'A', title: 'Song', rawText: 'A - Song' },
+          { id: 'vk-2', artist: 'A', title: 'Song', rawText: 'A - Song' },
+        ]),
+        '.json',
+        'VK',
+      ),
+    )
+    existing.rows[0].working.note = 'Decision 1'
+    existing.rows[1].working.note = 'Decision 2'
+
+    const preview = parseImport(
+      JSON.stringify([
+        { id: 'vk-999', artist: 'A', title: 'Song', rawText: 'A - Song' },
+        { id: 'vk-1', artist: 'A', title: 'Song', rawText: 'A - Song' },
+        { id: 'vk-2', artist: 'A', title: 'Song', rawText: 'A - Song' },
+      ]),
+      '.json',
+      'VK',
+    )
+
+    const result = mergeRepairedCollection(existing, preview)
+    expect(result.preservedCount).toBe(2)
+    expect(result.addedCount).toBe(1)
+    expect(result.rows[0].source.id).toBe('vk-999')
+    expect(result.rows[0].working.note).toBe('')
+    expect(result.rows[1].source.id).toBe('vk-1')
+    expect(result.rows[1].working.note).toBe('Decision 1')
+    expect(result.rows[2].source.id).toBe('vk-2')
+    expect(result.rows[2].working.note).toBe('Decision 2')
+  })
+
+  it('rejects invalid or overflowing sync ranges', () => {
+    const existing = createCollection(parseImport('A - 1\nB - 2', '.txt', 'Test'))
+    const one = parseImport('A - 1', '.txt', 'One')
+    one.range = { from: 0, to: 1 }
+    expect(() => mergeRepairedCollection(existing, one)).toThrow('за пределами')
+    one.range = { from: -1, to: 1 }
+    expect(() => mergeRepairedCollection(existing, one)).toThrow('за пределами')
+
+    const three = parseImport('A - 1\nB - 2\nC - 3', '.txt', 'Three')
+    three.range = { from: 1, to: 2 }
+    expect(() => mergeRepairedCollection(existing, three)).toThrow('превышает выбранный диапазон')
+  })
+
+  it('scans past an incompatible head entry inside the same duration bucket', () => {
+    const existing = createCollection(
+      parseImport(
+        JSON.stringify([
+          { artist: 'Artist', title: 'Same', duration: 180.1 },
+          { artist: 'Artist', title: 'Same', duration: 180.9 },
+        ]),
+        '.json',
+        'Test',
+      ),
+    )
+    existing.rows[0].working.note = 'Short version'
+    existing.rows[1].working.note = 'Matching version'
+
+    const preview = parseImport(
+      JSON.stringify([{ artist: 'Artist', title: 'Same', duration: 185.4 }]),
+      '.json',
+      'Test',
+    )
+    const result = mergeRepairedCollection(existing, preview)
+    expect(result.rows[0].working.note).toBe('Matching version')
   })
 })

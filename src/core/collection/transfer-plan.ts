@@ -1,4 +1,4 @@
-import type { Collection, PlanItem } from '../../shared/model'
+import type { Collection, PlanItem } from '../../shared/types'
 
 export function makePlan(collection: Collection): PlanItem[] {
   return collection.rows
@@ -46,6 +46,14 @@ export function mixedOrder(plan: PlanItem[], actual: string[]): string[] {
     throw new Error(
       `В плейлисте ${actual.length} записей, в плане ${plan.length}. Добавьте все локальные записи, включая повторы, и удалите посторонние записи.`,
     )
+  const norm = (s: string) => s.normalize('NFC').trim().toLowerCase()
+  const decode = (s: string): string | null => {
+    try {
+      return decodeURIComponent(s.replace(/\+/g, ' '))
+    } catch {
+      return null
+    }
+  }
   const used = new Set<number>()
   return plan.map((item) => {
     const index = actual.findIndex((uri, i) => {
@@ -54,12 +62,16 @@ export function mixedOrder(plan: PlanItem[], actual: string[]): string[] {
       if (!uri.startsWith('spotify:local:') || !item.local?.title) return false
       const parts = uri.split(':').slice(2)
       if (parts.length !== 4) return false
-      const decode = (s: string) => decodeURIComponent(s.replace(/\+/g, ' '))
+      const artist = decode(parts[0])
+      const title = decode(parts[2])
+      if (artist === null || title === null) return false
+      const uriDuration = parts[3].trim() === '' ? Number.NaN : Number(parts[3])
       return (
-        decode(parts[0]) === item.local.artist &&
-        decode(parts[2]) === item.local.title &&
+        norm(artist) === norm(item.local.artist) &&
+        norm(title) === norm(item.local.title) &&
         item.local.duration !== null &&
-        Math.abs(Number(parts[3]) - item.local.duration) <= 1
+        Number.isFinite(uriDuration) &&
+        Math.abs(uriDuration - item.local.duration) <= 1
       )
     })
     if (index < 0)
