@@ -4,7 +4,10 @@ import { Store } from '../../src/main/storage'
 import { Jobs } from '../../src/main/jobs/runner'
 import { Spotify } from '../../src/main/integrations/spotify/api'
 import { parseImport } from '../../src/core/collection'
-import { readSpotifySearch } from '../../src/main/integrations/spotify/browser'
+import {
+  isAllowedSpotifyBrowserUrl,
+  readSpotifySearch,
+} from '../../src/main/integrations/spotify/browser'
 
 describe('search providers and independent API cooldown', () => {
   it.each(['browser', 'api'] as const)(
@@ -215,6 +218,87 @@ describe('search providers and independent API cooldown', () => {
 
       const result = readSpotifySearch('Travis Scott 5% TINT')
       expect(result.kind).toBe('empty')
+    } finally {
+      globalThis.location = originalLocation
+      globalThis.document = originalDocument
+    }
+  })
+
+  it('allows only HTTPS Spotify/reCAPTCHA endpoints and about:blank in SpotifyBrowser navigation policy', () => {
+    expect(isAllowedSpotifyBrowserUrl('about:blank')).toBe(true)
+    expect(isAllowedSpotifyBrowserUrl('https://open.spotify.com/search')).toBe(true)
+    expect(isAllowedSpotifyBrowserUrl('https://accounts.spotify.com/authorize')).toBe(true)
+    expect(isAllowedSpotifyBrowserUrl('https://www.google.com/recaptcha/api2/anchor')).toBe(true)
+    expect(isAllowedSpotifyBrowserUrl('https://www.recaptcha.net/recaptcha/api.js')).toBe(true)
+    expect(isAllowedSpotifyBrowserUrl('https://www.gstatic.com/recaptcha/releases/v1.js')).toBe(
+      true,
+    )
+
+    expect(isAllowedSpotifyBrowserUrl('http://open.spotify.com/search')).toBe(false)
+    expect(isAllowedSpotifyBrowserUrl('https://docs.google.com/document/d/1')).toBe(false)
+    expect(isAllowedSpotifyBrowserUrl('https://sites.google.com/view/test')).toBe(false)
+    expect(isAllowedSpotifyBrowserUrl('https://www.google.com/search?q=spotify')).toBe(false)
+    expect(isAllowedSpotifyBrowserUrl('https://user:pass@open.spotify.com/search')).toBe(false)
+    expect(isAllowedSpotifyBrowserUrl('not-a-url')).toBe(false)
+  })
+
+  it('returns ready instead of incomplete when non-track rows coexist with valid track rows', () => {
+    const originalLocation = globalThis.location
+    const originalDocument = globalThis.document
+    try {
+      const id = 'a'.repeat(22)
+      const validRow = {
+        querySelector: (selector: string) => {
+          if (selector === 'a[href*="/track/"]') {
+            return { pathname: `/track/${id}`, textContent: 'Valid Song' }
+          }
+          if (selector === 'a[href*="/album/"]') return { textContent: 'Valid Album' }
+          return null
+        },
+        querySelectorAll: (selector: string) => {
+          if (selector === 'a[href*="/artist/"]') return [{ textContent: 'Valid Artist' }]
+          if (selector === 'div, span') return [{ textContent: '3:12' }]
+          return []
+        },
+      }
+      const nonTrackRow = {
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      }
+
+      globalThis.location = {
+        hostname: 'open.spotify.com',
+        pathname: '/search/' + encodeURIComponent('Valid Artist Valid Song') + '/tracks',
+      } as unknown as Location
+      globalThis.document = {
+        body: { innerText: '' },
+        querySelectorAll: (selector: string) => {
+          if (selector === '[data-testid="tracklist-row"]') return [validRow, nonTrackRow]
+          return []
+        },
+      } as unknown as Document
+
+      const result = readSpotifySearch('Valid Artist Valid Song')
+      expect(result.kind).toBe('ready')
+      expect(result.tracks).toHaveLength(1)
+      expect(result.tracks[0]).toMatchObject({
+        uri: 'spotify:track:' + id,
+        title: 'Valid Song',
+        artists: ['Valid Artist'],
+        duration: 192,
+      })
+
+      globalThis.document = {
+        body: { innerText: '' },
+        querySelectorAll: (selector: string) => {
+          if (selector === '[data-testid="tracklist-row"]') return [nonTrackRow]
+          return []
+        },
+      } as unknown as Document
+      expect(readSpotifySearch('Valid Artist Valid Song')).toEqual({
+        kind: 'incomplete',
+        tracks: [],
+      })
     } finally {
       globalThis.location = originalLocation
       globalThis.document = originalDocument

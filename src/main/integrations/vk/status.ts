@@ -93,7 +93,7 @@ export function readVKPageSignals(): Promise<VKPageSignals> {
     ].some((container) => visible(container) && hasVisibleRows(container))
 
     const shuffleButton = [...document.querySelectorAll('button, a, [role="button"]')].some(
-      (el) => visible(el) && /перемешать/i.test(el.textContent ?? ''),
+      (el) => visible(el) && /перемешать|shuffle/i.test(el.textContent ?? ''),
     )
 
     const visibleRowsFound = hasVisibleRows(document.body)
@@ -133,18 +133,26 @@ export function readVKPageSignals(): Promise<VKPageSignals> {
     signals.personalLibrary || signals.signInForm || signals.pageError
   return new Promise((resolve) => {
     let finished = false
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined
     const finish = (signals: VKPageSignals) => {
       if (finished) return
       finished = true
       observer.disconnect()
       clearTimeout(timer)
+      clearTimeout(debounceTimer)
       resolve(signals)
     }
     const check = () => {
+      if (finished) return
       const signals = inspect()
       if (decisive(signals)) finish(signals)
     }
-    const observer = new MutationObserver(check)
+    const scheduleCheck = () => {
+      if (finished) return
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(check, 150)
+    }
+    const observer = new MutationObserver(scheduleCheck)
     if (document.documentElement)
       observer.observe(document.documentElement, {
         childList: true,

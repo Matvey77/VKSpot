@@ -18,14 +18,25 @@ export class Store {
     this.collections = new CollectionRepository(this.db, this.preferences)
     this.queue = new JobRepository(this.db)
     for (const job of this.jobs()) {
-      if (job.state === 'running' || job.state === 'pausing')
-        this.putJob({
-          ...job,
-          state: 'paused',
-          autoResume:
-            job.kind === 'search' && job.backgroundSearch === true && job.autoResume !== false,
-          message: 'Прервано закрытием приложения. Можно продолжить.',
-        })
+      if (job.state === 'running' || job.state === 'pausing') {
+        if (job.kind === 'transfer' && !job.playlistId && job.cursor === 0) {
+          this.putJob({
+            ...job,
+            state: 'needs-review',
+            autoResume: false,
+            message:
+              'Приложение закрылось во время создания плейлиста. Проверьте Spotify и при необходимости укажите созданный плейлист для продолжения.',
+          })
+        } else {
+          this.putJob({
+            ...job,
+            state: 'paused',
+            autoResume:
+              job.kind === 'search' && job.backgroundSearch === true && job.autoResume !== false,
+            message: 'Прервано закрытием приложения. Можно продолжить.',
+          })
+        }
+      }
     }
   }
 

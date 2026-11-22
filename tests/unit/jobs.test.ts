@@ -1,5 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 vi.mock('electron', () => ({ safeStorage: {}, shell: {} }))
+const reviewGroupSpy = vi.hoisted(() => vi.fn())
+vi.mock('../../src/core/matching', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/core/matching')>()
+  return {
+    ...actual,
+    reviewGroup: (...args: Parameters<typeof actual.reviewGroup>) => {
+      reviewGroupSpy(...args)
+      return actual.reviewGroup(...args)
+    },
+  }
+})
 import { Jobs } from '../../src/main/jobs/runner'
 import { Store } from '../../src/main/storage'
 import { Spotify, SpotifyError } from '../../src/main/integrations/spotify/api'
@@ -331,6 +342,141 @@ describe('migration recovery', () => {
           `spotify:local:${encodeURIComponent('café')}::${encodeURIComponent('SONG')}:0`,
         ]),
       ).toHaveLength(1)
+    } finally {
+      store.close()
+    }
+  })
+
+  it('tracks isActive and isBusyWithCollection during reconcileMixed and handles 429 retryAfter', async () => {
+    const store = new Store(':memory:')
+    const changed = vi.fn()
+    try {
+      const id = store.import(parseImport('A - First\nB - Second', '.txt', 'Reconcile'))
+      const rows = store.get(id).rows
+      const uri = 'spotify:track:' + 'a'.repeat(22)
+      store.patch(id, [rows[0].id], {
+        destination: 'spotify',
+        spotify: { uri, title: 'First', artists: ['A'], album: '', url: '', duration: 200 },
+      })
+      store.patch(id, [rows[1].id], {
+        destination: 'local',
+        local: {
+          path: 'D:/second.mp3',
+          sha256: 'test',
+          artist: 'B',
+          title: 'Second',
+          duration: 180,
+          codec: 'MP3',
+          bitrate: null,
+          size: 1,
+        },
+      })
+
+      let resolveMove!: () => void
+      let rejectWith429 = false
+      const fake = {
+        connected: () => true,
+        playlistItems: async () => ['spotify:local:B::Second:180', uri],
+        request: () =>
+          new Promise<void>((resolve, reject) => {
+            resolveMove = () => {
+              if (rejectWith429) reject(new SpotifyError('Rate limit', 30, false, 'rate-limit'))
+              else resolve()
+            }
+          }),
+      } as unknown as Spotify
+
+      const jobs = new Jobs(store, fake, changed)
+      const job = store.newJob(id, 'transfer', [rows[0].id])
+      job.plan = makePlan(store.get(id))
+      job.playlistId = 'playlist-id'
+      job.state = 'complete'
+      store.putJob(job)
+
+      expect(jobs.isActive(job.id)).toBe(false)
+      expect(jobs.isBusyWithCollection(id)).toBe(false)
+
+      const pending = jobs.reconcileMixed(job.id)
+      await vi.waitFor(() => expect(resolveMove).toBeTypeOf('function'))
+
+      expect(jobs.isActive(job.id)).toBe(true)
+      expect(jobs.isBusyWithCollection(id)).toBe(true)
+      expect(jobs.isBusyWithCollection('other-collection')).toBe(false)
+
+      rejectWith429 = true
+      resolveMove()
+      await expect(pending).rejects.toThrow('Rate limit')
+
+      expect(jobs.isActive(job.id)).toBe(false)
+      expect(jobs.isBusyWithCollection(id)).toBe(false)
+      expect(store.value('spotify-api-retryAt', 0)).toBeGreaterThan(Date.now())
+      expect(changed).toHaveBeenCalled()
+
+      store.putJob({ ...store.job(job.id), state: 'pausing' })
+      expect(jobs.isActive(job.id)).toBe(true)
+      expect(jobs.isBusyWithCollection(id)).toBe(true)
+    } finally {
+      store.close()
+    }
+  })
+
+  it('skips deleted rows on paused search resume, passes matchingRules, and does not flicker running on pause', async () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(parseImport('Artist 1 - Song 1\nArtist 2 - Song 2', '.txt', 'Resume'))
+      const [row1, row2] = store.get(id).rows
+      store.setValue('preferences', {
+        ...store.settings(),
+        matchingRules: { ...store.settings().matchingRules, transliteration: false },
+      })
+
+      const job = store.newJob(id, 'search', [row1.id, row2.id])
+      job.backgroundSearch = true
+      store.putJob(job)
+
+      // Repair removes untouched row1 while preserving row2's id.
+      store.repairCollection(id, parseImport('Artist 2 - Song 2', '.txt', 'Repaired'))
+      expect(() => store.row(id, row1.id)).toThrow()
+
+      let releaseSearch!: (value: []) => void
+      const search = vi.fn(
+        () =>
+          new Promise<[]>((resolve) => {
+            releaseSearch = resolve
+          }),
+      )
+      const jobs = new Jobs(
+        store,
+        { connected: () => true, search } as unknown as Spotify,
+        () => {},
+      )
+      const statesAfterPause: string[] = []
+      let pausedIssued = false
+      const originalPutJob = store.putJob.bind(store)
+      vi.spyOn(store, 'putJob').mockImplementation((nextJob) => {
+        if (pausedIssued) statesAfterPause.push(nextJob.state)
+        originalPutJob(nextJob)
+      })
+
+      reviewGroupSpy.mockClear()
+      const runPromise = jobs.run(job.id)
+      await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(1))
+      expect(reviewGroupSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: row2.id }),
+        expect.objectContaining({ transliteration: false }),
+      )
+
+      pausedIssued = true
+      jobs.pause(job.id)
+      releaseSearch([])
+      await runPromise
+
+      expect(statesAfterPause).not.toContain('running')
+      expect(store.job(job.id)).toMatchObject({ cursor: 2, state: 'paused' })
+
+      // Resume from cursor=2 finishes cleanly.
+      await jobs.run(job.id)
+      expect(store.job(job.id).state).toBe('complete')
     } finally {
       store.close()
     }

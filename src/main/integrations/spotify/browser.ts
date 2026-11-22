@@ -4,7 +4,22 @@ import {
   type SpotifyTrack,
   type SpotifyBrowserState,
 } from '../../../shared/model'
-import { SpotifyError } from './api'
+import { parseRetryAfterSeconds, SpotifyError } from './api'
+
+export function isAllowedSpotifyBrowserUrl(address: string): boolean {
+  if (address === 'about:blank') return true
+  try {
+    const url = new URL(address)
+    if (url.protocol !== 'https:' || url.username || url.password) return false
+    const hostname = url.hostname.toLowerCase()
+    if (hostname === 'www.google.com') return url.pathname.startsWith('/recaptcha/')
+    return /(?:^|\.)(?:spotify\.com|scdn\.co|spotifycdn\.com|recaptcha\.net|gstatic\.com)$/i.test(
+      hostname,
+    )
+  } catch {
+    return false
+  }
+}
 
 // Runs in an isolated world. Reads only rendered search rows, never page state,
 // credentials, cookies or Spotify's private network endpoints.
@@ -48,10 +63,12 @@ export function readSpotifySearch(query: string) {
     return { kind: 'attention', tracks: [] }
   if (!rows.length && /something went wrong|что-то пошло не так|не удалось загрузить/i.test(text))
     return { kind: 'error', tracks: [] }
+  let incompleteTrackRow = false
   const tracks = rows.flatMap((row) => {
     const link = row.querySelector<HTMLAnchorElement>('a[href*="/track/"]')
-    const id = link?.pathname.match(/^\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]{22})$/)?.[1]
-    const title = link?.textContent?.trim()
+    if (!link) return []
+    const id = link.pathname.match(/^\/(?:intl-[a-z]+\/)?track\/([A-Za-z0-9]{22})$/)?.[1]
+    const title = link.textContent?.trim()
     const artists = [...row.querySelectorAll<HTMLAnchorElement>('a[href*="/artist/"]')]
       .map((a) => a.textContent?.trim() ?? '')
       .filter(Boolean)
@@ -59,7 +76,10 @@ export function readSpotifySearch(query: string) {
       .map((el) => el.textContent?.trim() ?? '')
       .filter((value) => /^(?:\d{1,2}:)?\d{1,3}:[0-5]\d$/.test(value))
     const time = times.at(-1)?.split(':').map(Number)
-    if (!id || !title || !time || time.some(isNaN)) return []
+    if (!id || !title || !time || time.some(isNaN)) {
+      incompleteTrackRow = true
+      return []
+    }
     const duration = time.reduce((total, part) => total * 60 + part, 0)
     return [
       {
@@ -73,8 +93,9 @@ export function readSpotifySearch(query: string) {
     ]
   })
   const unique = [...new Map(tracks.map((track) => [track.uri, track])).values()].slice(0, 10)
-  if (rows.length && tracks.length !== rows.length) return { kind: 'incomplete', tracks: [] }
+  if (incompleteTrackRow) return { kind: 'incomplete', tracks: [] }
   if (unique.length) return { kind: 'ready', tracks: unique }
+  if (rows.length) return { kind: 'incomplete', tracks: [] }
   // Only an explicit completed no-results screen can establish an empty search.
   if (
     /(?:no\s+(?:results|tracks)\s+(?:found|for)|couldn't\s+find|spelled\s+correctly|ничего\s+не\s+(?:найдено|нашли)|(?:треки|треков|результаты|результатов)\s+не\s+найден[ыо]|не\s+удалось\s+найти|нет\s+ли\s+опечаток|перефразируй(?:те)?|keine\s+(?:ergebnisse|titel)|richtig\s+geschrieben|no\s+se\s+(?:han\s+)?encontraron|aucun\s+(?:résultat|titre))/i.test(
@@ -86,7 +107,7 @@ export function readSpotifySearch(query: string) {
 }
 
 export class SpotifyBrowser {
-  private view: WebContentsView | undefined
+  private view: WebContentsView | null = null
   private visible = false
   private owner: string | undefined
   private busy = false
@@ -136,27 +157,14 @@ export class SpotifyBrowser {
     view.webContents.setUserAgent(
       view.webContents.getUserAgent().replace(/\s(?:Electron|VKSpot|vkspot)\/\S+/g, ''),
     )
-    const allowed = (address: string) => {
-      try {
-        const url = new URL(address)
-        if (url.protocol !== 'https:' && url.protocol !== 'http:') return false
-        return (
-          /(?:^|\.)(?:spotify\.com|scdn\.co|spotifycdn\.com|google\.com|recaptcha\.net|gstatic\.com)$/i.test(
-            url.hostname,
-          ) || url.href === 'about:blank'
-        )
-      } catch {
-        return false
-      }
-    }
     view.webContents.on('will-navigate', (event, address) => {
-      if (!allowed(address)) event.preventDefault()
+      if (!isAllowedSpotifyBrowserUrl(address)) event.preventDefault()
     })
     view.webContents.on('will-redirect', (event, address) => {
-      if (!allowed(address)) event.preventDefault()
+      if (!isAllowedSpotifyBrowserUrl(address)) event.preventDefault()
     })
     view.webContents.setWindowOpenHandler(({ url }) => {
-      if (allowed(url)) void view.webContents.loadURL(url).catch(() => {})
+      if (isAllowedSpotifyBrowserUrl(url)) void view.webContents.loadURL(url).catch(() => {})
       return { action: 'deny' }
     })
     view.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
@@ -164,17 +172,18 @@ export class SpotifyBrowser {
     )
     view.webContents.session.on('will-download', (event) => event.preventDefault())
     view.webContents.session.webRequest.onHeadersReceived(
-      { urls: ['https://open.spotify.com/*'] },
+      { urls: ['https://open.spotify.com/*', 'https://api-partner.spotify.com/*'] },
       (details, callback) => {
-        if (details.resourceType === 'mainFrame' && details.statusCode === 429) {
+        const isMain = details.resourceType === 'mainFrame'
+        const isPartnerApi =
+          Boolean(details.url?.startsWith('https://api-partner.spotify.com/')) &&
+          (['xhr', 'fetch'] as readonly string[]).includes(details.resourceType)
+        if (details.statusCode === 429 && (isMain || isPartnerApi)) {
           const entry = Object.entries(details.responseHeaders ?? {}).find(
             ([key]) => key.toLowerCase() === 'retry-after',
           )?.[1]?.[0]
-          const seconds = entry ? Number(entry) : 60
-          const delay = Number.isFinite(seconds)
-            ? Math.max(1, seconds) * 1000
-            : Math.max(1000, Date.parse(entry!) - Date.now())
-          this.retryAt = Date.now() + (Number.isFinite(delay) ? delay : 60000)
+          const delay = parseRetryAfterSeconds(entry ?? null) * 1000
+          this.retryAt = Math.max(this.retryAt, Date.now() + delay)
         }
         callback({})
       },
@@ -183,9 +192,29 @@ export class SpotifyBrowser {
       if (input.type === 'keyDown') {
         if (input.key === 'F5' || (input.control && input.key.toLowerCase() === 'r')) {
           event.preventDefault()
-          void this.reload()
+          void this.reload().catch(() => {})
         }
       }
+    })
+    view.webContents.on('render-process-gone', () => {
+      if (this.view !== view) return
+      try {
+        const host = this.host()
+        if (!host.isDestroyed()) host.contentView.removeChildView(view)
+      } catch {
+        /* Host window may already be closing. */
+      }
+      if (!view.webContents.isDestroyed()) view.webContents.close()
+      this.view = null
+      this.busy = false
+      this.visible = false
+      this.owner = undefined
+      this.loading = undefined
+      this.loadFailed = false
+      this.update('idle', '', undefined, {
+        state: 'error',
+        message: 'Страница Spotify завершилась аварийно. Откройте или обновите её снова.',
+      })
     })
     view.webContents.on(
       'did-fail-load',
@@ -221,13 +250,15 @@ export class SpotifyBrowser {
     view.setVisible(false)
     return view
   }
-  async show(bounds: Electron.Rectangle | null, owner = 'legacy'): Promise<void> {
+  async show(bounds: Electron.Rectangle | null, owner?: string): Promise<void> {
     if (!bounds) {
-      if (this.owner !== owner) return
+      if (owner !== undefined && this.owner !== undefined && this.owner !== owner) return
       this.visible = false
       this.owner = undefined
-      this.view?.setVisible(false)
-      this.view?.webContents.setAudioMuted(true)
+      if (this.view && !this.view.webContents.isDestroyed()) {
+        this.view.setVisible(false)
+        this.view.webContents.setAudioMuted(true)
+      }
       return
     }
     const view = this.ensure()
@@ -299,6 +330,11 @@ export class SpotifyBrowser {
     }
   }
   async reload(owner?: string): Promise<void> {
+    if (this.busy) {
+      throw new Error(
+        'Поиск Spotify сейчас выполняется. Дождитесь его остановки перед обновлением страницы.',
+      )
+    }
     if (owner && this.owner && this.owner !== owner) return
     const view = this.ensure()
     this.loadFailed = false
@@ -351,6 +387,16 @@ export class SpotifyBrowser {
         throw new Error(
           'Закрой страницу Spotify кнопкой «Вернуться к коллекции», затем продолжи поиск.',
         )
+      const ensureNotRateLimited = () => {
+        if (this.retryAt > Date.now())
+          throw new SpotifyError(
+            'Страница Spotify попросила подождать. Поиск и результаты сохранены.',
+            Math.ceil((this.retryAt - Date.now()) / 1000),
+            false,
+            'rate-limit',
+          )
+      }
+      ensureNotRateLimited()
       // Full navigation prevents a previous query's rows from being accepted.
       const cleanQuery =
         query
@@ -360,26 +406,27 @@ export class SpotifyBrowser {
           .trim() || query
       let loadError: Error | undefined
       for (let attempt = 0; attempt < 2; attempt++) {
-        if (this.stopped || view.webContents.isDestroyed())
+        if (this.stopped || view.webContents.isDestroyed() || this.view !== view)
           throw new Error('Поиск остановлен. Прогресс сохранён.')
+        ensureNotRateLimited()
         try {
           const load = view.webContents.loadURL(
             'https://open.spotify.com/search/' + encodeURIComponent(cleanQuery) + '/tracks',
           )
+          load.catch(() => {})
           let timer: ReturnType<typeof setTimeout> | undefined
           try {
             await Promise.race([
               load,
               new Promise<never>((_, reject) => {
-                timer = setTimeout(
-                  () =>
-                    reject(
-                      new Error(
-                        'Страница Spotify не загрузилась за 30 секунд. Проверь сеть или прокси в подключениях.',
-                      ),
+                timer = setTimeout(() => {
+                  if (!view.webContents.isDestroyed()) view.webContents.stop()
+                  reject(
+                    new Error(
+                      'Страница Spotify не загрузилась за 30 секунд. Проверь сеть или прокси в подключениях.',
                     ),
-                  30000,
-                )
+                  )
+                }, 30000)
               }),
             ])
             loadError = undefined
@@ -389,7 +436,13 @@ export class SpotifyBrowser {
           }
         } catch (err) {
           loadError = err instanceof Error ? err : new Error(String(err))
-          if (attempt === 0 && !this.stopped && !view.webContents.isDestroyed()) {
+          if (
+            attempt === 0 &&
+            !this.stopped &&
+            !view.webContents.isDestroyed() &&
+            this.view === view &&
+            this.retryAt <= Date.now()
+          ) {
             await new Promise((resolve) => setTimeout(resolve, 1500))
             continue
           }
@@ -410,15 +463,9 @@ export class SpotifyBrowser {
       let previous = '',
         stableAt = 0
       while (Date.now() < until) {
-        if (this.stopped || view.webContents.isDestroyed())
+        if (this.stopped || view.webContents.isDestroyed() || this.view !== view)
           throw new Error('Поиск остановлен. Прогресс сохранён.')
-        if (this.retryAt > Date.now())
-          throw new SpotifyError(
-            'Страница Spotify попросила подождать. Поиск и результаты сохранены.',
-            Math.ceil((this.retryAt - Date.now()) / 1000),
-            false,
-            'rate-limit',
-          )
+        ensureNotRateLimited()
         const result = (await view.webContents.executeJavaScriptInIsolatedWorld(1002, [
           {
             code: `(${readSpotifySearch.toString()})(${JSON.stringify(cleanQuery)})`,
@@ -449,6 +496,7 @@ export class SpotifyBrowser {
         }
         await new Promise((resolve) => setTimeout(resolve, 400))
       }
+      if (!view.webContents.isDestroyed()) view.webContents.stop()
       throw new Error(
         'Не удалось прочитать результаты Spotify. Открой страницу Spotify и проверь её; трек не помечен как ненайденный.',
       )
@@ -476,7 +524,10 @@ export class SpotifyBrowser {
   }
   close() {
     this.stop()
-    this.view?.webContents.close()
-    this.view = undefined
+    this.visible = false
+    this.owner = undefined
+    this.loading = undefined
+    if (this.view && !this.view.webContents.isDestroyed()) this.view.webContents.close()
+    this.view = null
   }
 }

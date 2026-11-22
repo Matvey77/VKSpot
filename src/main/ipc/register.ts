@@ -57,6 +57,8 @@ export type IpcServices = {
   dataPath: string
   changed: () => void
   verifySpotifyProfile: () => Promise<void>
+  rendererFilePath?: string
+  devRendererUrl?: string | null
 }
 
 export function registerIpc(services: IpcServices): void {
@@ -71,8 +73,10 @@ export function registerIpc(services: IpcServices): void {
     dataPath,
     changed,
     verifySpotifyProfile,
+    rendererFilePath,
+    devRendererUrl,
   } = services
-  const handler = createHandler(main)
+  const handler = createHandler(main, { rendererFilePath, devRendererUrl })
 
   handler('syncState', (cursor): StateSync => ({
     ...store.collectionSync(
@@ -116,15 +120,7 @@ export function registerIpc(services: IpcServices): void {
 
   handler('deleteCollection', (id) => {
     const collectionId = uuid.parse(id)
-    if (
-      store
-        .jobSummaries()
-        .some(
-          (job) =>
-            job.collectionId === collectionId &&
-            (job.state === 'running' || job.state === 'pausing'),
-        )
-    )
+    if (jobs.isBusyWithCollection(collectionId))
       throw new Error(
         'Перед удалением коллекции приостановите её задание и дождитесь завершения текущего запроса.',
       )
@@ -139,15 +135,7 @@ export function registerIpc(services: IpcServices): void {
 
   handler('repairCollection', (id, preview) => {
     const collectionId = uuid.parse(id)
-    if (
-      store
-        .jobSummaries()
-        .some(
-          (job) =>
-            job.collectionId === collectionId &&
-            (job.state === 'running' || job.state === 'pausing'),
-        )
-    )
+    if (jobs.isBusyWithCollection(collectionId))
       throw new Error(
         'Перед синхронизацией приостановите задание этой коллекции и дождитесь завершения текущего запроса.',
       )
@@ -232,11 +220,13 @@ export function registerIpc(services: IpcServices): void {
     const parsedOwner = z.string().uuid().optional().parse(owner)
     if (parsed) {
       const [width, height] = main.getContentSize()
+      const x = Math.min(parsed.x, Math.max(0, width - 100))
+      const y = Math.min(parsed.y, Math.max(0, height - 100))
       const clamped = {
-        x: Math.min(parsed.x, Math.max(0, width - 100)),
-        y: Math.min(parsed.y, Math.max(0, height - 100)),
-        width: Math.min(parsed.width, Math.max(100, width - parsed.x)),
-        height: Math.min(parsed.height, Math.max(100, height - parsed.y)),
+        x,
+        y,
+        width: Math.min(parsed.width, Math.max(100, width - x)),
+        height: Math.min(parsed.height, Math.max(100, height - y)),
       }
       jobs.pauseBrowserActive()
       await spotifyBrowser.show(clamped, parsedOwner)
@@ -269,7 +259,11 @@ export function registerIpc(services: IpcServices): void {
   })
 
   handler('archiveJob', (id) => {
-    store.archiveJob(uuid.parse(id))
+    const jobId = uuid.parse(id)
+    if (jobs.isActive(jobId)) {
+      throw new Error('Нельзя архивировать активное или приостанавливаемое задание.')
+    }
+    store.archiveJob(jobId)
     changed()
   })
 

@@ -61,6 +61,7 @@ describe('queue storage migration', () => {
       }
       expect(runtime.payload.length).toBeLessThan(1000)
       expect(JSON.parse(runtime.payload).rowIds).toBeUndefined()
+      expect(inspect.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 })
       inspect.close()
       const reopened = new Store(path)
       expect(reopened.job(job.id).rowIds).toEqual(job.rowIds)

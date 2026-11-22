@@ -1,6 +1,6 @@
 import { makePlan, reconcilePrefix, mixedOrder } from '../../core/collection'
 import { searchText, reviewGroup } from '../../core/matching'
-import type { Job } from '../../shared/model'
+import type { Job, TrackRow } from '../../shared/model'
 import type { Store } from '../storage'
 import { Spotify, SpotifyError } from '../integrations/spotify/api'
 import { autoSearch, jobMessage, waitingJob } from '../../shared/job-status'
@@ -8,6 +8,7 @@ import type { SpotifyBrowser } from '../integrations/spotify/browser'
 
 export class Jobs {
   private active: string | null = null
+  private activeCollectionId: string | null = null
   private interrupted = new Set<string>()
   private lastNotification = 0
   private timer: ReturnType<typeof setTimeout> | undefined
@@ -20,11 +21,27 @@ export class Jobs {
   ) {
     this.wake()
   }
+  isActive(jobId: string): boolean {
+    if (this.active === jobId) return true
+    return this.store
+      .jobSummaries()
+      .some((job) => job.id === jobId && (job.state === 'running' || job.state === 'pausing'))
+  }
+  isBusyWithCollection(collectionId: string): boolean {
+    if (this.activeCollectionId === collectionId) return true
+    return this.store
+      .jobSummaries()
+      .some(
+        (job) =>
+          job.collectionId === collectionId &&
+          (job.id === this.active || job.state === 'running' || job.state === 'pausing'),
+      )
+  }
   wake(): void {
     clearTimeout(this.timer)
     this.timer = undefined
     if (this.stopping || this.active || !this.store.settings().autoResumeSearch) return
-    const jobs = this.store.jobs()
+    const jobs = this.store.jobSummaries()
     const now = Date.now()
     const candidate = [...jobs]
       .reverse()
@@ -38,37 +55,35 @@ export class Jobs {
         job,
         deadline:
           job.searchProvider === 'browser'
-            ? Math.max(job.retryAt ?? now, this.store.value('spotify-browser-retryAt', 0))
+            ? Math.max(job.retryAt ?? 0, this.store.value('spotify-browser-retryAt', 0))
             : Math.max(
-                job.retryAt ?? now,
-                waitingJob(jobs, now)?.retryAt ?? now,
+                job.retryAt ?? 0,
+                waitingJob(jobs, now)?.retryAt ?? 0,
                 this.store.value('spotify-api-retryAt', 0),
               ),
       }))
       .sort((a, b) => a.deadline - b.deadline)[0]
     if (!candidate) return
-    this.timer = setTimeout(
-      () => {
-        this.timer = undefined
-        if (this.stopping) return
-        try {
-          this.resume(candidate.job.id)
-        } catch {
-          this.wake()
-        }
-      },
-      Math.min(2147483647, Math.max(0, candidate.deadline - now)),
-    )
+    const delay =
+      candidate.deadline >= now ? Math.min(2147483647, Math.max(50, candidate.deadline - now)) : 0
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      if (this.stopping) return
+      try {
+        this.resume(candidate.job.id)
+      } catch {
+        this.wake()
+      }
+    }, delay)
     this.timer.unref?.()
   }
   private save(job: Job): void {
-    // Preserve a manual pause if a request finishes with an older runner snapshot.
-    if (
-      this.active === job.id &&
-      this.interrupted.has(job.id) &&
-      this.store.job(job.id).autoResume === false
-    )
-      job.autoResume = false
+    // Preserve an in-flight pause if a request finishes with an older runner snapshot.
+    if (this.active === job.id && this.interrupted.has(job.id)) {
+      const stored = this.store.job(job.id)
+      if (stored.autoResume === false) job.autoResume = false
+      if (job.state === 'running' && stored.state === 'pausing') job.state = 'pausing'
+    }
     this.store.putJob(job)
     if (job.state !== 'running' || Date.now() - this.lastNotification >= 1200) {
       this.lastNotification = Date.now()
@@ -123,7 +138,7 @@ export class Jobs {
       throw new Error('В плане только локальные записи. Используйте подготовку локальных файлов.')
     if (
       this.store
-        .jobs()
+        .jobSummaries()
         .some(
           (j) => j.collectionId === collectionId && j.kind === 'transfer' && j.state !== 'complete',
         )
@@ -155,12 +170,20 @@ export class Jobs {
   }
   private checkCooldown(): void {
     const now = Date.now()
-    const waiting = waitingJob(this.store.jobs(), now)
+    const waiting = waitingJob(this.store.jobSummaries(), now)
     if (waiting) throw new Error('Spotify запросил паузу. ' + jobMessage(waiting, now))
     if (this.store.value('spotify-api-retryAt', 0) > now)
       throw new Error(
         'Квота Spotify API пока не восстановилась. Поиск через страницу Spotify доступен отдельно; перенос нужно повторить позже.',
       )
+  }
+  private findRow(collectionId: string, rowId: string): TrackRow | null {
+    const collection = this.store.get(collectionId)
+    try {
+      return this.store.row(collection.id, rowId)
+    } catch {
+      return null
+    }
   }
   private checkBrowserCooldown(): void {
     const deadline = this.store.value('spotify-browser-retryAt', 0)
@@ -199,6 +222,7 @@ export class Jobs {
     let job = this.runnable(id)
     if (job.state === 'complete') return
     this.active = id
+    this.activeCollectionId = job.collectionId
     this.interrupted.delete(id)
     delete job.retryAt
     delete job.waitReason
@@ -212,9 +236,14 @@ export class Jobs {
         // share one response. Background jobs can reuse the persistent cache.
         const refreshed = new Map<string, Awaited<ReturnType<Spotify['search']>>>()
         while (job.cursor < job.rowIds.length && !this.interrupted.has(id)) {
-          const row = this.store.row(job.collectionId, job.rowIds[job.cursor])
+          const row = this.findRow(job.collectionId, job.rowIds[job.cursor])
           let requested = false
-          if (!row.working.excluded && (!job.backgroundSearch || reviewGroup(row) === 'pending')) {
+          if (
+            row &&
+            !row.working.excluded &&
+            (!job.backgroundSearch ||
+              reviewGroup(row, this.store.settings().matchingRules) === 'pending')
+          ) {
             const query = searchText(row.working)
             if (query.trim()) {
               const cacheKey =
@@ -232,8 +261,8 @@ export class Jobs {
                 this.store.cache(cacheKey, results)
                 if (job.refreshSearchResults) refreshed.set(cacheKey, results)
               }
-              const current = this.store.row(job.collectionId, row.id)
-              if (searchText(current.working) === query)
+              const current = this.findRow(job.collectionId, row.id)
+              if (current && searchText(current.working) === query)
                 this.store.patch(
                   job.collectionId,
                   [row.id],
@@ -309,6 +338,7 @@ export class Jobs {
       this.save(job)
     } finally {
       this.active = null
+      this.activeCollectionId = null
       this.interrupted.delete(id)
       this.changed()
       this.wake()
@@ -349,6 +379,8 @@ export class Jobs {
     if (job.kind !== 'transfer' || !job.playlistId || !job.plan || job.state !== 'complete')
       throw new Error('Сначала завершите каталожный этап переноса.')
     this.active = id
+    this.activeCollectionId = job.collectionId
+    this.interrupted.delete(id)
     try {
       let actual = await this.spotify.playlistItems(job.playlistId)
       const desired = mixedOrder(job.plan, actual)
@@ -374,9 +406,23 @@ export class Jobs {
         throw new Error('Порядок изменился во время проверки. Повторите сверку.')
       job.message = 'Смешанный плейлист сверён: каталожные и локальные записи идут в порядке плана.'
       this.save(job)
+    } catch (error) {
+      if (error instanceof SpotifyError && error.retryAfter) {
+        const retryAt = Date.now() + error.retryAfter * 1000
+        this.store.setValue(
+          'spotify-api-retryAt',
+          Math.max(retryAt, this.store.value('spotify-api-retryAt', 0)),
+        )
+        job.message = error.message
+        this.save(job)
+      }
+      throw error
     } finally {
       this.active = null
+      this.activeCollectionId = null
       this.interrupted.delete(id)
+      this.changed()
+      this.wake()
     }
   }
 }

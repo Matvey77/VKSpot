@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { createServer } from 'node:http'
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { safeStorage, shell } from 'electron'
 import type { SpotifyTrack } from '../../../shared/model'
 
@@ -16,6 +17,68 @@ export class SpotifyError extends Error {
   }
 }
 export const redirectUri = 'http://127.0.0.1:43823/callback'
+export function parseRetryAfterSeconds(header: string | null, now = Date.now()): number {
+  if (!header) return 60
+  const trimmed = header.trim()
+  if (!trimmed) return 60
+  const numeric = Number(trimmed)
+  if (Number.isFinite(numeric)) return Math.max(1, Math.ceil(numeric))
+  const targetMs = Date.parse(trimmed)
+  if (Number.isFinite(targetMs)) return Math.max(1, Math.ceil((targetMs - now) / 1000))
+  return 60
+}
+export function createOAuthCallbackHandler(
+  expectedState: string,
+  onComplete: (error?: Error, code?: string) => void,
+) {
+  return (req: IncomingMessage, res: ServerResponse): void => {
+    res.setHeader('Connection', 'close')
+    try {
+      if (
+        req.method !== 'GET' ||
+        req.headers.host !== '127.0.0.1:43823' ||
+        !req.url?.startsWith('/')
+      ) {
+        res.writeHead(400)
+        res.end('Bad request')
+        return
+      }
+      const url = new URL(req.url, redirectUri)
+      if (url.origin !== 'http://127.0.0.1:43823') {
+        res.writeHead(400)
+        res.end('Bad request')
+        return
+      }
+      if (url.pathname !== '/callback') {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      if (url.searchParams.get('state') !== expectedState) {
+        res.writeHead(400)
+        res.end('Invalid state')
+        return
+      }
+      const result = url.searchParams.get('code'),
+        error = url.searchParams.get('error')
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.end(
+        '<!doctype html><meta charset="utf-8"><title>VKSpot</title><p>Можно вернуться в VKSpot.</p>',
+        () => {
+          onComplete(
+            error || !result
+              ? new Error('Spotify не подтвердил вход. Повторите подключение.')
+              : undefined,
+            result ?? undefined,
+          )
+        },
+      )
+    } catch {
+      if (!res.headersSent) res.writeHead(400)
+      if (!res.writableEnded) res.end('Bad request')
+    }
+  }
+}
 export function secureTokenStorageAvailable(platform: NodeJS.Platform = process.platform): boolean {
   if (!safeStorage.isEncryptionAvailable()) return false
   if (platform !== 'linux') return true
@@ -53,8 +116,21 @@ export class Spotify {
       throw new Error(
         'ОС не предоставила защищённое хранилище. Токены не будут записаны открытым текстом.',
       )
-    if (this.token)
-      writeFileSync(this.tokenPath, safeStorage.encryptString(JSON.stringify(this.token)))
+    if (!this.token) return
+    const encrypted = safeStorage.encryptString(JSON.stringify(this.token))
+    mkdirSync(dirname(this.tokenPath), { recursive: true })
+    const tempPath = `${this.tokenPath}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
+    try {
+      writeFileSync(tempPath, encrypted, process.platform === 'win32' ? undefined : { mode: 0o600 })
+      renameSync(tempPath, this.tokenPath)
+    } catch (error) {
+      try {
+        if (existsSync(tempPath)) unlinkSync(tempPath)
+      } catch {
+        /* Best-effort cleanup of the temporary token file. */
+      }
+      throw error
+    }
   }
   disconnect(): void {
     this.verified = false
@@ -76,34 +152,11 @@ export class Spotify {
           settled = true
           clearTimeout(timeout)
           server.close()
+          server.closeAllConnections?.()
           if (error) reject(error)
           else resolve(value!)
         }
-        const server = createServer((req, res) => {
-          const url = new URL(req.url ?? '/', redirectUri)
-          if (url.pathname !== '/callback') {
-            res.writeHead(404)
-            res.end()
-            return
-          }
-          if (url.searchParams.get('state') !== state) {
-            res.writeHead(400)
-            res.end('Invalid state')
-            return
-          }
-          const result = url.searchParams.get('code'),
-            error = url.searchParams.get('error')
-          res.setHeader('Content-Type', 'text/html; charset=utf-8')
-          res.end(
-            '<!doctype html><meta charset="utf-8"><title>VKSpot</title><p>Можно вернуться в VKSpot.</p>',
-          )
-          finish(
-            error || !result
-              ? new Error('Spotify не подтвердил вход. Повторите подключение.')
-              : undefined,
-            result ?? undefined,
-          )
-        })
+        const server = createServer(createOAuthCallbackHandler(state, finish))
         const timeout = setTimeout(
           () => finish(new Error('Время входа истекло. Подключитесь ещё раз.')),
           180000,
@@ -181,14 +234,19 @@ export class Spotify {
     }
     this.persist()
   }
-  async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+  async request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     if (!this.token) throw new Error('Подключите Spotify в настройках.')
+    signal?.throwIfAborted()
     if (this.token.expiresAt < Date.now() + 30000) {
       this.refreshing ??= this.refresh().finally(() => {
         this.refreshing = null
       })
       await this.refreshing
     }
+    signal?.throwIfAborted()
+    const isWrite = method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD'
+    const timeoutSignal = AbortSignal.timeout(30000)
+    const requestSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
     let response: Response
     try {
       response = await this.fetchImplementation('https://api.spotify.com/v1' + path, {
@@ -198,13 +256,16 @@ export class Spotify {
           'Content-Type': 'application/json',
         },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(30000),
+        signal: requestSignal,
       })
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) throw error
       throw new SpotifyError(
-        'Соединение прервано. Запись в Spotify могла выполниться; перед продолжением нужна сверка.',
+        isWrite
+          ? 'Соединение прервано. Запись в Spotify могла выполниться; перед продолжением нужна сверка.'
+          : 'Соединение со Spotify прервано. Проверьте подключение или прокси и повторите запрос.',
         0,
-        method !== 'GET',
+        isWrite,
       )
     }
     if (response.status === 429) {
@@ -212,13 +273,13 @@ export class Spotify {
         reason?: string
         error?: { reason?: string }
       }
-      const delay = Number(response.headers.get('retry-after') ?? 60)
+      const delay = parseRetryAfterSeconds(response.headers.get('retry-after'))
       const quota = (data.reason ?? data.error?.reason) === 'QUOTA_EXCEEDED'
       throw new SpotifyError(
         quota
           ? 'Квота Spotify исчерпана. Задание сохранено; продолжите позже.'
           : 'Spotify ограничил частоту запросов. Задание сохранено.',
-        Math.max(1, Number.isFinite(delay) ? delay : 60),
+        delay,
         false,
         quota ? 'quota' : 'rate-limit',
       )
@@ -245,7 +306,7 @@ export class Spotify {
       throw new SpotifyError(
         messages[response.status] ?? `Spotify вернул ошибку ${response.status}.`,
         0,
-        method !== 'GET' && response.status >= 500,
+        isWrite && response.status >= 500,
       )
     }
     if (response.status === 204) return undefined as T
@@ -289,14 +350,15 @@ export class Spotify {
         album: t.album.name,
       }))
   }
-  async playlistItems(id: string): Promise<string[]> {
+  async playlistItems(id: string, signal?: AbortSignal): Promise<string[]> {
     const items: string[] = []
     let offset = 0
     for (;;) {
+      signal?.throwIfAborted()
       const data = await this.request<{
         items: { item?: { uri: string } | null; track?: { uri: string } | null }[]
         next: string | null
-      }>(`/playlists/${id}/items?limit=100&offset=${offset}`)
+      }>(`/playlists/${id}/items?limit=100&offset=${offset}`, 'GET', undefined, signal)
       items.push(...data.items.map((i) => i.item?.uri ?? i.track?.uri ?? 'unavailable'))
       if (!data.next) return items
       if (!data.items.length) throw new Error('Spotify вернул неполную страницу плейлиста.')

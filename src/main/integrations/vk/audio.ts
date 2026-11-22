@@ -1,5 +1,11 @@
 import { BrowserWindow } from 'electron'
-import { playVKLibraryTrack, readVKLibraryLink, stopVKAudioPage } from './audio-page'
+import {
+  isVKSignInPage,
+  playVKLibraryTrack,
+  readVKLibraryLink,
+  stopVKAudioPage,
+} from './audio-page'
+import { ensureVKSessionPolicy } from './vk-session-policy'
 
 export type VKAudioTrack = {
   id?: string
@@ -91,11 +97,29 @@ export class VKAudioPlayer {
       if (!allowed(address)) event.preventDefault()
     })
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    ensureVKSessionPolicy(view.webContents.session)
+    const resetViewState = () => {
+      if (this.view !== view) return
+      ++this.revision
+      this.cancellation?.abort()
+      this.playing = false
+      this.currentKey = null
+      this.view = null
+    }
     const closeWithHost = () => this.close()
     main.once('closed', closeWithHost)
     view.once('closed', () => {
       main.off('closed', closeWithHost)
-      if (this.view === view) this.view = null
+      resetViewState()
+    })
+    view.webContents.on('destroyed', () => {
+      main.off('closed', closeWithHost)
+      resetViewState()
+    })
+    view.webContents.on('render-process-gone', () => {
+      main.off('closed', closeWithHost)
+      resetViewState()
+      if (!view.isDestroyed()) view.destroy()
     })
     return view
   }
@@ -175,9 +199,19 @@ export class VKAudioPlayer {
         // the export adapter, including vk.com -> vk.ru redirects and hydration.
         for (let attempt = 0; attempt < 40; attempt++) {
           if (cancelled() || view.webContents.isDestroyed()) return { playing: false }
-          const link = vkLibraryURL(
-            await this.execute<string | null>(view, `(${readVKLibraryLink.toString()})()`),
+          const probe = await this.execute<
+            string | { link: string | null; signIn: boolean } | null
+          >(
+            view,
+            `(() => { const readVKLibraryLink = ${readVKLibraryLink.toString()}; const isVKSignInPage = ${isVKSignInPage.toString()}; return { link: readVKLibraryLink(), signIn: isVKSignInPage() }; })()`,
           )
+          if (typeof probe === 'object' && probe !== null && probe.signIn === true) {
+            return {
+              playing: false,
+              error: 'Войди в VK в разделе «Подключения» и открой «Моя музыка».',
+            }
+          }
+          const link = vkLibraryURL(typeof probe === 'string' ? probe : (probe?.link ?? null))
           if (link && view.webContents.getURL() !== link) {
             await this.load(view, link)
             break

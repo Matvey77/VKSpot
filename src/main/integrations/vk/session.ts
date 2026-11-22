@@ -1,6 +1,7 @@
-import { BrowserWindow, WebContentsView } from 'electron'
+import { BrowserWindow, WebContentsView, session } from 'electron'
 import { readFileSync } from 'node:fs'
 import { classifyVKPage, readVKPageSignals } from './status'
+import { ensureVKSessionPolicy } from './vk-session-policy'
 import { vkExportOptionsSchema, vkImportPreview, vkProgressSchema } from '../../../core/vk-import'
 import type { ImportPreview, VKStatus } from '../../../shared/model'
 
@@ -16,6 +17,7 @@ export class VKSessionManager {
   private vkWindow: BrowserWindow | null = null
   private vkView: WebContentsView | null = null
   private vkExtracting = false
+  private vkExtractionCancelled = false
   private readonly vkWorld = 1001
   private vkStatus: VKStatus = { state: 'unknown' }
   private vkLastChecked: VKStatus = { state: 'unknown' }
@@ -60,6 +62,7 @@ export class VKSessionManager {
 
   private async checkVKPage(contents: Electron.WebContents): Promise<void> {
     if (
+      this.vkExtracting ||
       contents.isDestroyed() ||
       (contents === this.vkView?.webContents && this.vkNavigationURL !== null)
     ) {
@@ -183,7 +186,7 @@ export class VKSessionManager {
       if (mainFrame && contents === this.vkView?.webContents && !contents.isDestroyed()) {
         this.vkNavigationURL = inPlace ? null : url
         ++this.vkCheckRevision
-        this.beginVKCheck()
+        if (!this.vkExtracting) this.beginVKCheck()
       }
     })
     contents.on('did-finish-load', () => {
@@ -226,13 +229,14 @@ export class VKSessionManager {
     this.vkView.webContents.on('will-navigate', (event, url) => {
       if (!allowed(url)) event.preventDefault()
     })
+    this.vkView.webContents.on('will-redirect', (event, url) => {
+      if (!allowed(url)) event.preventDefault()
+    })
     this.vkView.webContents.setWindowOpenHandler(({ url }) => {
-      if (allowed(url)) void this.vkView?.webContents.loadURL(url)
+      if (allowed(url)) void this.vkView?.webContents.loadURL(url).catch(() => {})
       return { action: 'deny' }
     })
-    this.vkView.webContents.session.setPermissionRequestHandler(
-      (_webContents, _permission, callback) => callback(false),
-    )
+    ensureVKSessionPolicy(this.vkView.webContents.session)
     const ownedWindow = this.vkWindow
     const ownedView = this.vkView
     this.vkWindow.on('closed', () => {
@@ -268,10 +272,12 @@ export class VKSessionManager {
     }
     const contents = this.vkView.webContents
     this.vkExtracting = true
+    this.vkExtractionCancelled = false
     let active = true
     let polling = false
     let lastCollected = 0
     let lastProgressAt = Date.now()
+    let allowExpectedNavigation = false
     let releaseWatch = () => {}
     const poll = setInterval(async () => {
       if (polling || contents.isDestroyed()) return
@@ -301,30 +307,6 @@ export class VKSessionManager {
     }, 800)
 
     try {
-      const myMusicURL: unknown = await contents.executeJavaScriptInIsolatedWorld(this.vkWorld, [
-        {
-          code: `(() => { const tab = document.querySelector('[data-testid="AudioCatalog_Tabs_Tab_all"]'); return tab && tab.getAttribute('aria-selected') !== 'true' ? tab.href : null })()`,
-        },
-      ])
-      if (typeof myMusicURL === 'string') {
-        const target = new URL(myMusicURL)
-        if (
-          target.protocol !== 'https:' ||
-          !['vk.com', 'vk.ru'].includes(target.hostname) ||
-          !/^\/(audio|music)/.test(target.pathname)
-        ) {
-          throw new Error(
-            'VK вернул неподдерживаемую ссылку «Моя музыка». Откройте этот раздел вручную.',
-          )
-        }
-        this.options.onProgress({
-          collected: 0,
-          expected: expectedCount,
-          message: 'Открываем «Моя музыка»…',
-        })
-        await contents.loadURL(target.href)
-      }
-
       const interrupted = new Promise<never>((_resolve, reject) => {
         const destroyed = () => reject(new Error('Окно VK закрыто. Список не сохранён.'))
         const navigating = (
@@ -333,7 +315,7 @@ export class VKSessionManager {
           inPlace: boolean,
           mainFrame: boolean,
         ) => {
-          if (mainFrame && !inPlace) {
+          if (mainFrame && !inPlace && !allowExpectedNavigation) {
             reject(
               new Error(
                 'Чтение VK прервано сменой страницы. Откройте «Моя музыка» и повторите сбор.',
@@ -363,6 +345,55 @@ export class VKSessionManager {
         }
       })
 
+      const myMusicProbe = contents.executeJavaScriptInIsolatedWorld(this.vkWorld, [
+        {
+          code: `(() => { const tab = document.querySelector('[data-testid="AudioCatalog_Tabs_Tab_all"]'); return tab && tab.getAttribute('aria-selected') !== 'true' ? tab.href : null })()`,
+        },
+      ])
+      myMusicProbe.catch(() => {})
+      const myMusicURL: unknown = await Promise.race([myMusicProbe, interrupted])
+      if (typeof myMusicURL === 'string') {
+        const target = new URL(myMusicURL)
+        if (
+          target.protocol !== 'https:' ||
+          !['vk.com', 'vk.ru'].includes(target.hostname) ||
+          !/^\/(audio|music)/.test(target.pathname)
+        ) {
+          throw new Error(
+            'VK вернул неподдерживаемую ссылку «Моя музыка». Откройте этот раздел вручную.',
+          )
+        }
+        this.options.onProgress({
+          collected: 0,
+          expected: expectedCount,
+          message: 'Открываем «Моя музыка»…',
+        })
+        allowExpectedNavigation = true
+        let loadTimer: ReturnType<typeof setTimeout> | undefined
+        try {
+          const loadPromise = contents.loadURL(target.href)
+          loadPromise.catch(() => {})
+          await Promise.race([
+            loadPromise,
+            new Promise<never>((_resolve, reject) => {
+              loadTimer = setTimeout(() => {
+                if (!contents.isDestroyed()) contents.stop()
+                reject(new Error('Страница «Моя музыка» VK не загрузилась за 30 секунд.'))
+              }, 30000)
+            }),
+            interrupted,
+          ])
+        } finally {
+          clearTimeout(loadTimer)
+          allowExpectedNavigation = false
+          lastProgressAt = Date.now()
+        }
+      }
+
+      if (this.vkExtractionCancelled) {
+        throw new Error('Сбор остановлен пользователем.')
+      }
+
       const configCode = `globalThis.__VKSPOT_EXPORT_CONFIG__ = ${JSON.stringify({
         expectedCount,
         rangeFrom,
@@ -370,14 +401,13 @@ export class VKSessionManager {
         limit,
       })};`
       const exportScript = readFileSync(this.options.resolveResource('vk-export.js'), 'utf8')
-      const data: unknown = await Promise.race([
-        contents.executeJavaScriptInIsolatedWorld(
-          this.vkWorld,
-          [{ code: `${configCode}\n${exportScript}` }],
-          true,
-        ),
-        interrupted,
-      ])
+      const execPromise = contents.executeJavaScriptInIsolatedWorld(
+        this.vkWorld,
+        [{ code: `${configCode}\n${exportScript}` }],
+        true,
+      )
+      execPromise.catch(() => {})
+      const data: unknown = await Promise.race([execPromise, interrupted])
       if (!data || typeof data !== 'object') {
         throw new Error(
           'Скрипт VK не вернул данные. Убедитесь, что окно VK открыто на странице «Моя музыка» и список треков загружен.',
@@ -412,26 +442,38 @@ export class VKSessionManager {
       active = false
       clearInterval(poll)
       this.vkExtracting = false
+      this.vkExtractionCancelled = false
       this.options.onProgress(null)
     }
   }
 
   public async cancelVKExtraction(): Promise<void> {
-    if (!this.vkExtracting || !this.vkView || this.vkView.webContents.isDestroyed()) return
-    await this.vkView.webContents.executeJavaScriptInIsolatedWorld(this.vkWorld, [
-      {
-        code: 'if (globalThis.__VKSPOT_EXPORT__) globalThis.__VKSPOT_EXPORT__.cancelled = true; undefined',
-      },
-    ])
+    if (!this.vkExtracting) return
+    this.vkExtractionCancelled = true
+    if (!this.vkView || this.vkView.webContents.isDestroyed()) return
+    await this.vkView.webContents
+      .executeJavaScriptInIsolatedWorld(this.vkWorld, [
+        {
+          code: 'if (globalThis.__VKSPOT_EXPORT__) globalThis.__VKSPOT_EXPORT__.cancelled = true; undefined',
+        },
+      ])
+      .catch(() => {})
   }
 
   public async clearVK(): Promise<void> {
-    if (!this.vkView) throw new Error('Откройте окно VK, затем очистите сессию.')
-    const contents = this.vkView.webContents
+    if (this.vkExtracting) {
+      throw new Error('Остановите сбор списка VK перед выходом из аккаунта.')
+    }
+    const vkSession =
+      this.vkView && !this.vkView.webContents.isDestroyed()
+        ? this.vkView.webContents.session
+        : session.fromPartition('persist:vkspot-vk')
+    ensureVKSessionPolicy(vkSession)
     this.resetVKStatus('Сессия VK очищается; статус не подтверждён.')
-    await contents.session.clearStorageData()
+    await vkSession.clearStorageData()
     this.resetVKStatus('Сессия VK очищена; статус ещё не проверен.')
-    if (contents.isDestroyed()) throw new Error('Окно VK закрыто.')
-    await contents.loadURL('https://vk.com/audio')
+    if (this.vkView && !this.vkView.webContents.isDestroyed()) {
+      await this.vkView.webContents.loadURL('https://vk.com/audio')
+    }
   }
 }

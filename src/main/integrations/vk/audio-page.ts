@@ -10,6 +10,25 @@ export function readVKLibraryLink(): string | null {
   return tab?.href ?? null
 }
 
+/** Public DOM only. Detects a visible VK sign-in gate in an isolated world. */
+export function isVKSignInPage(): boolean {
+  const visible = (node: Element) => {
+    const style = getComputedStyle(node)
+    return (
+      node.getClientRects().length > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    )
+  }
+  return (
+    [
+      ...document.querySelectorAll(
+        'input[type="password"], #login_mobile, .login_form, .vkc__AuthRoot__content, [data-test-id="login-form"]',
+      ),
+    ].some(visible) ||
+    /^(?:login|id)\.vk\./.test(location.hostname) ||
+    location.pathname.startsWith('/join')
+  )
+}
+
 /** Cancels the scanner before pausing; never clicks a control that can start playback. */
 export function stopVKAudioPage(): void {
   const world = globalThis as typeof globalThis & { __VKSPOT_AUDIO__?: { cancelled: boolean } }
@@ -102,9 +121,18 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
     const time = text(
       '[data-testid="MusicTrackRow_Duration"], .audio_row__duration, .audio_item__duration',
     )
+    const rawDuration = tuple?.[5] ?? object.duration
+    const parsedDuration =
+      rawDuration !== undefined &&
+      rawDuration !== null &&
+      (typeof rawDuration !== 'string' || rawDuration.trim() !== '')
+        ? Number(rawDuration)
+        : NaN
     const duration = /^\d+(?::\d{2}){1,2}$/.test(time)
       ? time.split(':').reduce((total, part) => total * 60 + Number(part), 0)
-      : Number(tuple?.[5] ?? object.duration) || null
+      : Number.isFinite(parsedDuration) && parsedDuration >= 0
+        ? parsedDuration
+        : null
     const id =
       node.getAttribute('data-full-id') ||
       node.getAttribute('data-audio-id') ||
@@ -357,6 +385,8 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
         return fail(
           'Запись не найдена в личной медиатеке VK. Проверь аккаунт, «Мою музыку» и актуальность исходного списка.',
         )
+    } else {
+      endAt = 0
     }
     await sleep(150)
   }

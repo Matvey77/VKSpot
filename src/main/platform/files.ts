@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, shell } from 'electron'
-import { join, extname, basename } from 'node:path'
-import { createReadStream, promises as fs } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { basename, dirname, extname, join } from 'node:path'
+import { constants as fsConstants, createReadStream, promises as fs } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { z } from 'zod'
@@ -11,6 +11,60 @@ import { exportFormatSchema, type ImportPreview } from '../../shared/model'
 
 const uuid = z.string().uuid()
 const exec = promisify(execFile)
+const MAX_IMPORT_BYTES = 100 * 1024 * 1024
+
+async function writeFileAtomically(filePath: string, content: string): Promise<void> {
+  const tempPath = join(
+    dirname(filePath),
+    `.${basename(filePath)}.tmp-${process.pid}-${randomUUID()}`,
+  )
+  try {
+    await fs.writeFile(tempPath, content, 'utf8')
+    await fs.rename(tempPath, filePath)
+  } catch (error) {
+    await fs.rm(tempPath, { force: true }).catch(() => {})
+    throw error
+  }
+}
+
+function sanitizeHelperError(error: unknown): Error {
+  const err = error as NodeJS.ErrnoException & {
+    killed?: boolean
+    signal?: string | null
+    stderr?: string | Buffer
+  }
+  if (err?.killed || err?.signal === 'SIGTERM' || err?.code === 'ETIMEDOUT') {
+    return new Error('Системный помощник не ответил вовремя. Повторите проверку.', { cause: error })
+  }
+  const rawStderr =
+    typeof err?.stderr === 'string'
+      ? err.stderr
+      : Buffer.isBuffer(err?.stderr)
+        ? err.stderr.toString('utf8')
+        : ''
+  let text = rawStderr
+  if (text.includes('#< CLIXML')) {
+    const errorLines = [...text.matchAll(/<S S="Error">([\s\S]*?)<\/S>/g)].map((m) =>
+      m[1].replace(/_x000D__x000A_/g, '\n').replace(/<[^>]+>/g, ''),
+    )
+    text = errorLines.join('\n')
+  }
+  const firstLine = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(
+      (line) =>
+        line.length > 0 &&
+        !line.startsWith('At ') &&
+        !line.startsWith('строка:') &&
+        !line.startsWith('+') &&
+        !line.startsWith('CategoryInfo') &&
+        !line.startsWith('FullyQualifiedErrorId'),
+    )
+  return new Error(firstLine || 'Не удалось выполнить системную проверку Spotify.', {
+    cause: error,
+  })
+}
 
 export const localExtensions = new Set([
   '.mp3',
@@ -35,6 +89,8 @@ export function openExternalSafely(url: unknown): Promise<void> {
   const parsed = new URL(value)
   if (
     parsed.protocol !== 'https:' ||
+    parsed.username ||
+    parsed.password ||
     ![
       'open.spotify.com',
       'developer.spotify.com',
@@ -46,7 +102,7 @@ export function openExternalSafely(url: unknown): Promise<void> {
   ) {
     throw new Error('Эта внешняя ссылка не разрешена.')
   }
-  return shell.openExternal(value)
+  return shell.openExternal(parsed.href)
 }
 
 export async function previewImportDialog(main: BrowserWindow): Promise<ImportPreview | null> {
@@ -56,10 +112,18 @@ export async function previewImportDialog(main: BrowserWindow): Promise<ImportPr
     filters: [{ name: 'Список музыки', extensions: ['json', 'csv', 'txt'] }],
   })
   if (canceled) return null
+  const filePath = filePaths[0]
+  const stat = await fs.stat(filePath)
+  if (!stat.isFile()) {
+    throw new Error('Выберите обычный файл для импорта.')
+  }
+  if (stat.size > MAX_IMPORT_BYTES) {
+    throw new Error('Файл слишком большой для импорта (максимум 100 МБ).')
+  }
   return parseImport(
-    await fs.readFile(filePaths[0], 'utf8'),
-    extname(filePaths[0]),
-    basename(filePaths[0], extname(filePaths[0])),
+    await fs.readFile(filePath, 'utf8'),
+    extname(filePath),
+    basename(filePath, extname(filePath)),
   )
 }
 
@@ -78,7 +142,7 @@ export async function exportCollectionDialog(
     filters: [{ name: 'VKSpot', extensions: [extension] }],
   })
   if (result.canceled || !result.filePath) return null
-  await fs.writeFile(result.filePath, text, 'utf8')
+  await writeFileAtomically(result.filePath, text)
   return result.filePath
 }
 
@@ -99,12 +163,15 @@ export async function linkFileDialog(
   })
   if (result.canceled) return
   const path = result.filePaths[0]
-  const stat = await fs.stat(path)
+  const stat = await fs.lstat(path)
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error('Выберите обычный аудиофайл, а не символическую ссылку или папку.')
+  }
   if (!localExtensions.has(extname(path).toLowerCase())) {
     throw new Error('Выберите аудиофайл поддерживаемого формата.')
   }
   const { parseFile } = await import('music-metadata')
-  const metadata = await parseFile(path)
+  const metadata = await parseFile(path, { skipCovers: true })
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(path)) hash.update(chunk)
   store.patch(collectionId, [entryId], {
@@ -128,18 +195,19 @@ export async function prepareLocalDialog(
   id: unknown,
 ): Promise<string | null> {
   const collection = store.get(uuid.parse(id))
-  const plan = collection.rows.map((row) => ({
-    rowId: row.id,
-    position: row.position,
-    artist: row.working.artist,
-    title: row.working.title,
-    version: row.working.version,
-    excluded: row.working.excluded,
-    destination: row.working.destination,
-    uri: row.working.spotify?.uri ?? null,
-    local: row.working.local,
-  }))
-  const local = plan.filter((p) => !p.excluded && p.destination === 'local' && p.local)
+  const plan = collection.rows
+    .filter((r) => !r.working.excluded)
+    .map((r) => ({
+      rowId: r.id,
+      position: r.position,
+      artist: r.working.artist,
+      title: r.working.title,
+      version: r.working.version,
+      destination: r.working.destination,
+      uri: r.working.destination === 'spotify' ? (r.working.spotify?.uri ?? null) : null,
+      local: r.working.destination === 'local' ? r.working.local : null,
+    }))
+  const local = plan.filter((p) => p.destination === 'local' && p.local)
   if (!local.length) throw new Error('В плане нет локальных файлов.')
   const choice = await dialog.showOpenDialog(main, {
     title: 'Папка для копии локальных файлов',
@@ -155,6 +223,22 @@ export async function prepareLocalDialog(
     if (!localExtensions.has(extension)) {
       throw new Error('В архиве указан неподдерживаемый локальный файл.')
     }
+    let stat
+    try {
+      stat = await fs.lstat(file.path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error(`Файл записи №${item.position} не найден. Привяжите его заново.`, {
+          cause: error,
+        })
+      }
+      throw error
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error(
+        `Файл записи №${item.position} недоступен или является символической ссылкой. Привяжите его заново.`,
+      )
+    }
     const hash = createHash('sha256')
     for await (const chunk of createReadStream(file.path)) hash.update(chunk)
     if (hash.digest('hex') !== file.sha256) {
@@ -163,7 +247,7 @@ export async function prepareLocalDialog(
     const filename = `${String(item.position).padStart(6, '0')}-${item.rowId.slice(0, 8)}${extension}`
     const target = join(folder, filename)
     try {
-      await fs.copyFile(file.path, target, 1)
+      await fs.copyFile(file.path, target, fsConstants.COPYFILE_EXCL)
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
       const existing = createHash('sha256')
@@ -176,7 +260,7 @@ export async function prepareLocalDialog(
     }
     manifest.push({ ...item, preparedPath: target })
   }
-  await fs.writeFile(
+  await writeFileAtomically(
     join(folder, 'transfer-plan.json'),
     JSON.stringify(
       {
@@ -190,17 +274,18 @@ export async function prepareLocalDialog(
       2,
     ),
   )
-  await fs.writeFile(
+  await writeFileAtomically(
     join(folder, 'local.m3u8'),
     '#EXTM3U\n' +
       manifest
-        .map(
-          (p) =>
-            `#EXTINF:${p.local?.duration ?? -1},${p.artist.replace(/[\r\n]/g, ' ')} - ${p.title.replace(/[\r\n]/g, ' ')}\n${basename(p.preparedPath)}`,
-        )
-        .join('\n'),
+        .map((p) => {
+          const duration = p.local?.duration != null ? Math.round(p.local.duration) : -1
+          return `#EXTINF:${duration},${p.artist.replace(/[\r\n]/g, ' ')} - ${p.title.replace(/[\r\n]/g, ' ')}\n${basename(p.preparedPath)}`
+        })
+        .join('\n') +
+      '\n',
   )
-  await fs.writeFile(
+  await writeFileAtomically(
     join(folder, 'READ_ME.txt'),
     'VKSpot: файлы скопированы без перекодирования. Исходные файлы не изменены.\nПодключите эту папку в настройках Spotify → Локальные файлы. Добавьте записи в плейлист. transfer-plan.json содержит полный смешанный порядок.\nИмена файлов обозначают позиции; они не заменяют встроенные теги. Мобильное устройство требует отдельной копии файлов.\n',
   )
@@ -222,19 +307,23 @@ export async function executeSpotifyHelper(action: unknown): Promise<string> {
   if (process.platform !== 'win32') {
     throw new Error('Системный помощник этой сборки доступен только на Windows.')
   }
-  const result = await exec(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-File',
-      resolveResource('windows/spotify-helper.ps1'),
-      '-Action',
-      a,
-    ],
-    { windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 },
-  )
-  return result.stdout
+  try {
+    const result = await exec(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        resolveResource('windows/spotify-helper.ps1'),
+        '-Action',
+        a,
+      ],
+      { windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 },
+    )
+    return result.stdout
+  } catch (error) {
+    throw sanitizeHelperError(error)
+  }
 }

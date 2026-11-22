@@ -1,7 +1,21 @@
 import { describe, it, expect } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
 import { Store } from '../../src/main/storage'
+import { Database } from '../../src/main/storage/database'
 import { parseImport, exportText } from '../../src/core/collection'
 import { workingPatchSchema } from '../../src/shared/model'
+
+function cleanupTempDir(directory: string): void {
+  if (
+    dirname(resolve(directory)) !== resolve(tmpdir()) ||
+    !basename(directory).startsWith('vkspot-store-')
+  ) {
+    throw new Error('Unsafe cleanup target')
+  }
+  rmSync(directory, { recursive: true, force: true })
+}
 
 describe('transactional collection storage', () => {
   it('partial IPC commands retain local links, notes, versions and destination', () => {
@@ -199,6 +213,86 @@ describe('transactional collection storage', () => {
       expect(() => store.get(id3)).toThrow()
     } finally {
       store.close()
+    }
+  })
+
+  it('recovers interrupted transfer without playlistId at cursor 0 as needs-review and others as paused', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'vkspot-store-'))
+    const dbPath = join(directory, 'collection.db')
+    let store = new Store(dbPath)
+    try {
+      const id = store.import(parseImport('A - B', '.txt', 'Crash'))
+      const rowId = store.get(id).rows[0].id
+
+      const ambiguousTransfer = store.newJob(id, 'transfer', [rowId])
+      store.putJob({ ...ambiguousTransfer, state: 'running', cursor: 0 })
+
+      const createdTransfer = store.newJob(id, 'transfer', [rowId])
+      store.putJob({
+        ...createdTransfer,
+        state: 'pausing',
+        cursor: 0,
+        playlistId: 'playlist-123',
+      })
+
+      const interruptedSearch = store.newJob(id, 'search', [rowId])
+      store.putJob({ ...interruptedSearch, state: 'running', cursor: 0 })
+
+      store.close()
+      store = new Store(dbPath)
+
+      expect(store.job(ambiguousTransfer.id)).toMatchObject({
+        state: 'needs-review',
+        autoResume: false,
+      })
+      expect(store.job(ambiguousTransfer.id).message).toContain('Spotify')
+      expect(store.job(createdTransfer.id)).toMatchObject({ state: 'paused' })
+      expect(store.job(interruptedSearch.id)).toMatchObject({ state: 'paused' })
+    } finally {
+      store.close()
+      cleanupTempDir(directory)
+    }
+  })
+
+  it('supports nested SAVEPOINT transactions, creates history index, and preserves original errors on rollback failure', () => {
+    const db = new Database(':memory:')
+    try {
+      const indexRow = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_history_collection'",
+        )
+        .get() as { name: string } | undefined
+      expect(indexRow?.name).toBe('idx_history_collection')
+
+      db.transaction(() => {
+        db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('outer-before', '1')
+        expect(() =>
+          db.transaction(() => {
+            db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('inner-rolled-back', '2')
+            throw new Error('inner failure')
+          }),
+        ).toThrow('inner failure')
+        db.prepare('INSERT INTO settings(key,value) VALUES(?,?)').run('outer-after', '3')
+      })
+
+      expect(db.prepare('SELECT value FROM settings WHERE key=?').get('outer-before')).toEqual({
+        value: '1',
+      })
+      expect(
+        db.prepare('SELECT value FROM settings WHERE key=?').get('inner-rolled-back'),
+      ).toBeUndefined()
+      expect(db.prepare('SELECT value FROM settings WHERE key=?').get('outer-after')).toEqual({
+        value: '3',
+      })
+
+      expect(() =>
+        db.transaction(() => {
+          db.close()
+          throw new Error('original transaction failure')
+        }),
+      ).toThrow('original transaction failure')
+    } finally {
+      db.close()
     }
   })
 })

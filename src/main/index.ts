@@ -3,8 +3,10 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveResource } from './platform/files'
 import { registerIpc } from './ipc/register'
+import { resolveDevRendererUrl } from './ipc/router'
 import { Jobs } from './jobs/runner'
 import { configureSpotifyNetwork, configureVKNetwork } from './platform/network'
+import { proxySchema } from '../shared/model'
 import { Spotify } from './integrations/spotify/api'
 import { SpotifyBrowser } from './integrations/spotify/browser'
 import { Store } from './storage'
@@ -52,8 +54,20 @@ app
     mkdirSync(dataPath, { recursive: true })
     store = new Store(join(dataPath, 'collection.db'))
 
-    await configureSpotifyNetwork(store.settings().spotifyProxy)
-    await configureVKNetwork(store.settings().useProxyForVK, store.settings().vkProxy)
+    const startupSettings = store.settings()
+    const spotifyProxy = proxySchema.safeParse(startupSettings.spotifyProxy)
+    const vkProxy = proxySchema.safeParse(startupSettings.vkProxy)
+    await configureSpotifyNetwork(spotifyProxy.success ? spotifyProxy.data : '')
+    await configureVKNetwork(
+      startupSettings.useProxyForVK && vkProxy.success,
+      vkProxy.success ? vkProxy.data : '',
+    )
+
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
+      callback(false),
+    )
+    session.defaultSession.setPermissionCheckHandler(() => false)
+    session.defaultSession.on('will-download', (event) => event.preventDefault())
 
     spotify = new Spotify(join(dataPath, 'spotify.enc'), (url, init) =>
       session.fromPartition('vkspot-spotify-api').fetch(url, init),
@@ -108,8 +122,18 @@ app
     )
 
     main.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('https://open.spotify.com/') || url.startsWith('https://spotify.com/')) {
-        void shell.openExternal(url)
+      try {
+        const parsed = new URL(url)
+        if (
+          parsed.protocol === 'https:' &&
+          !parsed.username &&
+          !parsed.password &&
+          (parsed.hostname === 'open.spotify.com' || parsed.hostname === 'spotify.com')
+        ) {
+          void shell.openExternal(parsed.href)
+        }
+      } catch {
+        // Ignore invalid window.open URLs.
       }
       return { action: 'deny' }
     })
@@ -122,6 +146,28 @@ app
     }
 
     main.webContents.on('will-navigate', (event) => event.preventDefault())
+    main.webContents.on('will-redirect', (event) => event.preventDefault())
+    main.webContents.on('will-frame-navigate', (details) => {
+      if (details.isMainFrame) {
+        details.preventDefault()
+        return
+      }
+      try {
+        const parsed = new URL(details.url)
+        if (
+          parsed.protocol !== 'https:' ||
+          parsed.hostname !== 'open.spotify.com' ||
+          parsed.username ||
+          parsed.password
+        ) {
+          details.preventDefault()
+        }
+      } catch {
+        details.preventDefault()
+      }
+    })
+    const rendererFilePath = join(__dirname, '../renderer/index.html')
+    const devRendererUrl = resolveDevRendererUrl()
     registerIpc({
       main,
       store,
@@ -133,10 +179,12 @@ app
       dataPath,
       changed,
       verifySpotifyProfile,
+      rendererFilePath,
+      devRendererUrl,
     })
 
-    if (process.env.ELECTRON_RENDERER_URL) void main.loadURL(process.env.ELECTRON_RENDERER_URL)
-    else void main.loadFile(join(__dirname, '../renderer/index.html'))
+    if (devRendererUrl) void main.loadURL(devRendererUrl)
+    else void main.loadFile(rendererFilePath)
 
     if (spotify.hasSession()) void verifySpotifyProfile().catch(() => {})
 
@@ -144,6 +192,7 @@ app
       jobs.shutdown()
       spotifyBrowser.close()
       vkAudio.close()
+      store.close()
     })
     app.on('window-all-closed', () => app.quit())
   })

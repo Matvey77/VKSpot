@@ -1,18 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 
-const { mockWebContents, state } = vi.hoisted(() => {
+const { mockWebContents, webContentsListeners, windowListeners, state } = vi.hoisted(() => {
   const state = {
     url: '',
     link: 'https://vk.ru/audios42?section=all',
+    signIn: false,
     result: { playing: true } as { playing: boolean; error?: string },
   }
+  const webContentsListeners = new Map<string, Array<(...args: unknown[]) => void>>()
+  const windowListeners = new Map<string, Array<(...args: unknown[]) => void>>()
+  const mockSession = {
+    setPermissionRequestHandler: vi.fn(),
+    setPermissionCheckHandler: vi.fn(),
+    on: vi.fn(),
+  }
   const mockWebContents = {
+    session: mockSession,
     getUserAgent: vi.fn(() => 'Mozilla/5.0 Chrome/130 Electron/44'),
     setUserAgent: vi.fn(),
     isDestroyed: vi.fn(() => false),
     setAudioMuted: vi.fn(),
-    on: vi.fn(),
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const list = webContentsListeners.get(event) ?? []
+      list.push(listener)
+      webContentsListeners.set(event, list)
+    }),
     setWindowOpenHandler: vi.fn(),
     getURL: vi.fn(() => state.url),
     isLoadingMainFrame: vi.fn(() => false),
@@ -23,30 +36,40 @@ const { mockWebContents, state } = vi.hoisted(() => {
     executeJavaScriptInIsolatedWorld: vi.fn(),
     close: vi.fn(),
   }
-  return { mockWebContents, state }
+  return { mockWebContents, webContentsListeners, windowListeners, state }
 })
 
 vi.mock('electron', () => ({
   BrowserWindow: class {
     webContents = mockWebContents
-    once = vi.fn()
+    once = vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const list = windowListeners.get(event) ?? []
+      list.push(listener)
+      windowListeners.set(event, list)
+    })
     isDestroyed = vi.fn(() => false)
     destroy = vi.fn(() => mockWebContents.close())
   },
 }))
 
 import { VKAudioPlayer, vkLibraryURL } from '../../src/main/integrations/vk/audio'
+import { ensureVKSessionPolicy } from '../../src/main/integrations/vk/vk-session-policy'
 
 const host = () =>
   ({ isDestroyed: () => false, once: vi.fn(), off: vi.fn() }) as unknown as BrowserWindow
 beforeEach(() => {
   vi.clearAllMocks()
+  webContentsListeners.clear()
+  windowListeners.clear()
   state.url = ''
   state.link = 'https://vk.ru/audios42?section=all'
+  state.signIn = false
   state.result = { playing: true }
   mockWebContents.executeJavaScriptInIsolatedWorld.mockImplementation(
     async (_world, scripts: { code: string }[]) => {
-      if (scripts[0].code.includes('function readVKLibraryLink')) return state.link
+      if (scripts[0].code.includes('function readVKLibraryLink')) {
+        return { link: state.link, signIn: state.signIn }
+      }
       if (scripts[0].code.includes('function playVKLibraryTrack')) return state.result
       return undefined
     },
@@ -138,5 +161,51 @@ describe('VK audio personal-library navigation', () => {
     'https://user@vk.ru/audios42',
   ])('rejects unrelated or untrusted personal-library addresses: %s', (address) => {
     expect(vkLibraryURL(address)).toBeNull()
+  })
+
+  it('configures VK session policy once per session', () => {
+    const fakeSession = {
+      setPermissionRequestHandler: vi.fn(),
+      setPermissionCheckHandler: vi.fn(),
+      on: vi.fn(),
+    } as unknown as Electron.Session
+    ensureVKSessionPolicy(fakeSession)
+    ensureVKSessionPolicy(fakeSession)
+    expect(fakeSession.setPermissionRequestHandler).toHaveBeenCalledOnce()
+    expect(fakeSession.setPermissionCheckHandler).toHaveBeenCalledOnce()
+    expect(fakeSession.on).toHaveBeenCalledExactlyOnceWith('will-download', expect.any(Function))
+  })
+
+  it('exits library wait loop immediately when sign-in gate is detected', async () => {
+    state.link = ''
+    state.signIn = true
+    const player = new VKAudioPlayer(host)
+    const result = await player.play({ artist: 'Artist', title: 'Song' })
+    expect(result).toEqual({
+      playing: false,
+      error: 'Войди в VK в разделе «Подключения» и открой «Моя музыка».',
+    })
+    expect(mockWebContents.executeJavaScriptInIsolatedWorld).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets playing and currentKey on render-process-gone so the same track can play again', async () => {
+    const player = new VKAudioPlayer(host)
+    const track = { artist: 'Artist', title: 'Track', duration: 180, position: 1 }
+    expect(await player.play(track)).toEqual({ playing: true })
+
+    const crashHandlers = webContentsListeners.get('render-process-gone') ?? []
+    expect(crashHandlers.length).toBeGreaterThan(0)
+    state.url = ''
+    crashHandlers.forEach((handler) => handler({}, { reason: 'crashed', exitCode: 1 }))
+    expect(mockWebContents.close).toHaveBeenCalledOnce()
+
+    // If playing/currentKey had not been cleared, calling play(track) again would call pause() instead.
+    expect(await player.play(track)).toEqual({ playing: true })
+    const playCalls = mockWebContents.executeJavaScriptInIsolatedWorld.mock.calls.filter(
+      ([, scripts]) => scripts[0].code.includes('function playVKLibraryTrack'),
+    )
+    expect(playCalls).toHaveLength(2)
+    expect(mockWebContents.loadURL).toHaveBeenCalledTimes(4)
+    player.close()
   })
 })

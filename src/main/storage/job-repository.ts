@@ -14,12 +14,22 @@ export class JobRepository {
     db.connection.exec(
       'CREATE TABLE IF NOT EXISTS job_details(id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE, row_ids TEXT NOT NULL, plan TEXT);',
     )
-    const old = db.prepare('SELECT id,payload FROM jobs').all() as { id: string; payload: string }[]
-    db.transaction(() => {
+    if (db.userVersion() < 1) {
+      this.migrateLegacyJobs()
+    }
+  }
+
+  private migrateLegacyJobs(): void {
+    this.db.transaction(() => {
+      const old = this.db.prepare('SELECT id,payload FROM jobs').all() as {
+        id: string
+        payload: string
+      }[]
       for (const row of old) {
         const job = JSON.parse(row.payload) as Runtime
         if (job.rowIds) this.put(job as Job)
       }
+      this.db.setUserVersion(1)
     })
   }
 

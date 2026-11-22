@@ -24,20 +24,21 @@
     '.audioPlaylistSnippet, [data-testid*="PlaylistSnippet"], [data-testid*="Recommendation"], aside, [data-testid*="Recent"], [data-testid*="History"], [data-testid*="Friends"], [data-testid*="Curator"]'
 
   let cachedShuffleBtn = null
-  let shuffleChecked = false
+  let lastShuffleLookupAt = 0
 
   function getShuffleButton() {
     return [...document.querySelectorAll('button, a, [role="button"]')].find((el) => {
       const text = el.textContent || ''
-      return /перемешать/i.test(text) && !el.closest(excluded)
+      return /перемешать|shuffle/i.test(text) && !el.closest(excluded) && !el.closest(rowSelector)
     })
   }
 
   function getShuffleBtn() {
-    if (!shuffleChecked || (cachedShuffleBtn && !cachedShuffleBtn.isConnected)) {
-      cachedShuffleBtn = getShuffleButton()
-      shuffleChecked = true
-    }
+    if (cachedShuffleBtn && cachedShuffleBtn.isConnected) return cachedShuffleBtn
+    const now = Date.now()
+    if (lastShuffleLookupAt && now - lastShuffleLookupAt < 250) return cachedShuffleBtn
+    lastShuffleLookupAt = now
+    cachedShuffleBtn = getShuffleButton()
     return cachedShuffleBtn
   }
 
@@ -155,9 +156,14 @@
       '.audio_item__duration',
     ])
     const seconds = tuple ? payload[5] : object.duration
+    const hasSeconds =
+      seconds !== '' &&
+      seconds !== null &&
+      seconds !== undefined &&
+      (typeof seconds !== 'string' || seconds.trim() !== '')
     const duration = /^\d+(?::\d{2}){1,2}$/.test(time)
       ? time.split(':').reduce((sum, n) => sum * 60 + Number(n), 0)
-      : Number.isFinite(Number(seconds)) && seconds !== null && seconds !== undefined
+      : hasSeconds && Number.isFinite(Number(seconds))
         ? Math.max(0, Number(seconds))
         : null
     const id =
@@ -191,8 +197,9 @@
     return locate(node, { ...track })
   }
   function locate(node, track) {
-    const positionNode = node.hasAttribute('aria-posinset') ? node : node.closest('[aria-posinset]')
-    const position = Number(positionNode?.getAttribute('aria-posinset'))
+    const positionNode =
+      (node.hasAttribute('aria-posinset') ? node : node.closest('[aria-posinset]')) || node
+    const position = Number(positionNode.getAttribute('aria-posinset'))
     const rect = node.getBoundingClientRect()
     const offset =
       scroller === document.scrollingElement
@@ -203,7 +210,7 @@
       key: track.id || JSON.stringify([track.artist, track.title, track.duration]),
       top: rect.top - offset + scroller.scrollTop,
       position: Number.isInteger(position) && position > 0 ? position : null,
-      size: Number(node.getAttribute('aria-setsize')),
+      size: Number(positionNode.getAttribute('aria-setsize') ?? node.getAttribute('aria-setsize')),
     }
   }
   function snapshot() {
@@ -226,27 +233,42 @@
       saved.push(...current)
       return true
     }
-    const candidates = []
-    for (let start = saved.length - 1; start >= 0; start--) {
-      if (saved[start].key !== current[0].key) continue
-      const anchored =
-        current[0].position !== null && saved[start].position !== null
-          ? current[0].position === saved[start].position
-          : Math.abs(current[0].top - saved[start].top) <= 8
-      candidates.push({ start, anchored })
-    }
-    const anchoredCandidates = candidates.filter((item) => item.anchored)
-    const alignments = (anchoredCandidates.length ? anchoredCandidates : candidates).flatMap(
-      ({ start, anchored }) => {
+    const findMatch = (minStart, maxStart) => {
+      const candidates = []
+      for (let start = maxStart; start >= minStart; start--) {
+        if (saved[start].key !== current[0].key) continue
+        const anchored =
+          current[0].position !== null && saved[start].position !== null
+            ? current[0].position === saved[start].position
+            : Math.abs(current[0].top - saved[start].top) <= 8
+        candidates.push({ start, anchored })
+      }
+      if (!candidates.length) return { found: false, match: null }
+      const anchoredCandidates = candidates.filter((item) => item.anchored)
+      const pool = anchoredCandidates.length ? anchoredCandidates : candidates
+      const alignments = []
+      for (const { start, anchored } of pool) {
         const overlap = Math.min(current.length, saved.length - start)
-        return current.slice(0, overlap).every((item, i) => saved[start + i].key === item.key)
-          ? [{ start, overlap, anchored }]
-          : []
-      },
-    )
-    const anchored = alignments.filter((item) => item.anchored)
-    const match =
-      anchored.length === 1 ? anchored[0] : alignments.length === 1 ? alignments[0] : null
+        let matches = true
+        for (let i = 0; i < overlap; i++) {
+          if (saved[start + i].key !== current[i].key) {
+            matches = false
+            break
+          }
+        }
+        if (matches) alignments.push({ start, overlap, anchored })
+      }
+      if (!alignments.length) return { found: false, match: null }
+      const anchored = alignments.filter((item) => item.anchored)
+      const match =
+        anchored.length === 1 ? anchored[0] : alignments.length === 1 ? alignments[0] : null
+      return { found: true, match }
+    }
+    const windowSize = Math.max(current.length * 3, 200)
+    const windowStart = Math.max(0, saved.length - windowSize)
+    let result = findMatch(windowStart, saved.length - 1)
+    if (!result.found && windowStart > 0) result = findMatch(0, saved.length - 1)
+    const match = result.match
     if (!match) return false
     for (let i = 0; i < match.overlap; i++) enrich(saved[match.start + i], current[i])
     saved.push(...current.slice(match.overlap))
