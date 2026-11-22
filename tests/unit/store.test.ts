@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Store } from '../../src/main/storage'
 import { Database } from '../../src/main/storage/database'
+import {
+  EMPTY_CACHE_TTL_MS,
+  FULL_CACHE_TTL_MS,
+  Preferences,
+} from '../../src/main/storage/preferences'
 import { parseImport, exportText } from '../../src/core/collection'
 import { workingPatchSchema } from '../../src/shared/model'
 
@@ -293,6 +298,139 @@ describe('transactional collection storage', () => {
       ).toThrow('original transaction failure')
     } finally {
       db.close()
+    }
+  })
+
+  it('caches settings in memory until preferences change and enforces cache TTL and entry cap', () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    const baseTime = 1_700_000_000_000
+    nowSpy.mockReturnValue(baseTime)
+    const db = new Database(':memory:')
+    try {
+      const prefs = new Preferences(db, { maxCacheEntries: 3, cachePruneInterval: 1 })
+      const firstSettings = prefs.settings()
+      expect(prefs.settings()).toBe(firstSettings)
+
+      prefs.setValue('preferences', { ...firstSettings, playlistName: 'Updated List' })
+      const updatedSettings = prefs.settings()
+      expect(updatedSettings).not.toBe(firstSettings)
+      expect(updatedSettings.playlistName).toBe('Updated List')
+      expect(prefs.settings()).toBe(updatedSettings)
+
+      prefs.cache('empty-key', [])
+      prefs.cache('full-key', [{ uri: 'spotify:track:' + 'a'.repeat(22) }])
+      expect(prefs.cached('empty-key')).toEqual([])
+      expect(prefs.cached('full-key')).toHaveLength(1)
+
+      nowSpy.mockReturnValue(baseTime + EMPTY_CACHE_TTL_MS)
+      expect(prefs.cached('empty-key')).toBeNull()
+      expect(prefs.cached('full-key')).toHaveLength(1)
+
+      nowSpy.mockReturnValue(baseTime + FULL_CACHE_TTL_MS)
+      expect(prefs.cached('full-key')).toBeNull()
+
+      nowSpy.mockReturnValue(baseTime + FULL_CACHE_TTL_MS + 1000)
+      prefs.cache('k1', [{ id: 1 }])
+      nowSpy.mockReturnValue(baseTime + FULL_CACHE_TTL_MS + 2000)
+      prefs.cache('k2', [{ id: 2 }])
+      nowSpy.mockReturnValue(baseTime + FULL_CACHE_TTL_MS + 3000)
+      prefs.cache('k3', [{ id: 3 }])
+      nowSpy.mockReturnValue(baseTime + FULL_CACHE_TTL_MS + 4000)
+      prefs.cache('k4', [{ id: 4 }])
+
+      expect(prefs.cached('k1')).toBeNull()
+      expect(prefs.cached('k2')).toEqual([{ id: 2 }])
+      expect(prefs.cached('k3')).toEqual([{ id: 3 }])
+      expect(prefs.cached('k4')).toEqual([{ id: 4 }])
+    } finally {
+      nowSpy.mockRestore()
+      db.close()
+    }
+  })
+
+  it('bounds collection history to 100 entries and 5 repair snapshots', () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(parseImport('Artist - Track', '.txt', 'HistoryCap'))
+      const rowId = store.get(id).rows[0].id
+
+      for (let i = 1; i <= 105; i++) {
+        store.patch(id, [rowId], { note: `n-${i}` })
+      }
+
+      let undoCount = 0
+      while (store.undo(id)) undoCount++
+      expect(undoCount).toBe(100)
+      expect(store.row(id, rowId).working.note).toBe('n-5')
+
+      for (let r = 1; r <= 7; r++) {
+        store.repairCollection(id, parseImport(`Artist - Track\nExtra - ${r}`, '.txt', `R${r}`))
+      }
+      let repairUndos = 0
+      while (store.undo(id)) repairUndos++
+      expect(repairUndos).toBe(5)
+    } finally {
+      store.close()
+    }
+  })
+
+  it('detects in-place rowIds mutation in putJob and skips job_details in putJobProgress', () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(parseImport('A - B', '.txt', 'Jobs'))
+      const job = store.newJob(id, 'search', ['row-1'])
+      const hydrated = store.job(job.id)
+      hydrated.rowIds.push('row-2')
+      store.putJob(hydrated)
+      expect(store.job(job.id).rowIds).toEqual(['row-1', 'row-2'])
+
+      hydrated.cursor = 1
+      store.putJobProgress({ ...hydrated, rowIds: ['row-1', 'row-2', 'mutated-ignored'] })
+      expect(store.job(job.id).cursor).toBe(1)
+      expect(store.job(job.id).rowIds).toEqual(['row-1', 'row-2'])
+    } finally {
+      store.close()
+    }
+  })
+
+  it('migrates legacy cache tables without updated_at and confirms exact metadata matches once per row', () => {
+    const db = new Database(':memory:')
+    try {
+      db.connection.exec(
+        'DROP TABLE cache; CREATE TABLE cache(key TEXT PRIMARY KEY, value TEXT NOT NULL);',
+      )
+      db.prepare('INSERT INTO cache(key, value) VALUES (?, ?)').run(
+        'legacy-key',
+        JSON.stringify([]),
+      )
+      const prefs = new Preferences(db)
+      const cols = db.prepare('PRAGMA table_info(cache)').all() as { name: string }[]
+      expect(cols.some((c) => c.name === 'updated_at')).toBe(true)
+      expect(prefs.cached('legacy-key')).toEqual([])
+      prefs.cache('new-key', [{ uri: 'spotify:track:' + 'b'.repeat(22) }])
+      expect(prefs.cached('new-key')).toHaveLength(1)
+    } finally {
+      db.close()
+    }
+
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(parseImport('Artist - Song\nArtist - Other', '.txt', 'Confirm'))
+      const [r1, r2] = store.get(id).rows
+      const exactTrack = {
+        uri: 'spotify:track:' + 'c'.repeat(22),
+        title: 'Song',
+        artists: ['Artist'],
+        duration: 180,
+        album: '',
+        url: '',
+      }
+      store.patch(id, [r1.id], { candidates: [exactTrack], searchedQuery: 'Artist Song' }, false)
+      expect(store.confirmMetadataMatches(id, [r1.id])).toBe(1)
+      expect(store.row(id, r1.id).working.destination).toBe('spotify')
+      expect(() => store.confirmMetadataMatches(id, [r2.id])).toThrow('отдельной проверки')
+    } finally {
+      store.close()
     }
   })
 })

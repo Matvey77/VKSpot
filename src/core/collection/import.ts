@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { parse } from 'csv-parse/sync'
 import { archiveSchema, rawTrackSchema } from '../../shared/model'
-import type { Collection, ImportPreview, RawTrack } from '../../shared/types'
+import type { Collection, ImportPreview, RawTrack, TrackRow } from '../../shared/types'
 import { sourceHash, validateCollection } from './integrity'
+
+const validatedTracks = new WeakMap<RawTrack[], number>()
+const validatedCollections = new WeakMap<
+  Collection,
+  { sourceHash: string; rowCount: number; rows: TrackRow[] }
+>()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -27,13 +33,13 @@ function isBlockedFlag(value: unknown): boolean {
 }
 
 function detectCsvDelimiter(text: string): string {
-  const clean = text.replace(/^\uFEFF/, '')
+  const start = text.charCodeAt(0) === 0xfeff ? 1 : 0
   let inQuotes = false
   let headerOutsideQuotes = ''
-  for (let i = 0; i < clean.length; i++) {
-    const ch = clean[i]
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
     if (ch === '"') {
-      if (inQuotes && clean[i + 1] === '"') {
+      if (inQuotes && text[i + 1] === '"') {
         i++
         continue
       }
@@ -50,11 +56,20 @@ function detectCsvDelimiter(text: string): string {
 
 export function createCollection(preview: ImportPreview): Collection {
   if (preview.restored) {
-    validateCollection(preview.restored)
+    const verified = validatedCollections.get(preview.restored)
+    if (
+      !verified ||
+      verified.sourceHash !== preview.restored.sourceHash ||
+      verified.rowCount !== preview.restored.rows.length ||
+      verified.rows !== preview.restored.rows
+    ) {
+      validateCollection(preview.restored)
+    }
     return preview.restored
   }
+  const skipParse = validatedTracks.get(preview.tracks) === preview.tracks.length
   const rows = preview.tracks.map((track, i) => {
-    const source = rawTrackSchema.parse(track)
+    const source = skipParse ? track : rawTrackSchema.parse(track)
     return {
       id: randomUUID(),
       position: i + 1,
@@ -150,7 +165,8 @@ export function parseImport(text: string, extension: string, name: string): Impo
     message: 'Файл сохранён целиком. Полнота коллекции VK не подтверждена.',
   }
   if (extension.toLowerCase() === '.json') {
-    const data: unknown = JSON.parse(text.replace(/^\uFEFF/, ''))
+    const jsonText = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+    const data: unknown = JSON.parse(jsonText)
     if (!Array.isArray(data) && !isRecord(data))
       throw new Error('JSON должен содержать массив записей или объект с полем tracks.')
     if (isRecord(data) && data.format === 'vkspot') {
@@ -158,10 +174,17 @@ export function parseImport(text: string, extension: string, name: string): Impo
         throw new Error(`Неподдерживаемая версия архива VKSpot: ${String(data.version)}.`)
       const archive = archiveSchema.parse(data)
       validateCollection(archive.collection)
+      validatedCollections.set(archive.collection, {
+        sourceHash: archive.collection.sourceHash,
+        rowCount: archive.collection.rows.length,
+        rows: archive.collection.rows,
+      })
+      const tracks = archive.collection.rows.map((r) => r.source)
+      validatedTracks.set(tracks, tracks.length)
       return {
         name: archive.collection.name,
         origin: archive.collection.origin,
-        tracks: archive.collection.rows.map((r) => r.source),
+        tracks,
         completeness: archive.collection.completeness,
         restored: archive.collection,
       }
@@ -178,10 +201,12 @@ export function parseImport(text: string, extension: string, name: string): Impo
         ? rawExpected
         : null
     const verified = expected !== null && expected === records.length
+    const tracks = records.map(mapTrack)
+    validatedTracks.set(tracks, tracks.length)
     return {
       name,
       origin: 'JSON',
-      tracks: records.map(mapTrack),
+      tracks,
       completeness: {
         expected,
         status: verified ? 'verified-count' : 'unverified',
@@ -202,12 +227,12 @@ export function parseImport(text: string, extension: string, name: string): Impo
       relax_column_count: false,
     }) as Record<string, unknown>[]
     if (records.length === 0) throw new Error('Файл не содержит записей для импорта.')
-    return { name, origin: 'CSV', tracks: records.map(mapTrack), completeness: empty }
+    const tracks = records.map(mapTrack)
+    validatedTracks.set(tracks, tracks.length)
+    return { name, origin: 'CSV', tracks, completeness: empty }
   }
-  const lines = text
-    .replace(/^\uFEFF/, '')
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
+  const txtText = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+  const lines = txtText.split(/\r?\n/).filter((line) => line.trim().length > 0)
   if (lines.length === 0) throw new Error('Файл не содержит записей для импорта.')
   const records = lines.map((line) => {
     const separator = line.indexOf(' - ')
@@ -217,5 +242,6 @@ export function parseImport(text: string, extension: string, name: string): Impo
       rawText: line,
     })
   })
+  validatedTracks.set(records, records.length)
   return { name, origin: 'TXT', tracks: records, completeness: empty }
 }

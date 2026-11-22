@@ -1,10 +1,16 @@
 import { createHash } from 'node:crypto'
-import type { Collection, TrackRow } from '../../shared/model'
+import type { Collection, TrackRow } from '../../shared/types'
 
 export function sourceHash(rows: Pick<TrackRow, 'position' | 'source'>[]): string {
-  return createHash('sha256')
-    .update(JSON.stringify(rows.map((r) => ({ position: r.position, source: r.source }))))
-    .digest('hex')
+  const hash = createHash('sha256')
+  hash.update('[')
+  for (let i = 0; i < rows.length; i++) {
+    if (i > 0) hash.update(',')
+    const r = rows[i]
+    hash.update(JSON.stringify({ position: r.position, source: r.source }))
+  }
+  hash.update(']')
+  return hash.digest('hex')
 }
 
 export function validateCollection(collection: Collection): void {

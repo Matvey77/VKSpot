@@ -1,10 +1,14 @@
 import { makePlan, reconcilePrefix, mixedOrder } from '../../core/collection'
 import { searchText, reviewGroup } from '../../core/matching'
-import type { Job, TrackRow } from '../../shared/model'
+import type { Job, TrackRow, Working } from '../../shared/model'
 import type { Store } from '../storage'
+import type { WorkingPatchItem } from '../storage/collection-repository'
 import { Spotify, SpotifyError } from '../integrations/spotify/api'
 import { autoSearch, jobMessage, waitingJob } from '../../shared/job-status'
 import type { SpotifyBrowser } from '../integrations/spotify/browser'
+
+const SEARCH_BATCH_SIZE = 50
+const SEARCH_BATCH_WINDOW_MS = 150
 
 export class Jobs {
   private active: string | null = null
@@ -77,14 +81,14 @@ export class Jobs {
     }, delay)
     this.timer.unref?.()
   }
-  private save(job: Job): void {
+  private save(job: Job, progressOnly = false): void {
     // Preserve an in-flight pause if a request finishes with an older runner snapshot.
     if (this.active === job.id && this.interrupted.has(job.id)) {
       const stored = this.store.job(job.id)
       if (stored.autoResume === false) job.autoResume = false
       if (job.state === 'running' && stored.state === 'pausing') job.state = 'pausing'
     }
-    this.store.putJob(job)
+    this.store.putJob(job, progressOnly)
     if (job.state !== 'running' || Date.now() - this.lastNotification >= 1200) {
       this.lastNotification = Date.now()
       this.changed()
@@ -95,17 +99,20 @@ export class Jobs {
     const job = this.store.job(id)
     if (manual) job.autoResume = false
     if (job.state === 'paused' && job.retryAt && job.retryAt > Date.now()) {
-      this.save(job)
+      this.save(job, true)
       return
     }
     this.interrupted.add(id)
     if (this.active === id && job.searchProvider === 'browser') this.browser?.stop()
     if (job.state !== 'complete')
-      this.save({
-        ...job,
-        state: this.active === id ? 'pausing' : 'paused',
-        message: 'Приостановлено. Текущий запрос завершится и будет сохранён.',
-      })
+      this.save(
+        {
+          ...job,
+          state: this.active === id ? 'pausing' : 'paused',
+          message: 'Приостановлено. Текущий запрос завершится и будет сохранён.',
+        },
+        true,
+      )
   }
   search(collectionId: string, rowIds: string[], background = false): string {
     if (this.active) throw new Error('Другое задание уже работает. Приостановите его.')
@@ -123,7 +130,7 @@ export class Jobs {
     job.refreshSearchResults = !background
     job.autoResume = background
     job.searchProvider = provider
-    this.store.putJob(job)
+    this.store.putJob(job, true)
     void this.run(job.id).catch(() => undefined)
     return job.id
   }
@@ -178,9 +185,8 @@ export class Jobs {
       )
   }
   private findRow(collectionId: string, rowId: string): TrackRow | null {
-    const collection = this.store.get(collectionId)
     try {
-      return this.store.row(collection.id, rowId)
+      return this.store.row(collectionId, rowId)
     } catch {
       return null
     }
@@ -206,7 +212,7 @@ export class Jobs {
     job.searchProvider = 'browser'
     delete job.retryAt
     delete job.waitReason
-    this.store.putJob(job)
+    this.store.putJob(job, true)
     this.resume(id)
   }
   resume(id: string): void {
@@ -229,15 +235,42 @@ export class Jobs {
     job.autoResume = job.kind === 'search' && job.backgroundSearch === true
     job.state = 'running'
     job.message = 'Выполняется…'
-    this.save(job)
+    this.save(job, true)
     try {
       if (job.kind === 'search') {
         // Manual searches refresh Spotify, while repeats within this run still
         // share one response. Background jobs can reuse the persistent cache.
         const refreshed = new Map<string, Awaited<ReturnType<Spotify['search']>>>()
+        let pendingUpdates: WorkingPatchItem[] = []
+        const pendingIds = new Set<string>()
+        let pendingSteps = 0
+        let batchStartedAt = 0
+
+        const flushBatch = (saveProgress = true) => {
+          if (pendingUpdates.length) {
+            this.store.patchMany(job.collectionId, pendingUpdates, false)
+            pendingUpdates = []
+            pendingIds.clear()
+          }
+          if (pendingSteps > 0) {
+            job.message = `Кандидаты: ${job.cursor} из ${job.total}. Версии подтверждаются вручную.`
+            if (saveProgress) this.save(job, true)
+            pendingSteps = 0
+          }
+          batchStartedAt = 0
+        }
+
+        const queueRowPatch = (rowId: string, patch: Partial<Working>) => {
+          pendingUpdates.push({ id: rowId, patch })
+          pendingIds.add(rowId)
+        }
+
         while (job.cursor < job.rowIds.length && !this.interrupted.has(id)) {
-          const row = this.findRow(job.collectionId, job.rowIds[job.cursor])
+          const rowId = job.rowIds[job.cursor]
+          if (pendingIds.has(rowId)) flushBatch()
+          const row = this.findRow(job.collectionId, rowId)
           let requested = false
+          let directPatch: Partial<Working> | undefined
           if (
             row &&
             !row.working.excluded &&
@@ -253,6 +286,8 @@ export class Jobs {
                 ? refreshed.get(cacheKey)
                 : this.store.cached<Awaited<ReturnType<Spotify['search']>>>(cacheKey)
               if (!results) {
+                // Flush cached/skipped batch before hitting the network so failures keep prior progress.
+                flushBatch()
                 requested = true
                 results =
                   job.searchProvider === 'browser'
@@ -260,27 +295,44 @@ export class Jobs {
                     : await this.spotify.search(query)
                 this.store.cache(cacheKey, results)
                 if (job.refreshSearchResults) refreshed.set(cacheKey, results)
+                const current = this.findRow(job.collectionId, row.id)
+                if (current && searchText(current.working) === query) {
+                  directPatch = { candidates: results, searchedQuery: query }
+                }
+              } else {
+                queueRowPatch(row.id, { candidates: results, searchedQuery: query })
               }
-              const current = this.findRow(job.collectionId, row.id)
-              if (current && searchText(current.working) === query)
-                this.store.patch(
-                  job.collectionId,
-                  [row.id],
-                  { candidates: results, searchedQuery: query },
-                  false,
-                )
-            } else this.store.patch(job.collectionId, [row.id], { searchedQuery: query }, false)
+            } else {
+              queueRowPatch(row.id, { searchedQuery: query })
+            }
           }
-          job.cursor++
-          job.message = `Кандидаты: ${job.cursor} из ${job.total}. Версии подтверждаются вручную.`
-          this.save(job)
-          if (requested && job.cursor < job.total) {
-            const until = Date.now() + this.store.settings().searchDelayMs
-            while (Date.now() < until && !this.interrupted.has(id))
-              await new Promise((resolve) => setTimeout(resolve, Math.min(250, until - Date.now())))
-          } else if (job.cursor % 25 === 0)
-            await new Promise<void>((resolve) => setImmediate(resolve))
+
+          if (requested) {
+            if (directPatch) this.store.patch(job.collectionId, [row!.id], directPatch, false)
+            job.cursor++
+            job.message = `Кандидаты: ${job.cursor} из ${job.total}. Версии подтверждаются вручную.`
+            this.save(job, true)
+            if (job.cursor < job.total) {
+              const until = Date.now() + this.store.settings().searchDelayMs
+              while (Date.now() < until && !this.interrupted.has(id))
+                await new Promise((resolve) =>
+                  setTimeout(resolve, Math.min(250, until - Date.now())),
+                )
+            }
+          } else {
+            job.cursor++
+            if (pendingSteps === 0) batchStartedAt = Date.now()
+            pendingSteps++
+            if (
+              pendingSteps >= SEARCH_BATCH_SIZE ||
+              Date.now() - batchStartedAt >= SEARCH_BATCH_WINDOW_MS
+            ) {
+              flushBatch()
+              await new Promise<void>((resolve) => setImmediate(resolve))
+            }
+          }
         }
+        flushBatch(false)
       } else {
         const expected = job.plan!.filter((p) => p.destination === 'spotify').map((p) => p.uri!)
         if (!job.playlistId) {
@@ -290,17 +342,17 @@ export class Jobs {
             description: `VKSpot transfer ${job.id}`,
           })
           job.playlistId = p.id
-          this.save(job)
+          this.save(job, true)
         }
         const actual = await this.spotify.playlistItems(job.playlistId)
         job.cursor = reconcilePrefix(expected, actual)
-        this.save(job)
+        this.save(job, true)
         while (job.cursor < expected.length && !this.interrupted.has(id)) {
           const batch = expected.slice(job.cursor, job.cursor + 100)
           await this.spotify.request(`/playlists/${job.playlistId}/items`, 'POST', { uris: batch })
           job.cursor = reconcilePrefix(expected, await this.spotify.playlistItems(job.playlistId))
           job.message = `Сверено ${job.cursor} из ${job.total}.`
-          this.save(job)
+          this.save(job, true)
         }
       }
       const paused = this.interrupted.has(id)
@@ -314,7 +366,7 @@ export class Jobs {
           : localCount
             ? `Каталог Spotify перенесён. ${localCount} локальных записей нужно добавить по плану; смешанный порядок ещё не подтверждён.`
             : 'Перенос завершён. Состав и порядок каталожных записей сверены.'
-      this.save(job)
+      this.save(job, true)
     } catch (error) {
       job = this.store.job(id)
       const e = error instanceof Error ? error : new Error(String(error))
@@ -335,7 +387,7 @@ export class Jobs {
             Math.max(job.retryAt, this.store.value('spotify-browser-retryAt', 0)),
           )
       } else job.autoResume = false
-      this.save(job)
+      this.save(job, true)
     } finally {
       this.active = null
       this.activeCollectionId = null
@@ -371,7 +423,7 @@ export class Jobs {
     job.playlistId = playlistId
     job.state = 'paused'
     job.message = 'Существующий плейлист найден и сверён. Можно продолжить.'
-    this.save(job)
+    this.save(job, true)
   }
   async reconcileMixed(id: string): Promise<void> {
     if (this.active) throw new Error('Сначала остановите текущее задание.')
@@ -387,7 +439,7 @@ export class Jobs {
       for (let position = 0; position < desired.length; position++) {
         if (this.interrupted.has(id)) {
           job.message = 'Сверка остановлена. Повторный запуск проверит текущий порядок.'
-          this.save(job)
+          this.save(job, true)
           return
         }
         if (actual[position] === desired[position]) continue
@@ -405,7 +457,7 @@ export class Jobs {
       if (actual.length !== desired.length || actual.some((uri, i) => uri !== desired[i]))
         throw new Error('Порядок изменился во время проверки. Повторите сверку.')
       job.message = 'Смешанный плейлист сверён: каталожные и локальные записи идут в порядке плана.'
-      this.save(job)
+      this.save(job, true)
     } catch (error) {
       if (error instanceof SpotifyError && error.retryAfter) {
         const retryAt = Date.now() + error.retryAfter * 1000
@@ -414,7 +466,7 @@ export class Jobs {
           Math.max(retryAt, this.store.value('spotify-api-retryAt', 0)),
         )
         job.message = error.message
-        this.save(job)
+        this.save(job, true)
       }
       throw error
     } finally {

@@ -4,7 +4,7 @@ import {
   mergeRepairedCollection,
   sourceHash,
 } from '../../core/collection'
-import { metadataMatch, reviewGroup } from '../../core/matching'
+import { metadataMatch, searchText } from '../../core/matching'
 import {
   workingSchema,
   type Collection,
@@ -12,18 +12,23 @@ import {
   type TrackRow,
   type Working,
 } from '../../shared/model'
-import type { StateCursor } from '../../shared/sync'
+import type { CollectionMetadata, StateCursor } from '../../shared/sync'
 import { CollectionChanges } from './collection-changes'
 import type { Database } from './database'
 import type { Preferences } from './preferences'
 
-type CachedCollection = { collection: Collection; rows: Map<string, TrackRow> }
+const MAX_HISTORY_PER_COLLECTION = 100
+const MAX_REPAIR_HISTORY_PER_COLLECTION = 5
+
+type CachedCollection = { collection: Collection; rows: Map<string, TrackRow>; rowsDirty: boolean }
 type WorkingUpdate = { id: string; after: Working }
 type WorkingChange = WorkingUpdate & { before: Working }
 type RepairHistory = { kind: 'repair'; collection: Collection }
+export type WorkingPatchItem = { id: string; patch: Partial<Working> }
 
 export class CollectionRepository {
   private cache = new Map<string, CachedCollection>()
+  private cachedOrder: string[] | null = null
   private changes = new CollectionChanges()
 
   constructor(
@@ -31,37 +36,60 @@ export class CollectionRepository {
     private preferences: Preferences,
   ) {}
 
-  all(): Collection[] {
+  private order(): string[] {
+    if (this.cachedOrder) return this.cachedOrder.slice()
     const ids = this.db.prepare('SELECT id FROM collections ORDER BY rowid DESC').all() as {
       id: string
     }[]
     const order = new Map(
       this.preferences.value<string[]>('collection_order', []).map((id, index) => [id, index]),
     )
-    return ids
+    this.cachedOrder = ids
       .sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity))
-      .map(({ id }) => this.get(id))
+      .map(({ id }) => id)
+    return this.cachedOrder.slice()
+  }
+
+  all(): Collection[] {
+    return this.order().map((id) => this.get(id))
   }
 
   sync(cursor: StateCursor | null) {
-    const collections = this.all()
-    return {
-      ...this.changes.since(cursor, collections),
-      order: collections.map((collection) => collection.id),
+    if (this.changes.matchesCursor(cursor)) {
+      return {
+        cursor: this.changes.cursor(),
+        order: this.order(),
+        updates: [],
+      }
     }
+    const order = this.order()
+    return {
+      ...this.changes.since(cursor, order, {
+        collection: (id) => this.get(id),
+        metadata: (id) => this.metadataOf(this.ensureCached(id).collection),
+        row: (collectionId, rowId) => this.ensureCached(collectionId).rows.get(rowId),
+      }),
+      order,
+    }
+  }
+
+  private metadataOf(collection: Collection): CollectionMetadata {
+    const { rows: _rows, ...metadata } = collection
+    return metadata
   }
 
   private remember(collection: Collection): Collection {
     this.cache.set(collection.id, {
       collection,
       rows: new Map(collection.rows.map((row) => [row.id, row])),
+      rowsDirty: false,
     })
     return collection
   }
 
-  get(id: string): Collection {
+  private ensureCached(id: string): CachedCollection {
     const cached = this.cache.get(id)
-    if (cached) return cached.collection
+    if (cached) return cached
     const record = this.db.prepare('SELECT metadata FROM collections WHERE id=?').get(id) as
       { metadata: string } | undefined
     if (!record) throw new Error('Коллекция не найдена.')
@@ -70,7 +98,7 @@ export class CollectionRepository {
         'SELECT id,position,source,working FROM entries WHERE collection_id=? ORDER BY position',
       )
       .all(id) as { id: string; position: number; source: string; working: string }[]
-    return this.remember({
+    this.remember({
       ...JSON.parse(record.metadata),
       rows: entries.map((row) => ({
         id: row.id,
@@ -79,11 +107,26 @@ export class CollectionRepository {
         working: JSON.parse(row.working),
       })),
     })
+    return this.cache.get(id)!
+  }
+
+  private materialize(cached: CachedCollection): Collection {
+    if (cached.rowsDirty) {
+      cached.collection = {
+        ...cached.collection,
+        rows: [...cached.rows.values()],
+      }
+      cached.rowsDirty = false
+    }
+    return cached.collection
+  }
+
+  get(id: string): Collection {
+    return this.materialize(this.ensureCached(id))
   }
 
   row(collectionId: string, id: string): TrackRow {
-    this.get(collectionId)
-    const row = this.cache.get(collectionId)!.rows.get(id)
+    const row = this.ensureCached(collectionId).rows.get(id)
     if (!row) throw new Error('Запись не найдена в коллекции.')
     return row
   }
@@ -121,6 +164,7 @@ export class CollectionRepository {
       ])
     })
     this.remember(collection)
+    this.cachedOrder = null
     this.changes.record(collection.id, 'replace')
     return collection.id
   }
@@ -128,14 +172,15 @@ export class CollectionRepository {
   rename(id: string, name: string): void {
     const trimmed = name.trim()
     if (!trimmed) throw new Error('Название коллекции не может быть пустым.')
-    const collection = { ...this.get(id), name: trimmed }
-    this.saveMetadata(collection)
-    this.cache.get(id)!.collection = collection
+    const cached = this.ensureCached(id)
+    const next = { ...cached.collection, name: trimmed }
+    this.saveMetadata(next)
+    cached.collection = next
     this.changes.record(id, 'metadata')
   }
 
   reorder(ids: string[]): void {
-    const existing = this.all().map((collection) => collection.id)
+    const existing = this.order()
     if (
       ids.length !== existing.length ||
       new Set(ids).size !== existing.length ||
@@ -143,11 +188,12 @@ export class CollectionRepository {
     )
       throw new Error('Порядок должен содержать все коллекции ровно один раз.')
     this.preferences.setValue('collection_order', ids)
+    this.cachedOrder = [...ids]
     this.changes.record('', 'metadata')
   }
 
   remove(id: string): void {
-    this.get(id)
+    this.ensureCached(id)
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM history WHERE collection_id=?').run(id)
       this.db.prepare('DELETE FROM entries WHERE collection_id=?').run(id)
@@ -159,14 +205,44 @@ export class CollectionRepository {
       )
     })
     this.cache.delete(id)
+    this.cachedOrder = null
     this.changes.record(id, 'replace')
   }
 
   private saveMetadata(collection: Collection): void {
-    const { rows: _rows, ...metadata } = collection
     this.db
       .prepare('UPDATE collections SET metadata=? WHERE id=?')
-      .run(JSON.stringify(metadata), collection.id)
+      .run(JSON.stringify(this.metadataOf(collection)), collection.id)
+  }
+
+  private trimHistory(collectionId: string, limitRepairs: boolean): void {
+    if (limitRepairs) {
+      this.db
+        .prepare(
+          `DELETE FROM history
+           WHERE collection_id=?
+             AND changes LIKE '{"kind":"repair",%'
+             AND id NOT IN (
+               SELECT id FROM history
+               WHERE collection_id=? AND changes LIKE '{"kind":"repair",%'
+               ORDER BY id DESC
+               LIMIT ?
+             )`,
+        )
+        .run(collectionId, collectionId, MAX_REPAIR_HISTORY_PER_COLLECTION)
+    }
+    this.db
+      .prepare(
+        `DELETE FROM history
+         WHERE collection_id=?
+           AND id NOT IN (
+             SELECT id FROM history
+             WHERE collection_id=?
+             ORDER BY id DESC
+             LIMIT ?
+           )`,
+      )
+      .run(collectionId, collectionId, MAX_HISTORY_PER_COLLECTION)
   }
 
   repair(
@@ -202,6 +278,7 @@ export class CollectionRepository {
           JSON.stringify({ kind: 'repair', collection: existing } satisfies RepairHistory),
           new Date().toISOString(),
         )
+      this.trimHistory(id, true)
     })
     this.remember(collection)
     this.changes.record(id, 'replace')
@@ -212,7 +289,7 @@ export class CollectionRepository {
     if (!changes.length) return
     this.db.transaction(() => {
       this.writeWorkingRows(collectionId, changes)
-      if (history)
+      if (history) {
         this.db
           .prepare('INSERT INTO history(collection_id,changes,at) VALUES(?,?,?)')
           .run(
@@ -220,6 +297,8 @@ export class CollectionRepository {
             JSON.stringify(changes.map(({ id, before }) => ({ id, before }))),
             new Date().toISOString(),
           )
+        this.trimHistory(collectionId, false)
+      }
     })
     this.publishWorkingRows(collectionId, changes)
   }
@@ -231,15 +310,11 @@ export class CollectionRepository {
 
   private publishWorkingRows(collectionId: string, changes: WorkingUpdate[]): void {
     const cached = this.cache.get(collectionId)!
-    const nextRows = cached.collection.rows.slice()
     for (const change of changes) {
       const previous = cached.rows.get(change.id)!
-      const next = { ...previous, working: change.after }
-      cached.rows.set(change.id, next)
-      // Positions are contiguous and immutable between imports/repairs.
-      nextRows[previous.position - 1] = next
+      cached.rows.set(change.id, { ...previous, working: change.after })
     }
-    cached.collection = { ...cached.collection, rows: nextRows }
+    cached.rowsDirty = true
     this.changes.record(
       collectionId,
       'rows',
@@ -247,46 +322,76 @@ export class CollectionRepository {
     )
   }
 
+  private applyWorkingPatch(before: Working, patch: Partial<Working>): Working {
+    const after = workingSchema.parse({ ...before, ...patch })
+    const metadataChanged = (['artist', 'title', 'version'] as const).some(
+      (key) => patch[key] !== undefined && patch[key] !== before[key],
+    )
+    if (metadataChanged && patch.spotify === undefined) {
+      after.spotify = null
+      after.candidates = []
+      after.searchedQuery = null
+      if (after.destination === 'spotify') after.destination = 'unresolved'
+    }
+    if (after.destination === 'spotify' && !after.spotify)
+      throw new Error('Для Spotify нужно подтверждённое совпадение.')
+    if (after.destination === 'local' && !after.local)
+      throw new Error('Для локального переноса нужен файл.')
+    if (after.destination !== 'unresolved') {
+      after.localPending = false
+      after.reviewDeferred = false
+    }
+    return after
+  }
+
   patch(collectionId: string, ids: string[], patch: Partial<Working>, history = true): void {
     const changes: WorkingChange[] = []
     // Validate the whole batch before changing either the database or its cache.
     for (const id of new Set(ids)) {
       const before = this.row(collectionId, id).working
-      const after = workingSchema.parse({ ...before, ...patch })
-      const metadataChanged = (['artist', 'title', 'version'] as const).some(
-        (key) => patch[key] !== undefined && patch[key] !== before[key],
-      )
-      if (metadataChanged && patch.spotify === undefined) {
-        after.spotify = null
-        after.candidates = []
-        after.searchedQuery = null
-        if (after.destination === 'spotify') after.destination = 'unresolved'
-      }
-      if (after.destination === 'spotify' && !after.spotify)
-        throw new Error('Для Spotify нужно подтверждённое совпадение.')
-      if (after.destination === 'local' && !after.local)
-        throw new Error('Для локального переноса нужен файл.')
-      if (after.destination !== 'unresolved') {
-        after.localPending = false
-        after.reviewDeferred = false
-      }
-      changes.push({ id, before, after })
+      changes.push({ id, before, after: this.applyWorkingPatch(before, patch) })
     }
     this.commitWorking(collectionId, changes, history)
+  }
+
+  patchMany(collectionId: string, updates: WorkingPatchItem[], history = false): void {
+    if (!updates.length) return
+    const byId = new Map<string, WorkingChange>()
+    for (const item of updates) {
+      const existing = byId.get(item.id)
+      const before = existing ? existing.after : this.row(collectionId, item.id).working
+      const after = this.applyWorkingPatch(before, item.patch)
+      byId.set(item.id, {
+        id: item.id,
+        before: existing ? existing.before : before,
+        after,
+      })
+    }
+    this.commitWorking(collectionId, [...byId.values()], history)
   }
 
   confirm(collectionId: string, ids: string[]): number {
     const rules = this.preferences.settings().matchingRules
     const changes = [...new Set(ids)].map((id) => {
       const row = this.row(collectionId, id)
-      const candidate = metadataMatch(row, rules)
-      if (reviewGroup(row, rules) !== 'exact' || !candidate)
-        throw new Error(`Запись №${row.position} требует отдельной проверки.`)
+      const working = row.working
+      const searched =
+        working.searchedQuery === searchText(working) ||
+        (working.searchedQuery === null && working.candidates.length > 0)
+      const eligible =
+        !working.excluded &&
+        working.destination === 'unresolved' &&
+        !working.localPending &&
+        !working.reviewDeferred &&
+        searched &&
+        working.candidates.length > 0
+      const candidate = eligible ? metadataMatch(row, rules) : null
+      if (!candidate) throw new Error(`Запись №${row.position} требует отдельной проверки.`)
       return {
         id,
-        before: row.working,
+        before: working,
         after: {
-          ...row.working,
+          ...working,
           spotify: candidate,
           destination: 'spotify' as const,
           localPending: false,

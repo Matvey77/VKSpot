@@ -6,6 +6,7 @@ import {
   type SearchResultGroup,
   type ReviewGroup,
 } from './matching'
+import { hasNonAscii, matchingRulesMask } from './matching-normalize'
 
 export type LibraryFilter =
   'all' | 'unresolved' | 'spotify' | 'local' | 'local-pending' | 'deferred' | 'excluded' | 'blocked'
@@ -38,18 +39,6 @@ export const emptyDestinations = (): Record<LibraryFilter, number> => ({
   excluded: 0,
   blocked: 0,
 })
-export const rulesKey = (rules: MatchingRules): string =>
-  [
-    rules.diacritics,
-    rules.homoglyphs,
-    rules.featDeduplication,
-    rules.identicalVersions,
-    rules.remixPunctuation,
-    rules.extendedDurationTolerance,
-    rules.transliteration ?? true,
-  ]
-    .map(Number)
-    .join('')
 export const destinationStatus = (row: TrackRow): LibraryFilter =>
   row.working.excluded
     ? 'excluded'
@@ -70,27 +59,43 @@ export const formatDuration = (seconds: number | null): string => {
   return `${minutes}:${String(secs).padStart(2, '0')}`
 }
 
-type RowAnalysis = {
+function normalizeSearchText(value: string): string {
+  return hasNonAscii(value) ? value.normalize('NFKC').toLowerCase() : value.toLowerCase()
+}
+
+function buildRowSearch(row: TrackRow): string {
+  const { working, source } = row
+  const parts = [working.artist, working.title]
+  if (working.version) parts.push(working.version)
+  if (source.artist !== working.artist) parts.push(source.artist)
+  if (source.title !== working.title) parts.push(source.title)
+  if (source.id) parts.push(source.id)
+  if (working.note) parts.push(working.note)
+  return normalizeSearchText(parts.join('\u0000'))
+}
+
+export type AnalyzedRow = {
   group: ReviewGroup
   searchGroup: SearchResultGroup
   destination: LibraryFilter
-  search: string
+  readonly search: string
 }
-const rowCache = new WeakMap<TrackRow, { key: string; result: RowAnalysis }>()
+const rowCache = new WeakMap<TrackRow, { key: number; result: AnalyzedRow }>()
 
 /** Delta synchronization keeps these identities stable; only edited rows are recomputed. */
 export function analyzeRow(
   row: TrackRow,
   rules: MatchingRules = defaultMatchingRules,
-): RowAnalysis {
-  return analyzeRowWithKey(row, rules, rulesKey(rules))
+): AnalyzedRow {
+  return analyzeRowWithKey(row, rules, matchingRulesMask(rules))
 }
 
-function analyzeRowWithKey(row: TrackRow, rules: MatchingRules, key: string): RowAnalysis {
+function analyzeRowWithKey(row: TrackRow, rules: MatchingRules, key: number): AnalyzedRow {
   const cache = rowCache.get(row)
   let result = cache?.key === key ? cache.result : undefined
   if (!result) {
     const group = reviewGroup(row, rules)
+    let cachedSearch: string | null = null
     result = {
       group,
       searchGroup:
@@ -98,18 +103,12 @@ function analyzeRowWithKey(row: TrackRow, rules: MatchingRules, key: string): Ro
           ? searchResultGroup(row, rules)
           : group,
       destination: destinationStatus(row),
-      search: [
-        row.working.artist,
-        row.working.title,
-        row.working.version,
-        row.source.artist,
-        row.source.title,
-        row.source.id,
-        row.working.note,
-      ]
-        .join('\u0000')
-        .normalize('NFKC')
-        .toLocaleLowerCase(),
+      get search() {
+        if (cachedSearch === null) {
+          cachedSearch = buildRowSearch(row)
+        }
+        return cachedSearch
+      },
     }
     rowCache.set(row, { key, result })
   }
@@ -124,7 +123,8 @@ export function filterLibraryRows(
   filter: LibraryFilter,
   resultFilter: 'all' | SearchResultGroup,
 ) {
-  const terms = query.normalize('NFKC').trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  const normalizedQuery = query.trim()
+  const terms = normalizedQuery ? normalizeSearchText(normalizedQuery).split(/\s+/) : []
   const resultCounts: Record<SearchResultGroup, number> = {
     pending: 0,
     exact: 0,
@@ -132,7 +132,7 @@ export function filterLibraryRows(
     missing: 0,
   }
   const destinationCounts = emptyDestinations()
-  const key = rulesKey(rules)
+  const key = matchingRulesMask(rules)
   let baseCount = 0
   const rows: TrackRow[] = []
   const matchingIds: string[] = []
@@ -160,13 +160,13 @@ export function filterLibraryRows(
   return { baseCount, rows, matchingIds, resultCounts, destinationCounts }
 }
 
-type CollectionSummary = {
+export type CollectionSummary = {
   groups: Record<ReviewGroup, number>
   destinations: Record<LibraryFilter, number>
   unresolved: number
   localPending: number
 }
-const summaryCache = new WeakMap<TrackRow[], Map<string, CollectionSummary>>()
+const summaryCache = new WeakMap<TrackRow[], Map<number, CollectionSummary>>()
 
 export function summarizeCollection(
   collection: Collection | undefined,
@@ -184,7 +184,7 @@ export function summarizeCollection(
     cache = new Map()
     summaryCache.set(collection.rows, cache)
   }
-  const key = rulesKey(rules)
+  const key = matchingRulesMask(rules)
   let result = cache.get(key)
   if (!result) {
     result = {

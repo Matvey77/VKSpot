@@ -667,4 +667,44 @@ describe('conservative metadata review', () => {
     expect(hasVersionConflict(edited, candidate)).toBe(false)
     expect(metadataMatch(edited)).not.toBeNull()
   })
+
+  it('invalidates metadataMatch cache when switching matchingRules or mutating working fields', () => {
+    const entry = row()
+    entry.working.artist = 'Альянс'
+    entry.working.title = 'На Заре'
+    entry.source.duration = 210
+    entry.working.searchedQuery = searchText(entry.working)
+    const translitCandidate: SpotifyTrack = {
+      ...candidate,
+      title: 'Na Zare',
+      artists: ['Альянс'],
+      duration: 210,
+    }
+    entry.working.candidates = [translitCandidate]
+
+    expect(metadataMatch(entry, defaultMatchingRules)).toBe(translitCandidate)
+    expect(metadataMatch(entry, defaultMatchingRules)).toBe(translitCandidate)
+    expect(metadataMatch(entry, { ...defaultMatchingRules, transliteration: false })).toBeNull()
+    expect(metadataMatch(entry, defaultMatchingRules)).toBe(translitCandidate)
+
+    // In-place mutation of working.title must invalidate the cached match
+    entry.working.title = 'Другая песня'
+    expect(metadataMatch(entry, defaultMatchingRules)).toBeNull()
+
+    entry.working.title = 'На Заре'
+    expect(metadataMatch(entry, defaultMatchingRules)).toBe(translitCandidate)
+
+    // In-place mutation of working.version or candidates array must also invalidate
+    entry.working.version = 'Acoustic'
+    expect(metadataMatch(entry, defaultMatchingRules)).toBeNull()
+    entry.working.version = ''
+    expect(metadataMatch(entry, defaultMatchingRules)).toBe(translitCandidate)
+
+    entry.working.candidates.push({
+      ...candidate,
+      uri: 'spotify:track:' + 'z'.repeat(22),
+      artists: [],
+    })
+    expect(metadataMatch(entry, defaultMatchingRules)).toBeNull()
+  })
 })

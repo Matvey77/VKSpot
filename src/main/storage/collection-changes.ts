@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import type { Collection, TrackRow } from '../../shared/model'
-import type { CollectionUpdate, StateCursor } from '../../shared/sync'
+import type { CollectionMetadata, CollectionUpdate, StateCursor } from '../../shared/sync'
 
 type Change = { revision: number; id: string; kind: 'replace' | 'rows' | 'metadata'; ids: string[] }
+
+export type CollectionSyncSource = {
+  collection: (id: string) => Collection
+  metadata: (id: string) => CollectionMetadata
+  row: (collectionId: string, rowId: string) => TrackRow | undefined
+}
 
 /** Bounded identifiers only: the journal never retains old collections or working copies. */
 export class CollectionChanges {
@@ -11,6 +17,14 @@ export class CollectionChanges {
   private floor = 0
   private changes: Change[] = []
   private retainedIds = 0
+
+  cursor(): StateCursor {
+    return { session: this.session, revision: this.revision }
+  }
+
+  matchesCursor(cursor: StateCursor | null): boolean {
+    return Boolean(cursor && cursor.session === this.session && cursor.revision === this.revision)
+  }
 
   record(id: string, kind: Change['kind'], ids: string[] = []): void {
     this.revision++
@@ -25,9 +39,11 @@ export class CollectionChanges {
 
   since(
     cursor: StateCursor | null,
-    collections: Collection[],
+    order: string[],
+    source: CollectionSyncSource,
   ): { cursor: StateCursor; updates: CollectionUpdate[] } {
-    const next = { session: this.session, revision: this.revision }
+    const next = this.cursor()
+    if (this.matchesCursor(cursor)) return { cursor: next, updates: [] }
     if (
       !cursor ||
       cursor.session !== this.session ||
@@ -36,10 +52,9 @@ export class CollectionChanges {
     ) {
       return {
         cursor: next,
-        updates: collections.map((collection) => ({ kind: 'replace', collection })),
+        updates: order.map((id) => ({ kind: 'replace', collection: source.collection(id) })),
       }
     }
-    if (cursor.revision === this.revision) return { cursor: next, updates: [] }
     const grouped = new Map<string, { replace: boolean; metadata: boolean; ids: Set<string> }>()
     for (const change of this.changes) {
       if (change.revision <= cursor.revision) continue
@@ -53,21 +68,22 @@ export class CollectionChanges {
       for (const id of change.ids) group.ids.add(id)
     }
     const updates: CollectionUpdate[] = []
-    for (const collection of collections) {
-      const group = grouped.get(collection.id)
+    for (const id of order) {
+      const group = grouped.get(id)
       if (!group) continue
-      if (group.replace) updates.push({ kind: 'replace', collection })
-      else {
-        const { rows, ...metadata } = collection
-        // Scan once per changed collection, never once per changed row.
-        const changed: TrackRow[] = group.ids.size
-          ? rows.filter((row) => group.ids.has(row.id))
-          : []
+      if (group.replace) {
+        updates.push({ kind: 'replace', collection: source.collection(id) })
+      } else {
+        const changed: TrackRow[] = []
+        for (const rowId of group.ids) {
+          const row = source.row(id, rowId)
+          if (row) changed.push(row)
+        }
         updates.push({
           kind: 'patch',
-          id: collection.id,
+          id,
           rows: changed,
-          ...(group.metadata ? { metadata } : {}),
+          ...(group.metadata ? { metadata: source.metadata(id) } : {}),
         })
       }
     }

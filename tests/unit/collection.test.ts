@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 import {
@@ -144,6 +145,74 @@ describe('lossless occurrence archive', () => {
     )
     archiveObj.collection.rows[0].source.duration = -1
     expect(() => parseImport(JSON.stringify(archiveObj), '.json', 'NegDur')).toThrow()
+  })
+
+  it('computes streaming sourceHash byte-for-byte identical to reference JSON serialization', () => {
+    const referenceHash = (
+      rows: Array<{
+        position: number
+        source: {
+          id: string
+          artist: string
+          title: string
+          duration: number | null
+          availability: 'available' | 'blocked' | 'unknown'
+          url: string
+          rawText: string
+        }
+      }>,
+    ) =>
+      createHash('sha256')
+        .update(JSON.stringify(rows.map((r) => ({ position: r.position, source: r.source }))))
+        .digest('hex')
+
+    expect(sourceHash([])).toBe(referenceHash([]))
+
+    const single = [
+      {
+        position: 1,
+        source: {
+          id: 'vk-"1"',
+          artist: 'Ёлка & "JAŸ-Z"',
+          title: 'Песня\nс "кавычками" \\ и слешем',
+          duration: null,
+          availability: 'unknown' as const,
+          url: 'https://vk.com/audio?q=1',
+          rawText: 'Ёлка — "Песня"',
+        },
+      },
+    ]
+    expect(sourceHash(single)).toBe(referenceHash(single))
+
+    const twentyFive = Array.from({ length: 25 }, (_, i) => ({
+      position: i + 1,
+      source: {
+        id: `vk-${i}`,
+        artist: i % 2 === 0 ? `Артист "№${i}" 🎵` : `Artist '${i}' \\ Café`,
+        title: `Трек\t${i} — "Mix"`,
+        duration: i % 3 === 0 ? null : 120 + i,
+        availability: (['available', 'blocked', 'unknown'] as const)[i % 3],
+        url: i % 4 === 0 ? '' : `https://vk.com/audio/${i}`,
+        rawText: `raw-${i}`,
+      },
+    }))
+    expect(sourceHash(twentyFive)).toBe(referenceHash(twentyFive))
+  })
+
+  it('still validates unverified external tracks passed directly to createCollection', () => {
+    const preview = parseImport('Artist - Track', '.txt', 'External')
+    const copied = createCollection({
+      ...preview,
+      tracks: preview.tracks.map((t) => ({ ...t })),
+    })
+    expect(copied.rows[0].source).toEqual(preview.tracks[0])
+
+    expect(() =>
+      createCollection({
+        ...preview,
+        tracks: [{ ...preview.tracks[0], duration: -10 }],
+      }),
+    ).toThrow()
   })
 })
 describe('reviewed transfer plan', () => {

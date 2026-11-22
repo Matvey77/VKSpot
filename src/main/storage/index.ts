@@ -2,7 +2,7 @@ import type { ImportPreview, Job, Working } from '../../shared/model'
 import type { StateCursor } from '../../shared/sync'
 import { Database } from './database'
 import { Preferences } from './preferences'
-import { CollectionRepository } from './collection-repository'
+import { CollectionRepository, type WorkingPatchItem } from './collection-repository'
 import { JobRepository } from './job-repository'
 
 /** Application storage facade. SQL, collection history and queues have separate owners. */
@@ -17,24 +17,31 @@ export class Store {
     this.preferences = new Preferences(this.db)
     this.collections = new CollectionRepository(this.db, this.preferences)
     this.queue = new JobRepository(this.db)
-    for (const job of this.jobs()) {
-      if (job.state === 'running' || job.state === 'pausing') {
+    for (const summary of this.jobSummaries()) {
+      if (summary.state === 'running' || summary.state === 'pausing') {
+        const job = this.job(summary.id)
         if (job.kind === 'transfer' && !job.playlistId && job.cursor === 0) {
-          this.putJob({
-            ...job,
-            state: 'needs-review',
-            autoResume: false,
-            message:
-              'Приложение закрылось во время создания плейлиста. Проверьте Spotify и при необходимости укажите созданный плейлист для продолжения.',
-          })
+          this.putJob(
+            {
+              ...job,
+              state: 'needs-review',
+              autoResume: false,
+              message:
+                'Приложение закрылось во время создания плейлиста. Проверьте Spotify и при необходимости укажите созданный плейлист для продолжения.',
+            },
+            true,
+          )
         } else {
-          this.putJob({
-            ...job,
-            state: 'paused',
-            autoResume:
-              job.kind === 'search' && job.backgroundSearch === true && job.autoResume !== false,
-            message: 'Прервано закрытием приложения. Можно продолжить.',
-          })
+          this.putJob(
+            {
+              ...job,
+              state: 'paused',
+              autoResume:
+                job.kind === 'search' && job.backgroundSearch === true && job.autoResume !== false,
+              message: 'Прервано закрытием приложения. Можно продолжить.',
+            },
+            true,
+          )
         }
       }
     }
@@ -55,6 +62,8 @@ export class Store {
   repairCollection = (id: string, preview: ImportPreview) => this.collections.repair(id, preview)
   patch = (id: string, rows: string[], patch: Partial<Working>, history = true) =>
     this.collections.patch(id, rows, patch, history)
+  patchMany = (id: string, updates: WorkingPatchItem[], history = false) =>
+    this.collections.patchMany(id, updates, history)
   confirmMetadataMatches = (id: string, rows: string[]) => this.collections.confirm(id, rows)
   undo = (id: string) => this.collections.undo(id)
   settings = () => this.preferences.settings()
@@ -65,7 +74,9 @@ export class Store {
   jobs = () => this.queue.all()
   jobSummaries = () => this.queue.summaries()
   job = (id: string) => this.queue.get(id)
-  putJob = (job: Job) => this.queue.put(job)
+  putJob = (job: Job, progressOnly = false) =>
+    progressOnly ? this.queue.putProgress(job) : this.queue.put(job)
+  putJobProgress = (job: Job) => this.queue.putProgress(job)
   newJob = (id: string, kind: Job['kind'], rows: string[]) => this.queue.create(id, kind, rows)
   archiveJob = (id: string) => this.queue.remove(id)
   archiveFinishedJobs = () => this.queue.removeFinished()

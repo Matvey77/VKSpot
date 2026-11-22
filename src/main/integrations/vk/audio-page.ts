@@ -66,7 +66,7 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
     return template.content.textContent?.trim() ?? ''
   }
   const excluded =
-    'aside, .audioPlaylistSnippet, [data-testid*="PlaylistSnippet"], [data-testid*="Recommendation"], [data-testid*="Recent"], [data-testid*="History"], [data-testid*="Friends"]'
+    'aside, .audioPlaylistSnippet, [data-testid*="PlaylistSnippet"], [data-testid*="Recommendation"], [data-testid*="Recent"], [data-testid*="History"], [data-testid*="Friends"], [data-testid*="Curator"]'
   const rootSelector =
     '.audio_row, .audio_item, [data-testid="MusicTrackRow"], [class*="MusicTrackRow_root"], [class*="MusicTrackRow__root"]'
   const selector = rootSelector + ', [data-audio-id], [data-full-id], [data-audio]'
@@ -143,16 +143,17 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
           : '')
     const position =
       Number((node.closest('[aria-posinset]') ?? node).getAttribute('aria-posinset')) || null
+    const claimedSelector =
+      '.audio_row__claimed, .audio_row_claimed, [data-testid*="Blocked"], [data-testid*="Claimed"]'
     const blocked =
-      /blocked|unavailable|restricted|deleted|audio_claimed|audio_item_disabled/i.test(
+      /blocked|unavailable|restricted|deleted|audio_claimed|audio_row_claimed|audio_row__claimed|audio_item_disabled/i.test(
         node.className,
       ) ||
       node.getAttribute('aria-disabled') === 'true' ||
       object.is_restricted === true ||
       object.is_deleted === true ||
-      !!node.querySelector(
-        '.audio_row__claimed, .audio_row_claimed, [data-testid*="Blocked"], [data-testid*="Claimed"]',
-      )
+      node.matches(claimedSelector) ||
+      !!node.querySelector(claimedSelector)
     return {
       node,
       id: String(id),

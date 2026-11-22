@@ -198,4 +198,63 @@ describe('incremental state synchronization', () => {
       store.close()
     }
   })
+
+  it('skips collection scans when cursor is unchanged and preserves prior snapshots across lazy patches', () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(
+        parseImport('A - One\nB - Two\nC - Three\nD - Four', '.txt', 'LazySnapshot'),
+      )
+      const initialCollection = store.get(id)
+      const initialRows = initialCollection.rows
+      const initialRow1WorkingNote = initialRows[1].working.note
+
+      const replica = new StateReplica()
+      let state = replica.apply(snapshot(store, null))
+
+      const unchanged = store.collectionSync(replica.cursor)
+      expect(unchanged).toEqual({
+        cursor: replica.cursor,
+        order: [id],
+        updates: [],
+      })
+
+      store.patch(id, [initialRows[1].id], { note: 'Step 1' })
+      const delta1 = snapshot(store, replica.cursor)
+      expect(delta1.updates).toHaveLength(1)
+      expect(delta1.updates[0]).toMatchObject({ kind: 'patch', id })
+      state = replica.apply(delta1)
+
+      store.patchMany(id, [
+        { id: initialRows[3].id, patch: { note: 'Step 2' } },
+        { id: initialRows[0].id, patch: { note: 'Step 0' } },
+      ])
+      const delta2 = snapshot(store, replica.cursor)
+      expect(delta2.updates).toHaveLength(1)
+      state = replica.apply(delta2)
+
+      // Prior snapshot array and row objects must stay completely unmutated.
+      expect(initialRows[1].working.note).toBe(initialRow1WorkingNote)
+      expect(initialRows[3].working.note).toBe('')
+
+      const materialized = store.get(id)
+      expect(materialized.rows).not.toBe(initialRows)
+      expect(materialized.rows.map((r) => r.id)).toEqual(initialRows.map((r) => r.id))
+      expect(materialized.rows.map((r) => r.working.note)).toEqual([
+        'Step 0',
+        'Step 1',
+        '',
+        'Step 2',
+      ])
+      expect(materialized.rows[2]).toBe(initialRows[2])
+      expect(state.collections[0].rows.map((r) => r.working.note)).toEqual([
+        'Step 0',
+        'Step 1',
+        '',
+        'Step 2',
+      ])
+    } finally {
+      store.close()
+    }
+  })
 })

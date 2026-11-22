@@ -1,11 +1,17 @@
-import { createHash, randomBytes } from 'node:crypto'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
-import { safeStorage, shell } from 'electron'
 import type { SpotifyTrack } from '../../../shared/model'
+import {
+  authorizeSpotifyPKCE,
+  createOAuthCallbackHandler,
+  loadEncryptedToken,
+  persistEncryptedToken,
+  redirectUri,
+  removeEncryptedToken,
+  secureTokenStorageAvailable,
+  type SpotifyToken,
+} from './oauth-pkce'
 
-type Token = { access_token: string; refresh_token: string; expiresAt: number; clientId: string }
+export { createOAuthCallbackHandler, redirectUri, secureTokenStorageAvailable }
+
 export class SpotifyError extends Error {
   constructor(
     message: string,
@@ -16,7 +22,7 @@ export class SpotifyError extends Error {
     super(message)
   }
 }
-export const redirectUri = 'http://127.0.0.1:43823/callback'
+
 export function parseRetryAfterSeconds(header: string | null, now = Date.now()): number {
   if (!header) return 60
   const trimmed = header.trim()
@@ -27,66 +33,9 @@ export function parseRetryAfterSeconds(header: string | null, now = Date.now()):
   if (Number.isFinite(targetMs)) return Math.max(1, Math.ceil((targetMs - now) / 1000))
   return 60
 }
-export function createOAuthCallbackHandler(
-  expectedState: string,
-  onComplete: (error?: Error, code?: string) => void,
-) {
-  return (req: IncomingMessage, res: ServerResponse): void => {
-    res.setHeader('Connection', 'close')
-    try {
-      if (
-        req.method !== 'GET' ||
-        req.headers.host !== '127.0.0.1:43823' ||
-        !req.url?.startsWith('/')
-      ) {
-        res.writeHead(400)
-        res.end('Bad request')
-        return
-      }
-      const url = new URL(req.url, redirectUri)
-      if (url.origin !== 'http://127.0.0.1:43823') {
-        res.writeHead(400)
-        res.end('Bad request')
-        return
-      }
-      if (url.pathname !== '/callback') {
-        res.writeHead(404)
-        res.end()
-        return
-      }
-      if (url.searchParams.get('state') !== expectedState) {
-        res.writeHead(400)
-        res.end('Invalid state')
-        return
-      }
-      const result = url.searchParams.get('code'),
-        error = url.searchParams.get('error')
-      res.setHeader('Content-Type', 'text/html; charset=utf-8')
-      res.end(
-        '<!doctype html><meta charset="utf-8"><title>VKSpot</title><p>Можно вернуться в VKSpot.</p>',
-        () => {
-          onComplete(
-            error || !result
-              ? new Error('Spotify не подтвердил вход. Повторите подключение.')
-              : undefined,
-            result ?? undefined,
-          )
-        },
-      )
-    } catch {
-      if (!res.headersSent) res.writeHead(400)
-      if (!res.writableEnded) res.end('Bad request')
-    }
-  }
-}
-export function secureTokenStorageAvailable(platform: NodeJS.Platform = process.platform): boolean {
-  if (!safeStorage.isEncryptionAvailable()) return false
-  if (platform !== 'linux') return true
-  const backend = safeStorage.getSelectedStorageBackend()
-  return backend !== 'basic_text' && backend !== 'unknown'
-}
+
 export class Spotify {
-  private token: Token | null = null
+  private token: SpotifyToken | null = null
   private verified = false
   private refreshing: Promise<void> | null = null
   private authenticating = false
@@ -94,13 +43,7 @@ export class Spotify {
     private tokenPath: string,
     private fetchImplementation: (url: string, init?: RequestInit) => Promise<Response> = fetch,
   ) {
-    if (existsSync(tokenPath) && secureTokenStorageAvailable()) {
-      try {
-        this.token = JSON.parse(safeStorage.decryptString(readFileSync(tokenPath))) as Token
-      } catch {
-        this.token = null
-      }
-    }
+    this.token = loadEncryptedToken(tokenPath)
   }
   connected(): boolean {
     return !!this.token && this.verified
@@ -112,92 +55,21 @@ export class Spotify {
     this.verified = false
   }
   private persist(): void {
-    if (!secureTokenStorageAvailable())
-      throw new Error(
-        'ОС не предоставила защищённое хранилище. Токены не будут записаны открытым текстом.',
-      )
     if (!this.token) return
-    const encrypted = safeStorage.encryptString(JSON.stringify(this.token))
-    mkdirSync(dirname(this.tokenPath), { recursive: true })
-    const tempPath = `${this.tokenPath}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`
-    try {
-      writeFileSync(tempPath, encrypted, process.platform === 'win32' ? undefined : { mode: 0o600 })
-      renameSync(tempPath, this.tokenPath)
-    } catch (error) {
-      try {
-        if (existsSync(tempPath)) unlinkSync(tempPath)
-      } catch {
-        /* Best-effort cleanup of the temporary token file. */
-      }
-      throw error
-    }
+    persistEncryptedToken(this.tokenPath, this.token)
   }
   disconnect(): void {
     this.verified = false
     this.token = null
-    if (existsSync(this.tokenPath)) unlinkSync(this.tokenPath)
+    removeEncryptedToken(this.tokenPath)
   }
   async authorize(clientId: string): Promise<void> {
     if (!/^[a-fA-F0-9]{32}$/.test(clientId))
       throw new Error('Укажите Client ID из настроек приложения Spotify Developer.')
     if (this.authenticating) throw new Error('Вход уже открыт в браузере.')
     this.authenticating = true
-    const verifier = randomBytes(48).toString('base64url'),
-      state = randomBytes(24).toString('base64url')
     try {
-      const code = await new Promise<string>((resolve, reject) => {
-        let settled = false
-        const finish = (error?: Error, value?: string) => {
-          if (settled) return
-          settled = true
-          clearTimeout(timeout)
-          server.close()
-          server.closeAllConnections?.()
-          if (error) reject(error)
-          else resolve(value!)
-        }
-        const server = createServer(createOAuthCallbackHandler(state, finish))
-        const timeout = setTimeout(
-          () => finish(new Error('Время входа истекло. Подключитесь ещё раз.')),
-          180000,
-        )
-        server.once('error', () =>
-          finish(new Error('Порт 43823 занят. Закройте другое подключение и повторите вход.')),
-        )
-        server.listen(43823, '127.0.0.1', () => {
-          const params = new URLSearchParams({
-            client_id: clientId,
-            response_type: 'code',
-            redirect_uri: redirectUri,
-            state,
-            code_challenge_method: 'S256',
-            code_challenge: createHash('sha256').update(verifier).digest('base64url'),
-            scope: 'playlist-read-private playlist-modify-private user-read-private',
-          })
-          void shell
-            .openExternal('https://accounts.spotify.com/authorize?' + params)
-            .catch(() => finish(new Error('Не удалось открыть браузер.')))
-        })
-      })
-      const response = await this.fetchImplementation('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        body: new URLSearchParams({
-          client_id: clientId,
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: redirectUri,
-          code_verifier: verifier,
-        }),
-        signal: AbortSignal.timeout(30000),
-      })
-      if (!response.ok)
-        throw new Error('Не удалось получить доступ Spotify. Проверьте Client ID и Redirect URI.')
-      const data = (await response.json()) as {
-        access_token: string
-        refresh_token: string
-        expires_in: number
-      }
-      this.token = { ...data, clientId, expiresAt: Date.now() + data.expires_in * 1000 }
+      this.token = await authorizeSpotifyPKCE(clientId, this.fetchImplementation)
       this.verified = false
       this.persist()
     } finally {

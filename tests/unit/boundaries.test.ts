@@ -114,12 +114,23 @@ describe('architecture and IPC boundary invariants', () => {
       join(rootDir, 'src/preload/index.ts'),
       'invoke',
     )
-    const mainChannels = extractFirstStringArgCalls(
-      join(rootDir, 'src/main/ipc/register.ts'),
-      'handler',
+    const ipcFiles = listSourceFiles(join(rootDir, 'src/main/ipc'))
+    const moduleFiles = listSourceFiles(join(rootDir, 'src/main/ipc/modules')).map(
+      (filePath) => filePath.replace(/\\/g, '/').split('/src/main/ipc/modules/')[1],
+    )
+    expect(moduleFiles.sort()).toEqual([
+      'collections.ipc.ts',
+      'jobs.ipc.ts',
+      'platform.ipc.ts',
+      'spotify.ipc.ts',
+      'vk.ipc.ts',
+    ])
+    const mainChannels = ipcFiles.flatMap((filePath) =>
+      extractFirstStringArgCalls(filePath, 'handler'),
     )
 
     expect(new Set(preloadChannels)).toEqual(new Set(ipcKeys))
+    expect(mainChannels).toHaveLength(ipcKeys.length)
     expect(new Set(mainChannels)).toEqual(new Set(ipcKeys))
 
     const eventKeys = extractTypeKeys(join(rootDir, 'src/shared/ipc.ts'), 'IpcEventMap')

@@ -1,10 +1,59 @@
 import { randomUUID } from 'node:crypto'
-import type { Job } from '../../shared/model'
+import type { Job, PlanItem } from '../../shared/model'
 import type { JobSummary } from '../../shared/sync'
 import type { Database } from './database'
 
-type Details = Pick<Job, 'rowIds' | 'plan'>
-type Runtime = Omit<Job, 'rowIds' | 'plan'> & Partial<Details> & { localCount?: number }
+type Details = { rowIds: string[]; plan?: PlanItem[]; localCount: number }
+type Runtime = Omit<Job, 'rowIds' | 'plan'> &
+  Partial<Pick<Job, 'rowIds' | 'plan'>> & { localCount?: number }
+
+function countLocal(plan?: readonly PlanItem[]): number {
+  return plan?.filter((item) => item.destination === 'local').length ?? 0
+}
+
+function clonePlan(plan?: readonly PlanItem[]): PlanItem[] | undefined {
+  return plan?.map((item) => ({ ...item, local: item.local ? { ...item.local } : null }))
+}
+
+function samePlanItem(a: PlanItem, b: PlanItem): boolean {
+  if (
+    a.rowId !== b.rowId ||
+    a.position !== b.position ||
+    a.artist !== b.artist ||
+    a.title !== b.title ||
+    a.version !== b.version ||
+    a.destination !== b.destination ||
+    a.uri !== b.uri
+  ) {
+    return false
+  }
+  if (a.local === b.local) return true
+  if (!a.local || !b.local) return false
+  return (
+    a.local.path === b.local.path &&
+    a.local.sha256 === b.local.sha256 &&
+    a.local.artist === b.local.artist &&
+    a.local.title === b.local.title &&
+    a.local.duration === b.local.duration &&
+    a.local.codec === b.local.codec &&
+    a.local.bitrate === b.local.bitrate &&
+    a.local.size === b.local.size
+  )
+}
+
+function detailsEqual(cached: Details, rowIds: string[], plan?: PlanItem[]): boolean {
+  if (cached.rowIds.length !== rowIds.length) return false
+  for (let i = 0; i < rowIds.length; i++) {
+    if (cached.rowIds[i] !== rowIds[i]) return false
+  }
+  if ((cached.plan === undefined) !== (plan === undefined)) return false
+  if (!cached.plan || !plan) return true
+  if (cached.plan.length !== plan.length) return false
+  for (let i = 0; i < plan.length; i++) {
+    if (!samePlanItem(cached.plan[i], plan[i])) return false
+  }
+  return true
+}
 
 /** Large immutable queue inputs are stored once, separately from the changing cursor. */
 export class JobRepository {
@@ -38,9 +87,12 @@ export class JobRepository {
     if (cached) return cached
     const row = this.db.prepare('SELECT row_ids,plan FROM job_details WHERE id=?').get(id) as
       { row_ids: string; plan: string | null } | undefined
+    const rowIds = row ? (JSON.parse(row.row_ids) as string[]) : []
+    const plan = row?.plan ? (JSON.parse(row.plan) as PlanItem[]) : undefined
     const value: Details = {
-      rowIds: row ? JSON.parse(row.row_ids) : [],
-      ...(row?.plan ? { plan: JSON.parse(row.plan) } : {}),
+      rowIds,
+      ...(plan ? { plan } : {}),
+      localCount: countLocal(plan),
     }
     this.details.set(id, value)
     return value
@@ -48,11 +100,20 @@ export class JobRepository {
 
   private hydrate(runtime: Runtime): Job {
     const details = this.loadDetails(runtime.id)
+    const plan = runtime.plan ?? details.plan
     return {
       ...runtime,
-      rowIds: runtime.rowIds ?? details.rowIds,
-      plan: runtime.plan ?? details.plan,
+      rowIds: [...(runtime.rowIds ?? details.rowIds)],
+      ...(plan ? { plan: clonePlan(plan) } : {}),
     }
+  }
+
+  private writeRuntimePayload(runtime: Omit<Job, 'rowIds' | 'plan'>, localCount: number): void {
+    this.db
+      .prepare(
+        'INSERT INTO jobs(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
+      )
+      .run(runtime.id, JSON.stringify({ ...runtime, localCount }))
   }
 
   all(): Job[] {
@@ -68,8 +129,7 @@ export class JobRepository {
       const { rowIds: _rowIds, plan, ...runtime } = JSON.parse(row.payload) as Runtime
       return {
         ...runtime,
-        localCount:
-          runtime.localCount ?? plan?.filter((item) => item.destination === 'local').length ?? 0,
+        localCount: runtime.localCount ?? countLocal(plan),
       }
     })
   }
@@ -81,23 +141,21 @@ export class JobRepository {
     return this.hydrate(JSON.parse(row.payload))
   }
 
+  putProgress(job: Job): void {
+    job.updatedAt = new Date().toISOString()
+    const { rowIds: _rowIds, plan, ...runtime } = job
+    const localCount = plan ? countLocal(plan) : this.loadDetails(job.id).localCount
+    this.writeRuntimePayload(runtime, localCount)
+  }
+
   put(job: Job): void {
     job.updatedAt = new Date().toISOString()
     const { rowIds, plan, ...runtime } = job
     const cached = this.details.get(job.id)
-    const changedDetails = !cached || cached.rowIds !== rowIds || cached.plan !== plan
+    const changedDetails = !cached || !detailsEqual(cached, rowIds, plan)
+    const localCount = countLocal(plan)
     this.db.transaction(() => {
-      this.db
-        .prepare(
-          'INSERT INTO jobs(id,payload) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',
-        )
-        .run(
-          job.id,
-          JSON.stringify({
-            ...runtime,
-            localCount: plan?.filter((item) => item.destination === 'local').length ?? 0,
-          }),
-        )
+      this.writeRuntimePayload(runtime, localCount)
       if (changedDetails)
         this.db
           .prepare(
@@ -105,7 +163,13 @@ export class JobRepository {
           )
           .run(job.id, JSON.stringify(rowIds), plan ? JSON.stringify(plan) : null)
     })
-    if (changedDetails) this.details.set(job.id, { rowIds, plan })
+    if (changedDetails) {
+      this.details.set(job.id, {
+        rowIds: [...rowIds],
+        ...(plan ? { plan: clonePlan(plan) } : {}),
+        localCount,
+      })
+    }
   }
 
   prune(): void {
@@ -133,7 +197,7 @@ export class JobRepository {
       id: randomUUID(),
       collectionId,
       kind,
-      rowIds,
+      rowIds: [...rowIds],
       state: 'paused',
       cursor: 0,
       total: rowIds.length,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createCollection, parseImport } from '../../src/core/collection'
 import { defaultMatchingRules } from '../../src/shared/defaults'
 import {
+  analyzeRow,
   destinationLabels,
   filterLibraryRows,
   formatDuration,
@@ -127,5 +128,51 @@ describe('independent library filters', () => {
     expect(formatDuration(3599)).toBe('59:59')
     expect(formatDuration(3600)).toBe('1:00:00')
     expect(formatDuration(3900)).toBe('1:05:00')
+  })
+
+  it('computes lazy search across edited source.artist and Cyrillic/diacritic titles', () => {
+    const collection = createCollection(
+      parseImport(
+        JSON.stringify([
+          { artist: 'Original Кириллица', title: 'Йошкар-Ола', duration: 180 },
+          { artist: 'JAŸ-Z', title: 'Café', duration: 200 },
+        ]),
+        '.json',
+        'LazySearch',
+      ),
+    )
+    collection.rows[0].working.artist = 'Edited Artist'
+
+    // Empty-query pass and summary succeed before query filtering
+    const summary = summarizeCollection(collection, defaultMatchingRules)
+    expect(summary.destinations.all).toBe(2)
+    expect(filterLibraryRows(collection, defaultMatchingRules, '', 'all', 'all').rows).toHaveLength(
+      2,
+    )
+
+    // Filter by original source.artist even after working.artist changed
+    const bySourceArtist = filterLibraryRows(
+      collection,
+      defaultMatchingRules,
+      'кириллица',
+      'all',
+      'all',
+    )
+    expect(bySourceArtist.rows.map((r) => r.position)).toEqual([1])
+
+    // Filter by working.title with Cyrillic й and diacritic NFKC/lowercase handling
+    expect(
+      filterLibraryRows(collection, defaultMatchingRules, 'йошкар', 'all', 'all').rows.map(
+        (r) => r.position,
+      ),
+    ).toEqual([1])
+    expect(
+      filterLibraryRows(collection, defaultMatchingRules, 'café', 'all', 'all').rows.map(
+        (r) => r.position,
+      ),
+    ).toEqual([2])
+    expect(analyzeRow(collection.rows[0], defaultMatchingRules).search).toContain(
+      'original кириллица',
+    )
   })
 })

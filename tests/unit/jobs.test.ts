@@ -481,4 +481,82 @@ describe('migration recovery', () => {
       store.close()
     }
   })
+
+  it('batches cached and skipped search rows and flushes prior batch before network failure', async () => {
+    const store = new Store(':memory:')
+    const nowSpy = vi.spyOn(Date, 'now')
+    const started = 1_700_000_000_000
+    nowSpy.mockReturnValue(started)
+    try {
+      const lines = Array.from({ length: 125 }, (_, i) => `Artist ${i} - Song ${i}`)
+      lines.push('Artist Uncached - Failing Track')
+      const id = store.import(parseImport(lines.join('\n'), '.txt', 'BatchSearch'))
+      const rows = store.get(id).rows
+
+      // Mark row 10 as excluded and row 20 as already decided so they are skipped in batch.
+      store.patch(id, [rows[10].id], { excluded: true })
+      store.patch(id, [rows[20].id], { localPending: true })
+
+      for (let i = 0; i < 125; i++) {
+        store.cache(`spotify-search-v1:Artist ${i} Song ${i}`, [
+          {
+            uri: `spotify:track:${String(i).padStart(22, 'a')}`,
+            title: `Song ${i}`,
+            artists: [`Artist ${i}`],
+            duration: 180,
+            album: '',
+            url: '',
+          },
+        ])
+      }
+
+      const patchManySpy = vi.spyOn(store, 'patchMany')
+      const putJobSpy = vi.spyOn(store, 'putJob')
+      const search = vi.fn(async (query: string) => {
+        if (query.includes('Failing Track')) {
+          throw new SpotifyError('Rate limit', 60, false, 'rate-limit')
+        }
+        return []
+      })
+
+      const jobs = new Jobs(
+        store,
+        { connected: () => true, search } as unknown as Spotify,
+        () => {},
+      )
+      const job = store.newJob(
+        id,
+        'search',
+        rows.map((r) => r.id),
+      )
+      job.backgroundSearch = true
+      store.putJob(job)
+      patchManySpy.mockClear()
+      putJobSpy.mockClear()
+
+      await jobs.run(job.id)
+
+      // 125 cached/skipped rows flushed in 3 batches (50 + 50 + 25 before network), far fewer than 125 transactions.
+      expect(patchManySpy.mock.calls.length).toBeLessThanOrEqual(5)
+      expect(putJobSpy.mock.calls.length).toBeLessThanOrEqual(10)
+      expect(search).toHaveBeenCalledExactlyOnceWith('Artist Uncached Failing Track')
+      expect(store.job(job.id)).toMatchObject({ cursor: 125, state: 'paused' })
+
+      const updated = store.get(id).rows
+      expect(updated[0].working.candidates).toHaveLength(1)
+      expect(updated[10].working.searchedQuery).toBeNull()
+      expect(updated[20].working.searchedQuery).toBeNull()
+      expect(updated[124].working.candidates).toHaveLength(1)
+      expect(updated[124].working.searchedQuery).toBe('Artist 124 Song 124')
+
+      // Advance past the 60s rate-limit window, cache the final track, and complete.
+      nowSpy.mockReturnValue(started + 61_000)
+      store.cache('spotify-search-v1:Artist Uncached Failing Track', [])
+      await jobs.run(job.id)
+      expect(store.job(job.id)).toMatchObject({ cursor: 126, total: 126, state: 'complete' })
+    } finally {
+      nowSpy.mockRestore()
+      store.close()
+    }
+  })
 })

@@ -174,13 +174,17 @@
         : object.id != null
           ? `${object.owner_id ?? ''}_${object.id}`
           : '')
+    const claimedSelector =
+      '.audio_row__claimed, .audio_row_claimed, [data-testid*="Blocked"], [data-testid*="Claimed"]'
     const blocked =
-      /(?:blocked|unavailable|restricted|deleted|audio_claimed|audio_item_disabled)/i.test(
+      /(?:blocked|unavailable|restricted|deleted|audio_claimed|audio_row_claimed|audio_row__claimed|audio_item_disabled)/i.test(
         node.className,
       ) ||
       node.getAttribute('aria-disabled') === 'true' ||
       object.is_restricted === true ||
-      object.is_deleted === true
+      object.is_deleted === true ||
+      node.matches(claimedSelector) ||
+      !!node.querySelector(claimedSelector)
     const track = {
       id: String(id || ''),
       artist: String(artist || ''),
