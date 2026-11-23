@@ -23,7 +23,15 @@ test('welcome is the first view, explains the flow and links to working sections
       )
       .toBeGreaterThan(1000)
     await expect(page.locator('.brand-mark [data-brand="vkspot"]')).toBeVisible()
+    await expect(page.locator('.guide-meta-strip')).toContainText('Что понадобится')
+    await expect(page.locator('.guide-meta-strip')).toContainText('Как понять, что шаг готов')
+    await expect(page.locator('.guide-troubleshooting')).toContainText('Если что-то пошло не так')
+    const firstFaq = page.locator('.guide-troubleshooting details').first()
+    await firstFaq.locator('summary').click()
+    await expect(firstFaq).toHaveAttribute('open', '')
+    await firstFaq.locator('summary').click()
     await page.screenshot({ path: '.local/evidence/e2e/welcome-desktop.png' })
+
     await page.getByRole('link', { name: 'Посмотреть все шаги' }).click()
     await expect(
       page.getByRole('heading', { name: 'Твой маршрут — прямо по интерфейсу', exact: true }),
@@ -32,12 +40,21 @@ test('welcome is the first view, explains the flow and links to working sections
       .poll(() => page.locator('.welcome-page').evaluate((element) => element.scrollTop))
       .toBeGreaterThan(400)
     await page.screenshot({ path: '.local/evidence/e2e/welcome-roadmap.png' })
+
     await page.locator('.guide-marker').first().click()
     await expect(page.locator('.guide-bubble')).toContainText('Подключения')
     await page.screenshot({ path: '.local/evidence/e2e/welcome-callout.png' })
+    await page.locator('.guide-marker').first().press('ArrowRight')
+    await expect(page.locator('.guide-marker').nth(1)).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('.guide-bubble')).toContainText('Открыть VK')
+    await page.locator('.guide-marker').nth(1).press('ArrowLeft')
+    await expect(page.locator('.guide-marker').first()).toHaveAttribute('aria-pressed', 'true')
     await page.getByRole('button', { name: 'Закрыть пояснение', exact: true }).click()
+
     for (let index = 0; index < 6; index++) {
       await page.locator('.route-tabs button').nth(index).click()
+      await expect(page.locator('.guide-meta-strip')).toContainText('Что понадобится')
+      await expect(page.locator('.guide-troubleshooting')).toContainText('Если что-то пошло не так')
       const sceneButtons = page.locator('.guide-scenes button')
       const scenes = await sceneButtons.count()
       for (let scene = 0; scene < Math.max(1, scenes); scene++) {
@@ -51,22 +68,27 @@ test('welcome is the first view, explains the flow and links to working sections
           .toBeGreaterThan(1000)
         await expect(page.locator('.guide-marker').first()).toBeVisible()
         if (index === 3 && scene === 1) {
-          await expect(
-            page.getByRole('button', { name: 'Пояснение 1: Фоновый поиск', exact: true }),
-          ).toBeVisible()
-          await page
+          const canvasMarker = page
+            .locator('.guide-canvas')
             .getByRole('button', { name: 'Пояснение 1: Фоновый поиск', exact: true })
-            .click()
+          const listButton = page
+            .locator('.guide-instructions')
+            .getByRole('button', { name: 'Пояснение 1: Фоновый поиск', exact: true })
+          await expect(canvasMarker).toBeVisible()
+          await expect(listButton).toBeVisible()
+          await canvasMarker.click()
           await expect(page.locator('.guide-bubble')).toContainText('Автопродолжение')
           await page.getByRole('button', { name: 'Закрыть пояснение', exact: true }).click()
           await page.screenshot({ path: '.local/evidence/e2e/welcome-search-guide.png' })
         }
       }
     }
+
     await page.getByRole('button', { name: 'Открыть снимок крупнее', exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByRole('dialog').locator('img')).toBeVisible()
     await page.getByRole('button', { name: 'Закрыть снимок', exact: true }).click()
+
     await page.locator('.route-tabs button').nth(1).click()
     await page.getByRole('button', { name: 'Открыть коллекции', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Коллекции', exact: true })).toBeVisible()
@@ -76,6 +98,7 @@ test('welcome is the first view, explains the flow and links to working sections
     await expect(page.getByRole('heading', { name: 'VK Музыка', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Обзор', exact: true }).click()
     await page.getByRole('button', { name: 'Инструкция' }).click()
+
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760))
     await page.screenshot({ path: '.local/evidence/e2e/welcome-compact.png' })
     await page.getByRole('link', { name: 'Посмотреть все шаги' }).click()
@@ -83,6 +106,12 @@ test('welcome is the first view, explains the flow and links to working sections
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
+
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(940, 640))
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+
     await page.evaluate(async () => {
       const state = await window.vkspot.state()
       if (state.ok) await window.vkspot.saveSettings({ ...state.value.settings, theme: 'dark' })
@@ -90,6 +119,7 @@ test('welcome is the first view, explains the flow and links to working sections
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await expect(page.locator('.guide-capture figcaption')).toContainText('тёмное оформление')
     await page.screenshot({ path: '.local/evidence/e2e/welcome-dark.png' })
+
     await page.evaluate(() =>
       window.vkspot.importCollection({
         name: 'Guide navigation fixture',

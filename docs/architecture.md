@@ -4,12 +4,12 @@ VKSpot — Electron 44 / Node.js 24, React 19 и локальная SQLite (`nod
 
 ## Границы модулей
 
-- `src/core/` — правила коллекций, импорта/экспорта и сопоставления; не зависит от Electron или React.
-- `src/shared/` — доменные типы, схемы IPC, значения по умолчанию и контракт синхронизации.
-- `src/main/` — IPC, хранилище, фоновые задания, интеграции VK/Spotify и системные операции.
-- `src/preload/` — единственная граница main/renderer.
-- `src/renderer/src/` — оболочка, локальная копия состояния, экраны-функции, таблица и инспектор.
-- `resources/` — скрипты интеграций и ресурсы; `tests/` — unit и Electron E2E; `tools/` — локальные разработческие утилиты.
+- `src/core/` — правила коллекций (`collection/`), импорта/экспорта, нормализации (`matching-normalize.ts`), сопоставления (`matching.ts`) и фильтрации (`library.ts`); не зависит от Electron или React.
+- `src/shared/` — разделённые контракты: константы без Zod (`defaults.ts`), чистые типы (`types.ts`, `sync.ts`, `ipc.ts`), общие русские форматтеры и локализация ошибок (`ru.ts`, `job-status.ts`) и серверные Zod-схемы (`model.ts`).
+- `src/main/` — модульные IPC-обработчики (`ipc/router.ts`, `ipc/modules/`), хранилище SQLite (`storage/`), фоновые задания (`jobs/`), интеграции VK (`integrations/vk/` с общей политикой сессии `vk-session-policy.ts`) и Spotify (`integrations/spotify/{api,oauth-pkce,browser,browser-dom}.ts`), системные операции (`platform/`).
+- `src/preload/` — единственная типизированная граница main/renderer (`IpcInvokeMap` / `IpcEventMap`).
+- `src/renderer/src/` — оболочка (`app/`), локальная реплика состояния и изолированное хранилище черновиков (`state/{replica,useAppState,drafts}.ts`), переиспользуемые компоненты (`components/`), экраны-функции (`features/`), таблица, инспектор и стили (`styles/`).
+- `resources/` — скрипты интеграций и ресурсы; `tests/` — unit, Electron E2E и фикстуры (`tests/fixtures/`); `tools/` — локальные разработческие утилиты.
 
 ## Данные и синхронизация
 
@@ -20,7 +20,7 @@ SQLite-транзакция фиксирует изменение вместе �
 ## Как проследить изменение
 
 1. При правке записи [контроллер коллекции](../src/renderer/src/app/useWorkspaceController.ts) вызывает `patchRows` через Bridge.
-2. [IPC-обработчик](../src/main/ipc/register.ts) проверяет параметры и передаёт правку в Store. [Репозиторий коллекций](../src/main/storage/collection-repository.ts) сохраняет данные и историю, затем обновляет кэш и журнал дельт.
+2. [IPC-обработчик](../src/main/ipc/modules/collections.ipc.ts) (через [роутер](../src/main/ipc/router.ts)) проверяет отправителя и параметры, передаёт правку в Store. [Репозиторий коллекций](../src/main/storage/collection-repository.ts) сохраняет данные и историю, затем обновляет кэш и журнал дельт.
 3. [Хук синхронизации](../src/renderer/src/state/useAppState.ts) получает дельту. [Реплика](../src/renderer/src/state/replica.ts) применяет её, сохраняя ссылки на неизменённые записи.
 
 ## Правила зависимостей

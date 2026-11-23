@@ -73,28 +73,28 @@ VKSpot — бесплатное приложение с открытым код�
 
 Открой [последний релиз](https://github.com/Matvey77/VKSpot/releases/latest) и выбери файл в разделе **Assets**:
 
-| Система       | Архитектура   | Файл                                                                                                                                                                                                         |
-| ------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Windows 10/11 | x64           | [Установщик .exe](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot.Setup.0.2.0-x64.exe)                                                                                                    |
-| Windows 10/11 | ARM64         | [Установщик .exe](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot.Setup.0.2.0-arm64.exe)                                                                                                  |
-| macOS 13+     | Intel         | [Образ .dmg](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-mac-x64.dmg)                                                                                                           |
-| macOS 13+     | Apple Silicon | [Образ .dmg](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-mac-arm64.dmg)                                                                                                         |
-| Linux         | x64           | [AppImage](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-x86_64.AppImage) · [DEB](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-amd64.deb) |
-| Linux         | ARM64         | [AppImage](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-arm64.AppImage) · [DEB](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/VKSpot-0.2.0-linux-arm64.deb)  |
+| Система       | Архитектура   | Файл в Assets                                                               |
+| ------------- | ------------- | --------------------------------------------------------------------------- |
+| Windows 10/11 | x64           | `VKSpot Setup <версия>-x64.exe`                                             |
+| Windows 10/11 | ARM64         | `VKSpot Setup <версия>-arm64.exe`                                           |
+| macOS 13+     | Intel         | `VKSpot-<версия>-mac-x64.dmg`                                               |
+| macOS 13+     | Apple Silicon | `VKSpot-<версия>-mac-arm64.dmg`                                             |
+| Linux         | x64           | `VKSpot-<версия>-linux-x86_64.AppImage` · `VKSpot-<версия>-linux-amd64.deb` |
+| Linux         | ARM64         | `VKSpot-<версия>-linux-arm64.AppImage` · `VKSpot-<версия>-linux-arm64.deb`  |
 
-Все сборки содержат среду выполнения приложения. Для проверки файла в том же релизе есть [SHA256SUMS.txt](https://github.com/Matvey77/VKSpot/releases/download/v0.2.0/SHA256SUMS.txt). На macOS архитектуру можно посмотреть в меню Apple → «Об этом Mac»; в Linux команда `uname -m` показывает `x86_64` для x64 и `aarch64` для ARM64.
+Все сборки включают среду выполнения приложения. Для проверки целостности скачай `SHA256SUMS.txt` из того же релиза. На macOS архитектура указана в меню Apple → «Об этом Mac»; в Linux команда `uname -m` выводит `x86_64` (x64) или `aarch64` (ARM64).
 
-Установщики Windows не подписаны сертификатом издателя. Сборки macOS подписаны ad hoc и не нотарифицированы Apple, поэтому Gatekeeper может препятствовать запуску; см. [справку Apple](https://support.apple.com/ru-ru/102445). В Linux при ограничениях песочницы для AppImage можно использовать DEB с системным профилем.
+Установщики Windows не подписаны сертификатом издателя; сборки macOS подписаны ad hoc без нотарификации ([справка Apple](https://support.apple.com/ru-ru/102445)). Подробности по песочнице Linux AppImage/DEB — в [руководстве по поддержке](docs/maintenance.md).
 
 **Установка:**
 
 - **Windows:** запусти скачанный `.exe` и следуй инструкциям установщика.
 - **macOS:** открой `.dmg` и перенеси VKSpot в папку «Программы».
-- **Linux:** сделай AppImage исполняемым и запусти его либо установи DEB через менеджер пакетов Debian/Ubuntu. Например, для x64 в папке с файлом:
+- **Linux:** сделай AppImage исполняемым и запусти его либо установи DEB через менеджер пакетов Debian/Ubuntu:
 
   ```bash
-  chmod +x ./VKSpot-0.2.0-linux-x86_64.AppImage
-  ./VKSpot-0.2.0-linux-x86_64.AppImage
+  chmod +x ./VKSpot-*-linux-x86_64.AppImage
+  ./VKSpot-*-linux-x86_64.AppImage
   ```
 
 ### Быстрый старт
@@ -176,7 +176,7 @@ flowchart LR
 <details>
 <summary><strong>Архив и экспорт: сохранить результат работы</strong></summary>
 
-Резервная копия, исходный список, CSV, план переноса и M3U8 доступны из параметров коллекции.
+Параметры коллекции открывают все форматы сохранения и резервную копию (см. [как сохранить резервную копию](#как-сохранить-резервную-копию)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/archive-dark.png">
@@ -215,7 +215,7 @@ flowchart LR
 <details>
 <summary><strong>Почему Windows показывает неизвестного издателя?</strong></summary>
 
-Установщик релиза 0.2.0 не подписан сертификатом издателя. Скачивай его из [официальных релизов проекта](https://github.com/Matvey77/VKSpot/releases/latest). Сверить SHA-256 можно в PowerShell, указав фактический путь к скачанному файлу:
+Установщики релизов не подписаны сертификатом издателя. Скачивай файл только из [официальных релизов проекта](https://github.com/Matvey77/VKSpot/releases/latest). Сверить SHA-256 можно в PowerShell, указав фактический путь к скачанному файлу:
 
 ```powershell
 Get-FileHash -Algorithm SHA256 -LiteralPath "C:\путь\к\скачанному\установщику.exe"

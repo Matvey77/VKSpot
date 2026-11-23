@@ -241,8 +241,40 @@
   max-width: 95ch;
   margin-top: 14px;
 }
+.guide-meta-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+  max-width: 1184px;
+  margin-top: 18px;
+}
+.guide-meta-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-guide-note);
+  padding: var(--space-md) 14px;
+  min-width: 0;
+}
+.guide-meta-card > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.guide-meta-card > span svg {
+  color: var(--accent);
+}
+.guide-meta-card > p {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
 .guide-scenes {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   margin-top: 22px;
 }
@@ -304,6 +336,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-md);
   margin-top: var(--space-md);
   font-size: 11px;
@@ -321,12 +354,14 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
+  max-width: 1184px;
 }
 .guide-instructions li {
   display: flex;
   gap: var(--space-md);
   padding: 13px 14px;
   border-radius: var(--radius-guide-note);
+  min-width: 0;
 }
 .guide-instructions li.selected {
   background: var(--selected);
@@ -344,6 +379,8 @@
 .guide-instructions p {
   font-size: 13px;
   line-height: 1.65;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .guide-instructions strong {
   display: block;
@@ -351,10 +388,61 @@
   margin-bottom: 5px;
   font-weight: 600;
 }
+.guide-troubleshooting {
+  max-width: 1184px;
+  margin: 0 0 22px;
+  padding: 14px var(--space-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-guide-note);
+}
+.guide-troubleshooting h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.guide-troubleshooting h4 svg {
+  color: var(--accent);
+}
+.guide-faq-list {
+  display: grid;
+  gap: var(--space-xs);
+  margin-top: 10px;
+}
+.guide-faq-item {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-sm);
+}
+.guide-faq-item:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+.guide-faq-item > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.45;
+  padding: 3px 0;
+}
+.guide-faq-item > summary:hover {
+  color: var(--accent);
+}
+.guide-faq-item > p {
+  margin-top: 6px;
+  padding-left: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
 .guide-pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-md);
   padding: var(--space-lg) 0;
   border-top: 1px solid var(--line);
@@ -377,10 +465,13 @@
 .guide-bubble {
   position: fixed;
   z-index: 40;
-  width: 310px;
+  width: min(310px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   padding: 18px;
   background: var(--surface);
   color: var(--ink);
+  border: 1px solid var(--line);
   border-radius: var(--radius-guide);
   box-shadow: var(--shadow-bubble);
 }
@@ -413,4 +504,14 @@
 }
 .welcome-status strong {
   color: var(--ink);
+}
+@media (max-width: 1000px) {
+  .guide-meta-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-page {
+    scroll-behavior: auto;
+  }
 }
