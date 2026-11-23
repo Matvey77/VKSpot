@@ -1,65 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { summarizeCollection } from '../../../core/library'
-import { reviewGroup, type SearchResultGroup } from '../../../core/matching'
-import { retryDeadline } from '../../../shared/job-status'
-import type {
-  Collection,
-  ImportPreview,
-  Result,
-  VKExportProgress,
-  Working,
-} from '../../../shared/types'
-import { type Draft, type Filter } from '../features/library/LibraryView'
+import { reviewGroup } from '../../../core/matching'
+import type { ExportFormat, Result, VKExportProgress, Working } from '../../../shared/types'
 import { api } from '../state/api'
+import { clearCollectionDrafts, draftsStore } from '../state/drafts'
 import { useAppState } from '../state/useAppState'
-import useRetryClock from '../hooks/useRetryClock'
+import { type RunOptions } from './useModalActions'
+import { useModalActions } from './useModalActions'
+import { useNavigationState } from './useNavigationState'
 
-type View = 'welcome' | 'library' | 'connections' | 'jobs' | 'settings'
+type ActiveOp = { id: number; key: string }
+
+function resolveBusy(ops: readonly ActiveOp[]): string {
+  if (!ops.length) return ''
+  if (ops.some((op) => op.key === 'extract')) return 'extract'
+  if (ops.some((op) => op.key === 'connect')) return 'connect'
+  return ops[ops.length - 1]!.key
+}
+
 export function useWorkspaceController() {
-  const [view, setView] = useState<View>('welcome')
-  const [showGuide, setShowGuide] = useState(false)
-  const [spotifyPanel, setSpotifyPanel] = useState<{ jobId?: string } | null>(null)
-  const [dismissedHelp, setDismissedHelp] = useState('')
-  const [recentExportId, setRecentExportId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!recentExportId) return
-    const timer = setTimeout(() => {
-      setRecentExportId(null)
-    }, 12000)
-    return () => clearTimeout(timer)
-  }, [recentExportId])
-
-  const [collectionId, setCollectionId] = useState('')
-  const [openedCollectionId, setOpenedCollectionId] = useState<string | null>(null)
-  const [repairTarget, setRepairTarget] = useState<Collection | null>(null)
-  const [repairPreview, setRepairPreview] = useState<ImportPreview | null>(null)
-  const [focusId, setFocusId] = useState('')
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
-  const [resultFilter, setResultFilter] = useState<'all' | SearchResultGroup>('all')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [preview, setPreview] = useState<ImportPreview | null>(null)
   const [vkExpected, setVKExpected] = useState('')
   const [vkProgress, setVKProgress] = useState<VKExportProgress | null>(null)
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null)
   const [busy, setBusy] = useState('')
-  const [confirmTransfer, setConfirmTransfer] = useState(false)
 
-  const { data, refresh, readState } = useAppState(api, (message) =>
-    setNotice({ message, error: true }),
-  )
-  const jobNow = useRetryClock(view === 'jobs' ? retryDeadline(data?.jobs ?? []) : 0)
-  useEffect(() => {
-    if (!data) return
-    setCollectionId((current) =>
-      data.collections.some((c) => c.id === current) ? current : (data.collections[0]?.id ?? ''),
-    )
-    setOpenedCollectionId((current) =>
-      current && data.collections.some((c) => c.id === current) ? current : null,
-    )
-  }, [data?.collections])
+  const activeOpsRef = useRef<ActiveOp[]>([])
+  const nextOpIdRef = useRef(1)
+
+  const handleStateError = useCallback((message: string) => {
+    setNotice({ message, error: true })
+  }, [])
+
+  const { data, refresh, readState } = useAppState(api, handleStateError)
+  const nav = useNavigationState(data?.collections)
 
   useEffect(() => {
     document.documentElement.dataset.theme = data?.settings.theme ?? 'light'
@@ -77,9 +50,12 @@ export function useWorkspaceController() {
       key: string,
       action: () => Promise<Result<T>>,
       success?: string,
+      options?: RunOptions,
     ): Promise<T | undefined> => {
-      setBusy(key)
-      setNotice(null)
+      const id = nextOpIdRef.current++
+      activeOpsRef.current = [...activeOpsRef.current, { id, key }]
+      setBusy(resolveBusy(activeOpsRef.current))
+      if (!options?.preserveNotice) setNotice(null)
       try {
         const result = await action()
         if (!result.ok) {
@@ -97,218 +73,255 @@ export function useWorkspaceController() {
         })
         return undefined
       } finally {
-        setBusy('')
+        activeOpsRef.current = activeOpsRef.current.filter((op) => op.id !== id)
+        setBusy(resolveBusy(activeOpsRef.current))
       }
     },
     [refresh],
   )
 
-  const currentId = openedCollectionId || collectionId
-  const collection = data?.collections.find((c) => c.id === currentId)
+  const runBackground = useCallback(
+    async <T>(action: () => Promise<Result<T>>, fallbackError: string): Promise<T | undefined> => {
+      try {
+        const result = await action()
+        if (!result.ok) {
+          setNotice({ message: result.error, error: true })
+          return undefined
+        }
+        return result.value
+      } catch {
+        setNotice({ message: fallbackError, error: true })
+        return undefined
+      }
+    },
+    [],
+  )
+
+  const currentId = nav.openedCollectionId || nav.collectionId
+  const collection = useMemo(
+    () => data?.collections.find((c) => c.id === currentId),
+    [data?.collections, currentId],
+  )
 
   const counts = useMemo(
     () => summarizeCollection(collection, data?.settings.matchingRules).destinations,
     [collection, data?.settings.matchingRules],
   )
 
-  const patch = async (ids: string[], value: Partial<Working>): Promise<boolean> => {
-    const targetCollId = openedCollectionId || collectionId
-    const saved = await run('patch', async () => {
-      const result = await api.patchRows(targetCollId, ids, value)
-      if (result.ok && ['artist', 'title', 'version', 'note'].some((key) => key in value))
-        setDrafts((current) => {
-          const next = { ...current }
-          ids.forEach((id) => delete next[id])
-          return next
+  const modals = useModalActions({
+    currentId,
+    vkExpectedCount,
+    readState,
+    run,
+    setView: nav.setView,
+    setCollectionId: nav.setCollectionId,
+    setOpenedCollectionId: nav.setOpenedCollectionId,
+  })
+
+  const patch = useCallback(
+    async (ids: string[], value: Partial<Working>): Promise<boolean> => {
+      const saved = await run('patch', async () => {
+        const result = await api.patchRows(currentId, ids, value)
+        if (result.ok && ['artist', 'title', 'version', 'note'].some((key) => key in value)) {
+          draftsStore.clearRows(ids)
+        }
+        return result.ok ? { ok: true as const, value: true } : result
+      })
+      return saved === true
+    },
+    [currentId, run],
+  )
+
+  const search = useCallback(
+    (ids: string[], background = false) =>
+      run('search', () => api.startSearch(currentId, ids, background)),
+    [currentId, run],
+  )
+
+  const setAutoResume = useCallback(
+    (value: boolean) => {
+      const state = readState()
+      if (state) {
+        void run(
+          'settings',
+          () => api.saveSettings({ ...state.settings, autoResumeSearch: value }),
+          undefined,
+          { preserveNotice: true },
+        )
+      }
+    },
+    [readState, run],
+  )
+
+  const beginSearch = useCallback(() => {
+    const state = readState()
+    const target = state?.collections.find((c) => c.id === currentId) ?? collection
+    if (!target) return
+    nav.setOpenedCollectionId(target.id)
+    nav.setView('library')
+    const rules = state?.settings.matchingRules ?? data?.settings.matchingRules
+    void run('search', () =>
+      api.startSearch(
+        target.id,
+        target.rows.filter((row) => reviewGroup(row, rules) === 'pending').map((row) => row.id),
+        true,
+      ),
+    )
+  }, [collection, currentId, data?.settings.matchingRules, nav, readState, run])
+
+  const continueSearch = useCallback(
+    (id: string, browser: boolean) => {
+      const job = readState()?.jobs.find((item) => item.id === id)
+      if (job) {
+        nav.setCollectionId(job.collectionId)
+        nav.setOpenedCollectionId(job.collectionId)
+      }
+      nav.setView('library')
+      void run('control', () =>
+        browser ? api.continueSearchInBrowser(id) : api.controlJob(id, 'resume'),
+      )
+    },
+    [nav, readState, run],
+  )
+
+  const confirmMetadata = useCallback(
+    async (ids: string[]): Promise<boolean> => {
+      const result = await run('confirm', () => api.confirmMetadataMatches(currentId, ids))
+      return result !== undefined
+    },
+    [currentId, run],
+  )
+
+  const linkFile = useCallback(
+    async (rowId: string): Promise<boolean> => {
+      await run('file', () => api.linkFile(currentId, rowId))
+      const result = readState()
+      return (
+        Boolean(result) &&
+        result!.collections
+          .find((item) => item.id === currentId)
+          ?.rows.find((item) => item.id === rowId)?.working.destination === 'local'
+      )
+    },
+    [currentId, readState, run],
+  )
+
+  const exported = useCallback(
+    (format: ExportFormat, targetId?: string) => {
+      const targetCollId = targetId ?? currentId
+      if (!targetCollId) return
+      void run('export', () => api.exportCollection(targetCollId, format)).then((path) => {
+        if (path) setNotice({ message: `Сохранено: ${path}`, error: false })
+      })
+    },
+    [currentId, run],
+  )
+
+  const renameCollection = useCallback(
+    async (id: string, name: string): Promise<boolean> => {
+      const saved = await run(
+        'rename-collection',
+        async () => {
+          const result = await api.renameCollection(id, name)
+          return result.ok ? { ok: true as const, value: true } : result
+        },
+        'Коллекция переименована.',
+      )
+      return saved === true
+    },
+    [run],
+  )
+
+  const deleteCollection = useCallback(
+    async (id: string) => {
+      const rowIds =
+        readState()
+          ?.collections.find((entry) => entry.id === id)
+          ?.rows.map((row) => row.id) ?? []
+      const deleted = await run(
+        'delete-collection',
+        async () => {
+          const result = await api.deleteCollection(id)
+          return result.ok ? { ok: true as const, value: true } : result
+        },
+        'Коллекция удалена.',
+      )
+      if (deleted === true) {
+        clearCollectionDrafts(rowIds)
+        if (nav.openedCollectionId === id) nav.setOpenedCollectionId(null)
+      }
+    },
+    [nav, readState, run],
+  )
+
+  const reorderCollections = useCallback(
+    async (ids: string[]) => {
+      await run('reorder-collections', () => api.reorderCollections(ids), undefined, {
+        preserveNotice: true,
+      })
+    },
+    [run],
+  )
+
+  const openVK = useCallback(() => {
+    void run('vk', () => api.openVK(), undefined, { preserveNotice: true })
+  }, [run])
+
+  const cancelVKExtraction = useCallback(() => {
+    void runBackground(() => api.cancelVKExtraction(), 'Не удалось остановить выгрузку VK.')
+  }, [runBackground])
+
+  const extractVKPreview = useCallback(() => {
+    void run('extract', () => api.extractVK({ expectedCount: vkExpectedCount })).then((value) => {
+      if (value) modals.setPreview(value)
+    })
+  }, [modals, run, vkExpectedCount])
+
+  const prepareLocal = useCallback(() => {
+    if (!currentId) return
+    void run('prepare', () => api.prepareLocal(currentId)).then((path) => {
+      if (path) {
+        setNotice({
+          message: `Файлы и план сохранены: ${path}`,
+          error: false,
         })
-      return result.ok ? { ok: true as const, value: true } : result
+      }
     })
-    return saved === true
-  }
-
-  const importFile = async () => {
-    const value = await run('import', () => api.previewImport())
-    if (value) setPreview(value)
-  }
-
-  const search = (ids: string[], background = false) => {
-    const targetCollId = openedCollectionId || collectionId
-    return run('search', () => api.startSearch(targetCollId, ids, background))
-  }
-
-  const setAutoResume = (value: boolean) => {
-    if (data)
-      void run('settings', () => api.saveSettings({ ...data.settings, autoResumeSearch: value }))
-  }
-
-  const beginSearch = () => {
-    if (!collection) return
-    setOpenedCollectionId(collection.id)
-    setView('library')
-    search(
-      collection.rows
-        .filter((row) => reviewGroup(row, data?.settings.matchingRules) === 'pending')
-        .map((row) => row.id),
-      true,
-    )
-  }
-
-  const continueSearch = (id: string, browser: boolean) => {
-    const job = data?.jobs.find((item) => item.id === id)
-    if (job) {
-      setCollectionId(job.collectionId)
-      setOpenedCollectionId(job.collectionId)
-    }
-    setView('library')
-    void run('control', () =>
-      browser ? api.continueSearchInBrowser(id) : api.controlJob(id, 'resume'),
-    )
-  }
-
-  const openSpotifyPanel = (jobId?: string) => {
-    const targetCollId = openedCollectionId || collectionId
-    const relevant = data?.jobs.find(
-      (job) =>
-        job.collectionId === targetCollId &&
-        job.kind === 'search' &&
-        job.searchProvider === 'browser' &&
-        job.state !== 'complete',
-    )
-    setSpotifyPanel({ jobId: jobId ?? relevant?.id })
-  }
-
-  const confirmMetadata = async (ids: string[]): Promise<boolean> => {
-    const targetCollId = openedCollectionId || collectionId
-    const result = await run('confirm', () => api.confirmMetadataMatches(targetCollId, ids))
-    return result !== undefined
-  }
-
-  const linkFile = async (rowId: string): Promise<boolean> => {
-    const targetCollId = openedCollectionId || collectionId
-    await run('file', () => api.linkFile(targetCollId, rowId))
-    const result = readState()
-    return (
-      Boolean(result) &&
-      result!.collections
-        .find((item) => item.id === targetCollId)
-        ?.rows.find((item) => item.id === rowId)?.working.destination === 'local'
-    )
-  }
-
-  const exported = (
-    format: 'archive' | 'raw-json' | 'csv' | 'm3u8' | 'plan',
-    targetId?: string,
-  ) => {
-    const targetCollId = targetId ?? openedCollectionId ?? collectionId
-    if (!targetCollId) return
-    void run('export', () => api.exportCollection(targetCollId, format)).then((path) => {
-      if (path) setNotice({ message: `Сохранено: ${path}`, error: false })
-    })
-  }
-
-  const renameCollection = async (id: string, name: string) => {
-    await run('rename-collection', () => api.renameCollection(id, name), 'Коллекция переименована.')
-  }
-
-  const deleteCollection = async (id: string) => {
-    await run('delete-collection', () => api.deleteCollection(id), 'Коллекция удалена.')
-    if (openedCollectionId === id) setOpenedCollectionId(null)
-  }
-
-  const reorderCollections = async (ids: string[]) => {
-    await run('reorder-collections', () => api.reorderCollections(ids))
-  }
-
-  const openRepair = (target: Collection) => {
-    setRepairTarget(target)
-    setRepairPreview(null)
-  }
-
-  const confirmRepair = async (collId: string, previewItem: ImportPreview) => {
-    const res = await run(
-      'repair',
-      () => api.repairCollection(collId, previewItem),
-      'Коллекция успешно обновлена без потери решений!',
-    )
-    if (res) {
-      setRepairTarget(null)
-      setRepairPreview(null)
-      await refresh()
-    }
-  }
-
-  useEffect(() => {
-    setSelected(new Set())
-    setFocusId('')
-    setQuery('')
-    setFilter('all')
-    setResultFilter('all')
-  }, [collectionId])
+  }, [currentId, run])
 
   return {
-    view,
-    setView,
-    showGuide,
-    setShowGuide,
-    spotifyPanel,
-    setSpotifyPanel,
-    dismissedHelp,
-    setDismissedHelp,
-    recentExportId,
-    setRecentExportId,
-    collectionId,
-    setCollectionId,
-    openedCollectionId,
-    setOpenedCollectionId,
-    repairTarget,
-    setRepairTarget,
-    repairPreview,
-    setRepairPreview,
-    focusId,
-    setFocusId,
-    drafts,
-    setDrafts,
-    query,
-    setQuery,
-    filter,
-    setFilter,
-    resultFilter,
-    setResultFilter,
-    selected,
-    setSelected,
-    preview,
-    setPreview,
+    ...nav,
+    ...modals,
+    currentId,
     vkExpected,
     setVKExpected,
     vkProgress,
     notice,
     setNotice,
     busy,
-    confirmTransfer,
-    setConfirmTransfer,
     data,
     readState,
-    jobNow,
     vkExpectedCount,
     invalidVKCount,
     run,
     collection,
     counts,
     patch,
-    importFile,
     search,
     setAutoResume,
     beginSearch,
     continueSearch,
-    openSpotifyPanel,
     confirmMetadata,
     linkFile,
     exported,
     renameCollection,
     deleteCollection,
     reorderCollections,
-    openRepair,
-    confirmRepair,
+    openVK,
+    cancelVKExtraction,
+    extractVKPreview,
+    prepareLocal,
   }
 }
+
 export type WorkspaceController = ReturnType<typeof useWorkspaceController>

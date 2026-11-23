@@ -12,6 +12,7 @@ import type { Collection } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import { summarizeCollection, type LibraryFilter } from '../../../../core/library'
 import type { SearchResultGroup } from '../../../../core/matching'
+import { selectNextStep } from './next-step'
 
 export default function StartPage({
   data,
@@ -50,75 +51,40 @@ export default function StartPage({
 }) {
   const rows = collection?.rows ?? []
   const summary = summarizeCollection(collection, data.settings.matchingRules)
-  const pending = summary.groups.pending
-  const unresolved = summary.unresolved
-  const job = data.jobs.find(
-    (item) =>
-      item.collectionId === collection?.id && item.kind === 'search' && item.state !== 'complete',
-  )
-  const transfer = data.jobs.find(
-    (item) => item.collectionId === collection?.id && item.kind === 'transfer',
-  )
-  let title = 'Твоя музыка из VK — в Spotify'
-  let description = 'Начни со списка музыки. VKSpot сохранит оригинал и найдёт версии в Spotify.'
-  let action = 'Забрать список из VK',
-    next = onVK,
-    stage = 0
-  if (collection) {
-    stage = 1
-    title = 'Найдём версии твоих треков'
-    description = 'Поиск работает в фоне. Результаты будут появляться в таблице.'
-    action = 'Начать поиск'
-    next = onSearch
-    if (job?.state === 'running' || job?.state === 'pausing') {
-      title = 'Поиск уже работает'
-      description = `Обработано ${job.cursor.toLocaleString('ru-RU')} из ${job.total.toLocaleString('ru-RU')}. Можно разбирать найденное.`
-      action = 'Открыть результаты'
-      next = onLibrary
-    } else if (job) {
-      const needsPage =
-        data.spotifyBrowser?.state === 'attention' && job.searchProvider === 'browser'
-      title = needsPage
-        ? data.spotifyBrowser?.reason === 'verification'
-          ? 'Spotify просит подтверждение'
-          : 'Проверим страницу Spotify'
-        : 'Продолжим с сохранённого места'
-      description =
-        job.searchProvider === 'browser'
-          ? job.message
-          : 'Можно продолжить через страницу Spotify, пока API ожидает восстановления квоты.'
-      action = needsPage ? 'Открыть Spotify здесь' : 'Продолжить поиск'
-      next = needsPage ? onBrowser : () => onResume(job.id, job.searchProvider !== 'browser')
-    } else if (!pending && unresolved) {
-      stage = 2
-      title = 'Проверь найденные версии'
-      description = 'Совпадения можно подтвердить группой. Спорные записи открой для сравнения.'
-      action = 'Проверить результаты'
-      next = onLibrary
-    } else if (!unresolved) {
-      stage = 2
-      title = 'Коллекция готова к переносу'
-      description = 'Проверь состав перед созданием плейлиста.'
-      action = 'Проверить перенос'
-      next = onTransfer
-      if (transfer?.state === 'complete') {
-        title = transfer.localCount > 0 ? 'Каталожные треки перенесены' : 'Плейлист создан'
-        description = transfer.message
-        action = 'Открыть задание'
-        next = onJobs
-      } else if (transfer) {
-        title = transfer.state === 'running' ? 'Перенос уже работает' : 'Продолжим перенос'
-        description = transfer.message
-        action = 'Открыть задание'
-        next = onJobs
-      }
-    }
-    if (pending && !job && data.settings.searchProvider === 'api' && !data.spotify.connected) {
-      title = 'Подключи Spotify для выбранного способа поиска'
-      description =
-        'В параметрах выбран Spotify API. Подключи его или выбери поиск через страницу без Client ID.'
-      action = 'Открыть подключения'
-      next = onConnect
+  const nextStep = selectNextStep({
+    collection,
+    summary,
+    jobs: data.jobs,
+    settings: data.settings,
+    spotifyConnected: data.spotify.connected,
+    spotifyBrowser: data.spotifyBrowser,
+  })
+  const executeNextStep = () => {
+    switch (nextStep.action.kind) {
+      case 'vk':
+        onVK()
+        break
+      case 'search':
+        onSearch()
+        break
+      case 'library':
+        onLibrary()
+        break
+      case 'browser':
+        onBrowser()
+        break
+      case 'resume':
+        onResume(nextStep.action.jobId, nextStep.action.useBrowser)
+        break
+      case 'transfer':
+        onTransfer()
+        break
+      case 'jobs':
+        onJobs()
+        break
+      case 'connect':
+        onConnect()
+        break
     }
   }
   const ready = summary.destinations.spotify + summary.destinations.local
@@ -165,7 +131,7 @@ export default function StartPage({
           <p>Твоя музыка, текущий прогресс и следующий шаг.</p>
         </div>
         <button onClick={onHelp}>
-          <BookOpen size={16} />
+          <BookOpen size={16} aria-hidden="true" />
           Инструкция
         </button>
       </header>
@@ -187,26 +153,26 @@ export default function StartPage({
           </label>
           <button className="text-button" onClick={onCollections}>
             Все коллекции
-            <ArrowRight size={15} />
+            <ArrowRight size={15} aria-hidden="true" />
           </button>
         </div>
       )}
       <div className="overview-grid">
         <section className="overview-next" aria-label="Следующий шаг">
-          <h2>{title}</h2>
-          <p>{description}</p>
+          <h2>{nextStep.title}</h2>
+          <p>{nextStep.description}</p>
           <div className="button-row">
-            <button className="primary next-action" disabled={busy} onClick={next}>
-              {action}
-              <ArrowRight size={17} />
+            <button className="primary next-action" disabled={busy} onClick={executeNextStep}>
+              {nextStep.actionLabel}
+              <ArrowRight size={17} aria-hidden="true" />
             </button>
             {!collection && (
               <button disabled={busy} onClick={onImport}>
-                <Upload size={16} />
+                <Upload size={16} aria-hidden="true" />
                 Импортировать файл
               </button>
             )}
-            {collection && next !== onLibrary && (
+            {collection && nextStep.action.kind !== 'library' && (
               <button onClick={onLibrary}>Открыть коллекцию</button>
             )}
           </div>
@@ -214,10 +180,12 @@ export default function StartPage({
             {['Список из VK', 'Поиск версий', 'Проверка и перенос'].map((name, index) => (
               <li
                 key={name}
-                aria-current={stage === index ? 'step' : undefined}
-                className={index < stage ? 'done' : ''}
+                aria-current={nextStep.stage === index ? 'step' : undefined}
+                className={index < nextStep.stage ? 'done' : ''}
               >
-                <span>{index < stage ? <Check size={14} /> : index + 1}</span>
+                <span>
+                  {index < nextStep.stage ? <Check size={14} aria-hidden="true" /> : index + 1}
+                </span>
                 {name}
               </li>
             ))}
@@ -257,19 +225,19 @@ export default function StartPage({
                   onClick={() => onReview(queue.decision, queue.result)}
                   disabled={!queue.count}
                 >
-                  <queue.icon size={19} />
+                  <queue.icon size={19} aria-hidden="true" />
                   <span>
                     <strong>{queue.name}</strong>
                     <small>{queue.description}</small>
                   </span>
                   <b>{queue.count.toLocaleString('ru-RU')}</b>
-                  <ArrowRight size={16} />
+                  <ArrowRight size={16} aria-hidden="true" />
                 </button>
               ))}
             </div>
             <button className="text-button" onClick={onLibrary}>
               Открыть всю коллекцию
-              <ArrowRight size={15} />
+              <ArrowRight size={15} aria-hidden="true" />
             </button>
           </section>
         ) : (

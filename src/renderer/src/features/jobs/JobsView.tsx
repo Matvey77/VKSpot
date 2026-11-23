@@ -1,7 +1,13 @@
 import { Archive, ArrowRight, CheckCheck, History, Pause, Play } from 'lucide-react'
+import {
+  autoSearch,
+  jobMessage,
+  resumeDisabledReason,
+  retryDeadline,
+} from '../../../../shared/job-status'
 import type { ViewState } from '../../../../shared/sync'
-import { autoSearch, jobMessage, resumeDisabledReason } from '../../../../shared/job-status'
 import ExplainedButton from '../../components/ui/ExplainedButton'
+import useRetryClock from '../../hooks/useRetryClock'
 import { PlaylistRecovery } from './PlaylistRecovery'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
@@ -9,7 +15,6 @@ const count = (number: number) => number.toLocaleString('ru-RU')
 interface JobsViewProps {
   data: ViewState
   busy: string
-  jobNow: number
   onArchiveFinishedJobs: () => void
   onArchiveJob: (id: string) => void
   onPauseJob: (id: string) => void
@@ -26,7 +31,6 @@ interface JobsViewProps {
 export function JobsView({
   data,
   busy,
-  jobNow,
   onArchiveFinishedJobs,
   onArchiveJob,
   onPauseJob,
@@ -39,6 +43,11 @@ export function JobsView({
   onSetAutoResume,
   onGoToLibrary,
 }: JobsViewProps) {
+  const jobNow = useRetryClock(retryDeadline(data.jobs))
+  const finishedCount = data.jobs.filter(
+    (j) => j.state === 'complete' || j.state === 'failed',
+  ).length
+
   return (
     <div className="content-page">
       <div
@@ -56,27 +65,26 @@ export function JobsView({
             Прогресс сохраняется на диске. После остановки перенос сверяет уже добавленные записи.
           </p>
         </div>
-        {data.jobs.some((j) => j.state === 'complete' || j.state === 'failed') && (
+        {finishedCount > 0 && (
           <button
             className="archive-finished-btn"
             disabled={!!busy}
             onClick={onArchiveFinishedJobs}
             title="Удалить завершённые и ошибочные задания из списка"
           >
-            <Archive size={15} />
-            Архивировать завершённые (
-            {data.jobs.filter((j) => j.state === 'complete' || j.state === 'failed').length})
+            <Archive size={15} aria-hidden="true" />
+            Архивировать завершённые ({finishedCount})
           </button>
         )}
       </div>
       {data.jobs.length === 0 ? (
         <div className="simple-empty">
-          <History size={32} />
+          <History size={32} aria-hidden="true" />
           <h2>Заданий пока нет</h2>
           <p>Запусти поиск выбранных записей или проверь план переноса в коллекции.</p>
           <button onClick={onGoToLibrary}>
             К коллекции
-            <ArrowRight size={16} />
+            <ArrowRight size={16} aria-hidden="true" />
           </button>
         </div>
       ) : (
@@ -148,18 +156,18 @@ export function JobsView({
               {job.playlistId && (
                 <button onClick={() => onOpenPlaylist(job.playlistId!)}>
                   Открыть плейлист
-                  <ArrowRight size={15} />
+                  <ArrowRight size={15} aria-hidden="true" />
                 </button>
               )}
               {job.kind === 'transfer' && job.state === 'complete' && job.localCount > 0 && (
                 <button disabled={!!busy} onClick={() => onReconcileMixed(job.id)}>
-                  <CheckCheck size={16} />
+                  <CheckCheck size={16} aria-hidden="true" />
                   Сверить смешанный порядок
                 </button>
               )}
               {job.state === 'running' ? (
                 <button onClick={() => onPauseJob(job.id)}>
-                  <Pause size={16} />
+                  <Pause size={16} aria-hidden="true" />
                   Пауза
                 </button>
               ) : job.state === 'paused' || job.state === 'failed' ? (
@@ -175,7 +183,7 @@ export function JobsView({
                   )}
                   onClick={() => onResumeJob(job.id)}
                 >
-                  <Play size={16} />
+                  <Play size={16} aria-hidden="true" />
                   Продолжить
                 </ExplainedButton>
               ) : null}
@@ -186,7 +194,7 @@ export function JobsView({
                   onClick={() => onArchiveJob(job.id)}
                   title="Архивировать это задание"
                 >
-                  <Archive size={14} />
+                  <Archive size={14} aria-hidden="true" />
                   Архивировать
                 </button>
               )}

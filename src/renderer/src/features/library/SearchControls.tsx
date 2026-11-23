@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Pause, Play, Search } from 'lucide-react'
 import type { JobStatus } from '../../../../shared/job-status'
 import {
@@ -11,7 +12,7 @@ import ExplainedButton from '../../components/ui/ExplainedButton'
 import useRetryClock from '../../hooks/useRetryClock'
 
 const count = (n: number) => n.toLocaleString('ru-RU')
-export default function SearchControls({
+const SearchControls = memo(function SearchControls({
   collectionId,
   jobs,
   busy,
@@ -105,7 +106,7 @@ export default function SearchControls({
             }
             onClick={onStart}
           >
-            <Search size={16} /> Фоновый поиск ({count(pending)})
+            <Search size={16} aria-hidden="true" /> Фоновый поиск ({count(pending)})
           </ExplainedButton>
         )}
       </div>
@@ -166,7 +167,11 @@ export default function SearchControls({
                 }
                 onClick={() => onControl(job.id, job.state === 'running' ? 'pause' : 'resume')}
               >
-                {job.state === 'running' ? <Pause size={15} /> : <Play size={15} />}
+                {job.state === 'running' ? (
+                  <Pause size={15} aria-hidden="true" />
+                ) : (
+                  <Play size={15} aria-hidden="true" />
+                )}
                 {job.state === 'pausing'
                   ? 'Останавливаем поиск…'
                   : job.state === 'running'
@@ -179,4 +184,6 @@ export default function SearchControls({
       )}
     </section>
   )
-}
+})
+
+export default SearchControls

@@ -1,10 +1,11 @@
 import { ArrowRight, LoaderCircle, X } from 'lucide-react'
 import { useEffect } from 'react'
+import IconButton from '../components/ui/IconButton'
 import { AppSidebar } from './AppSidebar'
+import { findPausedBrowserJobId } from './browser-job'
 import { useWorkspaceController } from './useWorkspaceController'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
 import { WorkspaceRoutes } from './WorkspaceRoutes'
-import IconButton from '../components/ui/IconButton'
 
 export default function App() {
   const controller = useWorkspaceController()
@@ -18,6 +19,7 @@ export default function App() {
     data,
     openSpotifyPanel,
   } = controller
+
   useEffect(() => {
     if (!notice || notice.error) return
     const timer = setTimeout(
@@ -26,6 +28,7 @@ export default function App() {
     )
     return () => clearTimeout(timer)
   }, [notice, setNotice])
+
   return (
     <div className="app">
       <AppSidebar controller={controller} />
@@ -37,7 +40,7 @@ export default function App() {
           >
             <span>{notice.message}</span>
             <IconButton title="Закрыть сообщение" onClick={() => setNotice(null)}>
-              <X size={16} />
+              <X size={16} aria-hidden="true" />
             </IconButton>
           </div>
         )}
@@ -52,34 +55,21 @@ export default function App() {
                     ? 'Не удалось загрузить страницу Spotify.'
                     : 'Не удалось прочитать результаты Spotify.'}
               </span>
-              <button
-                onClick={() =>
-                  openSpotifyPanel(
-                    [...data.jobs]
-                      .filter(
-                        (job) =>
-                          job.kind === 'search' &&
-                          job.searchProvider === 'browser' &&
-                          job.state === 'paused',
-                      )
-                      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id,
-                  )
-                }
-              >
-                Открыть Spotify здесь <ArrowRight size={15} />
+              <button onClick={() => openSpotifyPanel(findPausedBrowserJobId(data.jobs))}>
+                Открыть Spotify здесь <ArrowRight size={15} aria-hidden="true" />
               </button>
               <IconButton
                 title="Скрыть подсказку"
                 onClick={() => setDismissedHelp(data.spotifyBrowser!.message)}
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </IconButton>
             </div>
           )}
         <WorkspaceRoutes controller={controller} />
         {busy && (
           <div className="activity" role="status">
-            <LoaderCircle className="spinning" size={15} />
+            <LoaderCircle className="spinning" size={15} aria-hidden="true" />
             {busy === 'extract'
               ? 'Собираем строки VK. Это может занять время…'
               : busy === 'connect'

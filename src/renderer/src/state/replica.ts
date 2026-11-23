@@ -99,5 +99,7 @@ export class StateReplica {
 
   reset(): void {
     this.cursor = null
+    this.collections.clear()
+    this.positions.clear()
   }
 }

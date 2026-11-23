@@ -116,6 +116,9 @@
   padding: 0 var(--space-page) var(--space-md);
   flex: none;
 }
+.review-source-status-frame {
+  position: relative;
+}
 .review-source-status {
   background: var(--warning-bg);
   color: var(--warning-ink);
@@ -128,6 +131,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  padding-right: 32px;
   cursor: pointer;
   user-select: none;
 }
@@ -180,11 +184,12 @@
 
 /* Completeness Notice Dismiss Button */
 .notice-dismiss-btn {
-  margin-left: auto;
+  position: absolute;
+  top: 9px;
+  right: 10px;
   width: 24px;
   height: 24px;
   padding: 0;
-  flex: none;
   background: transparent;
   border: 0;
   color: var(--warning-ink);

@@ -1,7 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from 'react'
 import {
   ArrowRight,
-  Check,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -10,11 +17,8 @@ import {
   Headphones,
   Link2,
   Loader2,
-  Pause,
-  Play,
   Rows2,
   Search,
-  ShieldCheck,
   X,
 } from 'lucide-react'
 import type { TrackRow, Working } from '../../../../../shared/types'
@@ -23,13 +27,37 @@ import { spotifyTrackId } from '../../../../../core/spotify-link'
 import { formatDuration as duration } from '../../../../../core/library'
 import { SpotifyIcon } from '../../../components/brand/BrandIcons'
 import IconButton from '../../../components/ui/IconButton'
+import { draftsStore } from '../../../state/drafts'
+import { CandidatesList } from './CandidatesList'
 import ManualSpotifyMatch from './ManualSpotifyMatch'
+import { SpotifyEmbedPlayer } from './SpotifyEmbedPlayer'
+import { useVKAudioPreview } from './useVKAudioPreview'
+import { VKOriginalCard } from './VKOriginalCard'
+import { WorkingCopyForm } from './WorkingCopyForm'
 
-type Draft = Pick<Working, 'artist' | 'title' | 'version' | 'note'>
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), iframe, [tabindex]:not([tabindex="-1"])'
+
+function useRowDraftModified(row: TrackRow): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) => draftsStore.subscribe(row.id, listener),
+    [row.id],
+  )
+  const getSnapshot = useCallback(() => {
+    const draft = draftsStore.get(row.id)
+    if (!draft) return false
+    return (
+      draft.artist !== row.working.artist ||
+      draft.title !== row.working.title ||
+      draft.version !== row.working.version ||
+      draft.note !== row.working.note
+    )
+  }, [row.id, row.working])
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
 export function Inspector({
   row,
-  draft: cachedDraft,
-  onDraftChange,
   busy,
   jobs,
   spotifyConnected,
@@ -41,13 +69,12 @@ export function Inspector({
   width,
   panelRef,
   layout = 'parallel',
+  isOverlay = false,
   onLayoutChange,
   onPrevious,
   onNext,
 }: {
   row: TrackRow
-  draft?: Draft
-  onDraftChange: (draft: Draft) => void
   busy: boolean
   jobs: JobStatus[]
   spotifyConnected: boolean
@@ -59,17 +86,29 @@ export function Inspector({
   width?: number
   panelRef?: RefObject<HTMLElement | null>
   layout?: 'parallel' | 'sequential'
+  isOverlay?: boolean
   onLayoutChange?: (mode: 'parallel' | 'sequential') => void
   onPrevious?: () => void
   onNext?: () => void
 }) {
   const heading = useRef<HTMLHeadingElement>(null)
+  const localPanelRef = useRef<HTMLElement>(null)
+  const setAsideRef = useCallback(
+    (node: HTMLElement | null) => {
+      localPanelRef.current = node
+      if (panelRef) panelRef.current = node
+    },
+    [panelRef],
+  )
+
   useLayoutEffect(() => heading.current?.focus({ preventScroll: true }), [])
+
   const [startingSearch, setStartingSearch] = useState(false)
   const [searchId, setSearchId] = useState<string>()
   const searchJob = jobs.find((job) => job.id === searchId)
   const searching =
     startingSearch || searchJob?.state === 'running' || searchJob?.state === 'pausing'
+
   const handleSearch = async () => {
     setStartingSearch(true)
     setSearchId(undefined)
@@ -79,199 +118,47 @@ export function Inspector({
       setStartingSearch(false)
     }
   }
-  const excluded = row.working.excluded
 
+  const excluded = row.working.excluded
+  const modified = useRowDraftModified(row)
   const [playingSpotifyId, setPlayingSpotifyId] = useState<string | null>(null)
   const [manualPreview, setManualPreview] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
-  const [vkPlaying, setVkPlaying] = useState(false)
-  const [vkLoading, setVkLoading] = useState(false)
-  const [vkError, setVkError] = useState<string | null>(null)
-  const vkRequest = useRef(0)
-  const [vkProgress, setVkProgress] = useState('Ищем запись в «Моей музыке» VK…')
-  useEffect(() => window.vkspot.onVKAudioProgress(setVkProgress), [])
 
   useEffect(() => {
-    if (vkPlaying) {
-      void window.vkspot.pauseVKTrack()
-      setVkPlaying(false)
-    }
     setPlayingSpotifyId(null)
-    setVkError(null)
     setManualPreview(false)
     setManualOpen(false)
   }, [row.id])
 
-  useEffect(() => {
-    return () => {
-      ++vkRequest.current
-      void window.vkspot.pauseVKTrack()
-    }
-  }, [])
-
-  const handleToggleVK = async () => {
+  const vkAudio = useVKAudioPreview(row, () => {
     setManualPreview(false)
-    if (playingSpotifyId) {
-      setPlayingSpotifyId(null)
-    }
-    if (vkPlaying || vkLoading) {
-      ++vkRequest.current
-      setVkLoading(false)
-      await window.vkspot.pauseVKTrack()
-      setVkPlaying(false)
-    } else {
-      const request = ++vkRequest.current
-      setVkLoading(true)
-      setVkProgress('Ищем запись в «Моей музыке» VK…')
-      setVkError(null)
-      try {
-        const res = await window.vkspot.playVKTrack({
-          id: row.source.id,
-          artist: row.source.artist,
-          title: row.source.title,
-          duration: row.source.duration,
-          position: row.position,
-        })
-        if (request !== vkRequest.current) return
-        setVkLoading(false)
-        if (res.ok && res.value.playing) {
-          setVkPlaying(true)
-        } else if (!res.ok) {
-          setVkError(res.error)
-        } else if (res.value?.error) {
-          setVkError(res.value.error)
-        }
-      } catch {
-        if (request !== vkRequest.current) return
-        setVkLoading(false)
-        setVkError('Не удалось запустить воспроизведение VK')
-      }
-    }
-  }
+    setPlayingSpotifyId(null)
+  })
 
   const handleToggleSpotify = (trackId: string) => {
     setManualPreview(false)
-    if (vkPlaying || vkLoading) {
-      ++vkRequest.current
-      setVkLoading(false)
-      void window.vkspot.pauseVKTrack()
-      setVkPlaying(false)
-    }
+    void vkAudio.stop()
     setPlayingSpotifyId((prev) => (prev === trackId ? null : trackId))
   }
 
-  const draft = cachedDraft ?? {
-    artist: row.working.artist,
-    title: row.working.title,
-    version: row.working.version,
-    note: row.working.note,
-  }
-  const setDraft = onDraftChange
-  const modified = Object.entries(draft).some(
-    ([key, value]) => value !== row.working[key as keyof typeof draft],
-  )
+  const chosenSpotifyId = row.working.spotify
+    ? spotifyTrackId(row.working.spotify.uri || row.working.spotify.url)
+    : null
 
   const vkOriginalSection = (
-    <div className="inspector-card">
-      <h3>
-        <ShieldCheck size={15} />
-        Оригинал из VK
-      </h3>
-      <dl>
-        <dt>Исполнитель</dt>
-        <dd>{row.source.artist || 'Не указан'}</dd>
-        <dt>Название</dt>
-        <dd>{row.source.title || 'Не указано'}</dd>
-        <dt>ID / длительность</dt>
-        <dd>
-          {row.source.id || 'Нет ID'} · {duration(row.source.duration)}
-        </dd>
-      </dl>
-      <div className="review-audio-bar">
-        <button
-          type="button"
-          className={`audio-listen-button ${vkPlaying ? 'playing' : ''}`}
-          disabled={busy || row.source.availability === 'blocked'}
-          onClick={handleToggleVK}
-          title={
-            row.source.availability === 'blocked'
-              ? 'Аудиозапись недоступна в VK'
-              : vkLoading
-                ? 'Отменить поиск оригинала VK'
-                : vkPlaying
-                  ? 'Поставить VK на паузу'
-                  : 'Слушать оригинал в VK'
-          }
-        >
-          {vkLoading ? (
-            <Loader2 size={14} className="spinning" />
-          ) : vkPlaying ? (
-            <Pause size={14} />
-          ) : (
-            <Play size={14} />
-          )}
-          <span>
-            {vkLoading ? 'Отменить запуск VK' : vkPlaying ? 'Пауза VK' : 'Слушать оригинал VK'}
-          </span>
-        </button>
-        {vkLoading && (
-          <span className="helper-text" role="status">
-            {vkProgress}
-          </span>
-        )}
-        {vkPlaying && (
-          <span className="audio-playing-badge">
-            <span className="audio-pulse-dot" /> Играет VK
-          </span>
-        )}
-        {vkError && <span className="audio-error-hint">{vkError}</span>}
-      </div>
-      {row.source.availability === 'blocked' && (
-        <span className="status-tag blocked">Недоступна в VK</span>
-      )}
-    </div>
+    <VKOriginalCard
+      row={row}
+      busy={busy}
+      playing={vkAudio.playing}
+      loading={vkAudio.loading}
+      progress={vkAudio.progress}
+      error={vkAudio.error}
+      onTogglePlay={() => void vkAudio.toggle()}
+    />
   )
 
-  const vkWorkSection = (
-    <div className="inspector-card">
-      <h3>Рабочая копия</h3>
-      <p className="inspector-section-help">
-        Меняется только рабочая копия. Оригинал останется прежним.
-      </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          onPatch(draft)
-        }}
-      >
-        {(
-          [
-            { key: 'artist', name: 'Исполнитель' },
-            { key: 'title', name: 'Название' },
-            { key: 'version', name: 'Версия / авторский тег' },
-            { key: 'note', name: 'Заметка' },
-          ] as const
-        ).map((field) => (
-          <label className="field" key={field.key}>
-            {field.name}
-            <input
-              value={draft[field.key]}
-              onChange={(e) => setDraft({ ...draft, [field.key]: e.target.value })}
-            />
-          </label>
-        ))}
-        <button className="primary full-width" disabled={!modified || busy} type="submit">
-          Сохранить правки
-          <Check size={15} />
-        </button>
-      </form>
-      {modified && (
-        <p className="helper-text inspector-save-hint">
-          Не забудьте сохранить правки перед повторным поиском.
-        </p>
-      )}
-    </div>
-  )
+  const vkWorkSection = <WorkingCopyForm row={row} busy={busy} onPatch={onPatch} />
 
   const spotifyMatchSection = (
     <div className="inspector-card">
@@ -298,7 +185,11 @@ export function Inspector({
           disabled={busy || searching || !spotifyConnected || modified || excluded}
           onClick={() => void handleSearch()}
         >
-          {searching ? <Loader2 size={15} className="spinning" /> : <Search size={15} />}
+          {searching ? (
+            <Loader2 size={15} className="spinning" aria-hidden="true" />
+          ) : (
+            <Search size={15} aria-hidden="true" />
+          )}
           {searching ? 'Поиск в Spotify…' : 'Найти в Spotify'}
         </button>
         <button
@@ -310,7 +201,7 @@ export function Inspector({
             setManualPreview(false)
           }}
         >
-          <Link2 size={15} />
+          <Link2 size={15} aria-hidden="true" />
           Указать трек Spotify
         </button>
       </div>
@@ -333,18 +224,13 @@ export function Inspector({
         onPreviewChange={setManualPreview}
         onPatch={onPatch}
         onPreview={() => {
-          if (vkPlaying || vkLoading) {
-            ++vkRequest.current
-            setVkLoading(false)
-            void window.vkspot.pauseVKTrack()
-            setVkPlaying(false)
-          }
+          void vkAudio.stop()
           setPlayingSpotifyId(null)
         }}
       />
       <div className="button-row inspector-action-row">
         <button type="button" disabled={busy} onClick={onLink}>
-          <FileAudio size={15} />
+          <FileAudio size={15} aria-hidden="true" />
           Привязать файл
         </button>
       </div>
@@ -355,7 +241,7 @@ export function Inspector({
             row.working.destination === 'spotify' ? 'chosen-match' : 'chosen-match retained-match'
           }
         >
-          <CheckCheck size={17} />
+          <CheckCheck size={17} aria-hidden="true" />
           <div>
             <small>
               {row.working.destination === 'spotify'
@@ -371,52 +257,37 @@ export function Inspector({
               <button
                 className="chosen-match-use-btn"
                 disabled={busy || modified}
-                onClick={() => onPatch({ destination: 'spotify' })}
+                onClick={() => void onPatch({ destination: 'spotify' })}
               >
                 Использовать Spotify
               </button>
             )}
-            {spotifyTrackId(row.working.spotify.uri || row.working.spotify.url) && (
+            {chosenSpotifyId && (
               <div className="chosen-match-audio-actions">
                 <button
                   type="button"
-                  className={`audio-listen-button ${playingSpotifyId === spotifyTrackId(row.working.spotify.uri || row.working.spotify.url) ? 'active' : ''}`}
+                  className={`audio-listen-button ${playingSpotifyId === chosenSpotifyId ? 'active' : ''}`}
                   disabled={busy}
-                  onClick={() =>
-                    handleToggleSpotify(
-                      spotifyTrackId(row.working.spotify!.uri || row.working.spotify!.url)!,
-                    )
-                  }
+                  onClick={() => handleToggleSpotify(chosenSpotifyId)}
                 >
-                  <Headphones size={14} />
+                  <Headphones size={14} aria-hidden="true" />
                   <span>
-                    {playingSpotifyId ===
-                    spotifyTrackId(row.working.spotify.uri || row.working.spotify.url)
-                      ? 'Скрыть'
-                      : 'Слушать в Spotify'}
+                    {playingSpotifyId === chosenSpotifyId ? 'Скрыть' : 'Слушать в Spotify'}
                   </span>
                 </button>
                 <IconButton
                   title="Открыть в браузере"
                   onClick={() => onExternal(row.working.spotify!.url)}
                 >
-                  <ArrowRight size={14} />
+                  <ArrowRight size={14} aria-hidden="true" />
                 </IconButton>
               </div>
             )}
-            {playingSpotifyId ===
-              spotifyTrackId(row.working.spotify.uri || row.working.spotify.url) && (
-              <div className="spotify-embed-card">
-                <iframe
-                  src={`https://open.spotify.com/embed/track/${spotifyTrackId(row.working.spotify.uri || row.working.spotify.url)}?utm_source=generator&theme=0`}
-                  width="100%"
-                  height="152"
-                  frameBorder="0"
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  loading="lazy"
-                  title={`Spotify: ${row.working.spotify.title}`}
-                />
-              </div>
+            {chosenSpotifyId && playingSpotifyId === chosenSpotifyId && (
+              <SpotifyEmbedPlayer
+                trackId={chosenSpotifyId}
+                title={`Spotify: ${row.working.spotify.title}`}
+              />
             )}
           </div>
         </div>
@@ -439,117 +310,64 @@ export function Inspector({
           <span>
             Теги: {row.working.local.artist || '—'} — {row.working.local.title || '—'}
           </span>
-          <button disabled={busy} onClick={() => onPatch({ destination: 'local' })}>
+          <button disabled={busy} onClick={() => void onPatch({ destination: 'local' })}>
             Использовать локальный файл
           </button>
         </div>
       )}
 
-      {row.working.candidates.length > 0 && (
-        <div className="candidates">
-          <h4>
-            <SpotifyIcon size={18} />
-            Варианты Spotify <span>{row.working.candidates.length}</span>
-          </h4>
-          {row.working.candidates.map((candidate) => {
-            const candTrackId = spotifyTrackId(candidate.uri || candidate.url)
-            const isCandPlaying = playingSpotifyId === candTrackId
-            const isChosen =
-              row.working.destination === 'spotify' && row.working.spotify?.uri === candidate.uri
-            return (
-              <div
-                className={`candidate ${isChosen ? 'candidate-chosen' : ''}`}
-                key={candidate.uri}
-              >
-                <strong>{candidate.title}</strong>
-                <span>
-                  {candidate.artists.join(', ') || 'Исполнитель не указан'} ·{' '}
-                  {duration(candidate.duration)}
-                </span>
-                <small>{candidate.album}</small>
-                {isCandPlaying && candTrackId && (
-                  <div className="spotify-embed-card">
-                    <iframe
-                      src={`https://open.spotify.com/embed/track/${candTrackId}?utm_source=generator&theme=0`}
-                      width="100%"
-                      height="152"
-                      frameBorder="0"
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                      loading="lazy"
-                      title={`Spotify: ${candidate.title}`}
-                    />
-                  </div>
-                )}
-                <div className="button-row">
-                  <button
-                    disabled={busy || modified}
-                    onClick={() => onPatch({ spotify: candidate, destination: 'spotify' })}
-                  >
-                    <Check size={14} />
-                    {isChosen ? 'Выбрано' : 'Выбрать'}
-                  </button>
-                  {candTrackId && (
-                    <button
-                      type="button"
-                      className={`audio-listen-button ${isCandPlaying ? 'active' : ''}`}
-                      disabled={busy}
-                      onClick={() => handleToggleSpotify(candTrackId)}
-                      title={isCandPlaying ? 'Скрыть плеер' : 'Слушать превью'}
-                    >
-                      <Headphones size={13} />
-                      <span>{isCandPlaying ? 'Пауза' : 'Слушать'}</span>
-                    </button>
-                  )}
-                  <IconButton
-                    title="Послушать на сайте Spotify"
-                    onClick={() => onExternal(candidate.url)}
-                  >
-                    <ArrowRight size={15} />
-                  </IconButton>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-      {!row.working.candidates.length && !searching && !row.working.spotify && (
-        <div className="candidate-empty">
-          <Search size={22} />
-          <strong>
-            {row.working.searchedQuery
-              ? 'По этому запросу ничего не найдено'
-              : 'Найдём эту запись в Spotify'}
-          </strong>
-          {row.working.searchedQuery ? (
-            <>
-              <p className="last-search-query">
-                Последний запрос: <span>{row.working.searchedQuery}</span>
-              </p>
-              <p>
-                Пустой ответ не означает, что трека нет в Spotify. Повтори поиск или измени
-                исполнителя и название в рабочей копии. Можно также указать ссылку или выбрать
-                решение «Нужен локальный файл».
-              </p>
-            </>
-          ) : (
-            <p>Запусти поиск, укажи ссылку на трек или выбери решение «Нужен локальный файл».</p>
-          )}
-        </div>
-      )}
+      <CandidatesList
+        row={row}
+        busy={busy}
+        modified={modified}
+        searching={searching}
+        playingSpotifyId={playingSpotifyId}
+        onToggleSpotify={handleToggleSpotify}
+        onSelectCandidate={(candidate) => onPatch({ spotify: candidate, destination: 'spotify' })}
+        onExternal={onExternal}
+      />
     </div>
   )
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
+      event.stopPropagation()
+      onClose()
+      return
+    }
+    if (isOverlay && event.key === 'Tab') {
+      const container = localPanelRef.current
+      if (!container) return
+      const focusable = Array.from(
+        container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter((el) => el.getClientRects().length > 0)
+      if (!focusable.length) {
+        event.preventDefault()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey) {
+        if (active === first || active === heading.current || !container.contains(active)) {
+          event.preventDefault()
+          last.focus()
+        }
+      } else if (active === last || !container.contains(active)) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+  }
+
   return (
     <aside
-      ref={panelRef}
+      ref={setAsideRef}
+      role={isOverlay ? 'dialog' : undefined}
+      aria-modal={isOverlay ? true : undefined}
       className={`inspector ${layout === 'parallel' ? 'layout-parallel' : 'layout-sequential'}`}
       aria-label={`Разбор записи ${row.position}`}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && !event.defaultPrevented) {
-          event.stopPropagation()
-          onClose()
-        }
-      }}
+      onKeyDown={handleKeyDown}
       style={width ? { width: `${width}px` } : undefined}
     >
       <div className="inspector-heading">
@@ -571,10 +389,10 @@ export function Inspector({
               disabled={!onPrevious}
               onClick={() => onPrevious?.()}
             >
-              <ChevronLeft size={17} />
+              <ChevronLeft size={17} aria-hidden="true" />
             </IconButton>
             <IconButton title="Следующая запись" disabled={!onNext} onClick={() => onNext?.()}>
-              <ChevronRight size={17} />
+              <ChevronRight size={17} aria-hidden="true" />
             </IconButton>
           </div>
           {onLayoutChange && (
@@ -586,7 +404,7 @@ export function Inspector({
                 aria-pressed={layout === 'parallel'}
                 onClick={() => onLayoutChange('parallel')}
               >
-                <Columns2 size={15} />
+                <Columns2 size={15} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -595,12 +413,12 @@ export function Inspector({
                 aria-pressed={layout === 'sequential'}
                 onClick={() => onLayoutChange('sequential')}
               >
-                <Rows2 size={15} />
+                <Rows2 size={15} aria-hidden="true" />
               </button>
             </div>
           )}
           <IconButton title="Закрыть запись" onClick={onClose}>
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </IconButton>
         </div>
       </div>

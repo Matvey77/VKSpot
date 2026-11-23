@@ -3,6 +3,7 @@ import { Headphones } from 'lucide-react'
 import { manualSpotifyTrack, parseSpotifyTrackLink } from '../../../../../core/spotify-link'
 import { formatDuration } from '../../../../../core/library'
 import type { TrackRow, Working } from '../../../../../shared/types'
+import { SpotifyEmbedPlayer } from './SpotifyEmbedPlayer'
 
 export default function ManualSpotifyMatch({
   open,
@@ -99,18 +100,15 @@ export default function ManualSpotifyMatch({
             setPreview(!preview)
           }}
         >
-          <Headphones size={14} />
+          <Headphones size={14} aria-hidden="true" />
           {preview ? 'Скрыть плеер' : 'Проверить в плеере Spotify'}
         </button>
         {preview && track && (
-          <iframe
-            className="manual-spotify-player"
-            src={`https://open.spotify.com/embed/track/${track.id}?theme=0`}
-            width="100%"
-            height="152"
-            frameBorder="0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          <SpotifyEmbedPlayer
+            trackId={track.id}
             title="Проверка трека Spotify по ссылке"
+            className="manual-spotify-player"
+            bare
           />
         )}
         <p className="helper-text">

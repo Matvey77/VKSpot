@@ -2,6 +2,7 @@ import { ArrowRight, Download, FileAudio, FolderOpen, LoaderCircle } from 'lucid
 import type { Collection, Settings, VKExportProgress } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import { SpotifyIcon, VKIcon } from '../../components/brand/BrandIcons'
+import { api } from '../../state/api'
 import { SpotifySettings } from './SpotifySettings'
 import { VKSettings } from './VKSettings'
 
@@ -119,13 +120,13 @@ export function ConnectionsView({
             <div className="button-row">
               <button className="primary" disabled={!!busy} onClick={onOpenVK}>
                 Открыть VK
-                <ArrowRight size={16} />
+                <ArrowRight size={16} aria-hidden="true" />
               </button>
               <button disabled={!!busy || invalidVKCount} onClick={onExtractVK}>
                 {busy === 'extract' ? (
-                  <LoaderCircle className="spinning" size={16} />
+                  <LoaderCircle className="spinning" size={16} aria-hidden="true" />
                 ) : (
-                  <Download size={16} />
+                  <Download size={16} aria-hidden="true" />
                 )}
                 Выгрузить мой список
               </button>
@@ -188,14 +189,14 @@ export function ConnectionsView({
               />
               <button className="text-button" onClick={onOpenSpotifyDev}>
                 Открыть Spotify Developer
-                <ArrowRight size={14} />
+                <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
           </div>
         </section>
         <section className="connection-section">
           <div className="section-symbol neutral-symbol">
-            <FileAudio size={28} />
+            <FileAudio size={28} aria-hidden="true" />
           </div>
           <div className="section-main">
             <h2>Локальные файлы</h2>
@@ -205,13 +206,13 @@ export function ConnectionsView({
             </p>
             <div className="button-row">
               <button disabled={!collection || !!busy} onClick={onPrepareLocal}>
-                <FolderOpen size={16} />
+                <FolderOpen size={16} aria-hidden="true" />
                 Подготовить файлы
               </button>
               <button disabled={!!busy} onClick={onOpenSpotifyHelper}>
                 Открыть Spotify
               </button>
-              {window.vkspot.canInspectSpotify && (
+              {api.canInspectSpotify && (
                 <button disabled={!!busy} onClick={onInspectHelper}>
                   Проверить доступность управления
                 </button>

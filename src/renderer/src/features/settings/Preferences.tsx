@@ -7,7 +7,7 @@ import {
   SlidersHorizontal,
   Undo2,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Settings } from '../../../../shared/types'
 
 const sections = [
@@ -57,6 +57,35 @@ const rules = [
   },
 ] as const
 
+const formatDelaySeconds = (ms: number): string => String(ms / 1000)
+
+const parseDelayMs = (raw: string): number => {
+  const trimmed = raw.trim()
+  if (!trimmed) return Number.NaN
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? Math.round(parsed * 1000) : Number.NaN
+}
+
+function arePreferenceSettingsEqual(a: Settings, b: Settings): boolean {
+  if (
+    a.searchProvider !== b.searchProvider ||
+    a.searchDelayMs !== b.searchDelayMs ||
+    a.autoResumeSearch !== b.autoResumeSearch ||
+    a.playlistName !== b.playlistName ||
+    a.theme !== b.theme
+  ) {
+    return false
+  }
+  return rules.every((rule) => a.matchingRules[rule.key] === b.matchingRules[rule.key])
+}
+
+function isPreferenceDraftClean(draft: Settings, delayInput: string, baseline: Settings): boolean {
+  return (
+    arePreferenceSettingsEqual(draft, baseline) &&
+    delayInput.trim() === formatDelaySeconds(baseline.searchDelayMs)
+  )
+}
+
 export function Preferences({
   settings,
   dataPath,
@@ -69,10 +98,25 @@ export function Preferences({
   save: (settings: Settings) => void
 }) {
   const [draft, setDraft] = useState(settings)
+  const [delayInput, setDelayInput] = useState(() => formatDelaySeconds(settings.searchDelayMs))
   const [section, setSection] = useState<Section>('search')
   const [error, setError] = useState('')
-  useEffect(() => setDraft(settings), [settings])
-  const dirty = JSON.stringify(draft) !== JSON.stringify(settings)
+
+  const appliedSettingsRef = useRef(settings)
+  const draftSnapshotRef = useRef({ draft, delayInput })
+  draftSnapshotRef.current = { draft, delayInput }
+
+  useEffect(() => {
+    const { draft: currentDraft, delayInput: currentDelay } = draftSnapshotRef.current
+    if (!isPreferenceDraftClean(currentDraft, currentDelay, appliedSettingsRef.current)) return
+    appliedSettingsRef.current = settings
+    setDraft(settings)
+    setDelayInput(formatDelaySeconds(settings.searchDelayMs))
+    setError('')
+  }, [settings])
+
+  const isDirty = !isPreferenceDraftClean(draft, delayInput, settings)
+
   const edit = (patch: Partial<Settings>) => {
     setDraft((current) => ({ ...current, ...patch }))
     setError('')
@@ -101,21 +145,35 @@ export function Preferences({
       className="preferences-form"
       onSubmit={(event) => {
         event.preventDefault()
-        if (!draft.playlistName.trim()) {
+        const searchDelayMs = parseDelayMs(delayInput)
+        const nextSettings: Settings = {
+          ...settings,
+          searchProvider: draft.searchProvider,
+          searchDelayMs,
+          autoResumeSearch: draft.autoResumeSearch,
+          matchingRules: draft.matchingRules,
+          playlistName: draft.playlistName.trim(),
+          theme: draft.theme,
+        }
+        if (!nextSettings.playlistName) {
           setSection('transfer')
           setError('Укажи название нового плейлиста.')
           return
         }
         if (
-          !Number.isFinite(draft.searchDelayMs) ||
-          draft.searchDelayMs < 1000 ||
-          draft.searchDelayMs > 60000
+          !Number.isInteger(nextSettings.searchDelayMs) ||
+          nextSettings.searchDelayMs < 1000 ||
+          nextSettings.searchDelayMs > 60000
         ) {
           setSection('search')
           setError('Пауза между запросами должна быть от 1 до 60 секунд.')
           return
         }
-        save(draft)
+        appliedSettingsRef.current = nextSettings
+        setDraft(nextSettings)
+        setDelayInput(formatDelaySeconds(nextSettings.searchDelayMs))
+        setError('')
+        save(nextSettings)
       }}
     >
       <div className="preferences-layout">
@@ -137,7 +195,7 @@ export function Preferences({
               onClick={() => setSection(item.id)}
               onKeyDown={(event) => selectSection(event, index)}
             >
-              <item.icon size={17} />
+              <item.icon size={17} aria-hidden="true" />
               {item.label}
             </button>
           ))}
@@ -209,8 +267,12 @@ export function Preferences({
                     max={60}
                     step={1}
                     required
-                    value={draft.searchDelayMs / 1000}
-                    onChange={(event) => edit({ searchDelayMs: Number(event.target.value) * 1000 })}
+                    value={delayInput}
+                    onChange={(event) => {
+                      const raw = event.target.value
+                      setDelayInput(raw)
+                      edit({ searchDelayMs: parseDelayMs(raw) })
+                    }}
                   />
                 </label>
               </div>
@@ -330,22 +392,24 @@ export function Preferences({
       </div>
       <footer className="preferences-save-bar">
         <span role="status">
-          {dirty ? 'Есть несохранённые изменения' : 'Нет несохранённых изменений'}
+          {isDirty ? 'Есть несохранённые изменения' : 'Нет несохранённых изменений'}
         </span>
         <div className="button-row">
           <button
             type="button"
-            disabled={busy || !dirty}
+            disabled={busy || !isDirty}
             onClick={() => {
+              appliedSettingsRef.current = settings
               setDraft(settings)
+              setDelayInput(formatDelaySeconds(settings.searchDelayMs))
               setError('')
             }}
           >
-            <Undo2 size={15} />
+            <Undo2 size={15} aria-hidden="true" />
             Отменить изменения
           </button>
-          <button className="primary" disabled={busy || !dirty}>
-            <Check size={16} />
+          <button className="primary" disabled={busy || !isDirty}>
+            <Check size={16} aria-hidden="true" />
             Сохранить настройки
           </button>
         </div>

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ShieldCheck, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { ImportPreview } from '../../../../shared/types'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
@@ -26,9 +26,17 @@ export function ImportDialog({ preview, busy, onClose, onSave }: ImportDialogPro
   }, [preview])
 
   const reviewVK = preview?.origin === 'VK DOM' && preview.completeness.status === 'unverified'
-  const previewRows = preview?.tracks.map((track, index) => ({ track, position: index + 1 })) ?? []
-  const previewSample =
-    previewRows.length > 6 ? [...previewRows.slice(0, 3), ...previewRows.slice(-3)] : previewRows
+  const totalTracks = preview?.tracks.length ?? 0
+  const previewSample = !preview
+    ? []
+    : totalTracks > 6
+      ? [
+          ...preview.tracks.slice(0, 3).map((track, index) => ({ track, position: index + 1 })),
+          ...preview.tracks
+            .slice(-3)
+            .map((track, index) => ({ track, position: totalTracks - 2 + index })),
+        ]
+      : preview.tracks.map((track, index) => ({ track, position: index + 1 }))
 
   return (
     <Dialog.Root
@@ -51,12 +59,12 @@ export function ImportDialog({ preview, busy, onClose, onSave }: ImportDialogPro
                 <input value={name} onChange={(e) => setName(e.target.value)} />
               </label>
               <div className="import-summary">
-                <strong>{count(preview.tracks.length)}</strong>
+                <strong>{count(totalTracks)}</strong>
                 <span>записей из {preview.origin}</span>
               </div>
               <p className="inline-warning">{preview.completeness.message}</p>
               <p className="helper-text">
-                {previewRows.length > 6 ? 'Первые три и последние три записи:' : 'Записи списка:'}
+                {totalTracks > 6 ? 'Первые три и последние три записи:' : 'Записи списка:'}
               </p>
               <div className="preview-tracks">
                 {previewSample.map(({ track, position }) => (
@@ -94,23 +102,20 @@ export function ImportDialog({ preview, busy, onClose, onSave }: ImportDialogPro
                 <button
                   className="primary"
                   disabled={
-                    !!busy ||
-                    !preview.tracks.length ||
-                    !name.trim() ||
-                    (!!reviewVK && !acceptUnverified)
+                    !!busy || !totalTracks || !name.trim() || (!!reviewVK && !acceptUnverified)
                   }
                   onClick={() => onSave({ ...preview, name }, searchAfterImport)}
                 >
-                  <ShieldCheck size={16} />
+                  <ShieldCheck size={16} aria-hidden="true" />
                   {reviewVK
                     ? 'Сохранить непроверенный список'
-                    : `Сохранить ${count(preview.tracks.length)} записей`}
+                    : `Сохранить ${count(totalTracks)} записей`}
                 </button>
               </div>
             </>
           )}
           <Dialog.Close className="dialog-close" aria-label="Закрыть" disabled={!!busy}>
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>

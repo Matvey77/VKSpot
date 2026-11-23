@@ -20,6 +20,7 @@ export function useAppState(api: Bridge, onError: (message: string) => void) {
         pending.current = false
         const result = await api.syncState(replica.cursor)
         if (!result.ok) {
+          pending.current = false
           error.current(result.error)
           return
         }

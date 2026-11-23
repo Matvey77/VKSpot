@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export const tableColumns = [
   { id: 'select', label: '', width: 38, min: 38, max: 50, resize: false },
@@ -11,11 +11,21 @@ export const tableColumns = [
 ] as const
 export type ColumnId = (typeof tableColumns)[number]['id']
 type Sizing = Partial<Record<ColumnId, number>>
-const key = 'vkspot_column_sizing'
+
+const STORAGE_KEY = 'vkspot_column_sizing'
+const defaultTrackWidths: Record<ColumnId, number> = {
+  select: 36,
+  position: 40,
+  title: 140,
+  result: 138,
+  status: 112,
+  duration: 52,
+  open: 32,
+}
 
 function loadSizes(): Sizing {
   try {
-    const saved = JSON.parse(localStorage.getItem(key) || '{}') as Sizing
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Sizing
     const result: Sizing = {}
     for (const column of tableColumns) {
       const value = saved[column.id]
@@ -28,101 +38,139 @@ function loadSizes(): Sizing {
   }
 }
 
+function buildGridTemplate(sizes: Sizing): string {
+  return tableColumns
+    .map((column) => {
+      if (column.id === 'title') {
+        const minTitle = sizes.title ?? defaultTrackWidths.title
+        return `minmax(${minTitle}px, 1fr)`
+      }
+      return `${sizes[column.id] ?? defaultTrackWidths[column.id]}px`
+    })
+    .join(' ')
+}
+
+function buildMinWidth(sizes: Sizing): string {
+  const total = tableColumns.reduce((sum, column) => {
+    const width =
+      column.id === 'title'
+        ? (sizes.title ?? defaultTrackWidths.title)
+        : (sizes[column.id] ?? defaultTrackWidths[column.id])
+    return sum + width
+  }, 0)
+  return `${total}px`
+}
+
 export function useColumnSizing() {
   const [sizes, setSizes] = useState<Sizing>(loadSizes)
   const [resizing, setResizing] = useState<ColumnId | null>(null)
+  const table = useRef<HTMLElement>(null)
   const header = useRef<HTMLDivElement>(null)
+  const sizesRef = useRef(sizes)
+  sizesRef.current = sizes
   const cleanup = useRef<(() => void) | null>(null)
   useEffect(() => () => cleanup.current?.(), [])
 
-  const measuredSizes = useCallback((): Sizing => {
-    const result: Sizing = {}
-    const cells = header.current?.children
-    tableColumns.forEach((column, index) => {
-      result[column.id] = cells?.[index]?.getBoundingClientRect().width ?? column.width
-    })
-    return result
+  const measuredWidth = useCallback((id: ColumnId): number | undefined => {
+    const index = tableColumns.findIndex((column) => column.id === id)
+    return index >= 0 ? header.current?.children[index]?.getBoundingClientRect().width : undefined
   }, [])
 
-  const persist = (next: Sizing) => {
+  const applyDomSizing = useCallback((next: Sizing) => {
+    if (!table.current) return
+    table.current.style.setProperty('--table-columns', buildGridTemplate(next))
+    table.current.style.setProperty('--table-min-width', buildMinWidth(next))
+  }, [])
+
+  const persist = useCallback((next: Sizing) => {
     setSizes(next)
     try {
-      localStorage.setItem(key, JSON.stringify(next))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     } catch {
       /* Read-only browser storage must not block resizing. */
     }
-  }
+  }, [])
 
-  const startResize = (id: ColumnId, event: React.PointerEvent) => {
-    event.preventDefault()
-    cleanup.current?.()
-    const column = tableColumns.find((column) => column.id === id)!
-    const initial = measuredSizes(),
-      startX = event.clientX
-    let latest = initial,
-      frame = 0
-    const previousCursor = document.body.style.cursor
-    const previousSelect = document.body.style.userSelect
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    setResizing(id)
-    const move = (event: PointerEvent) => {
-      latest = {
-        ...initial,
-        [id]: Math.min(column.max, Math.max(column.min, initial[id]! + event.clientX - startX)),
+  const startResize = useCallback(
+    (id: ColumnId, event: React.PointerEvent) => {
+      event.preventDefault()
+      cleanup.current?.()
+      const column = tableColumns.find((col) => col.id === id)!
+      const handle = event.currentTarget as HTMLElement
+      const startWidth = measuredWidth(id) ?? sizesRef.current[id] ?? column.width
+      const startX = event.clientX
+      let latest: Sizing = sizesRef.current
+      let frame = 0
+      const previousCursor = document.body.style.cursor
+      const previousSelect = document.body.style.userSelect
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      setResizing(id)
+
+      const move = (moveEvent: PointerEvent) => {
+        const nextWidth = Math.round(
+          Math.min(column.max, Math.max(column.min, startWidth + moveEvent.clientX - startX)),
+        )
+        latest = { ...sizesRef.current, [id]: nextWidth }
+        if (!frame) {
+          frame = requestAnimationFrame(() => {
+            frame = 0
+            applyDomSizing(latest)
+            handle.setAttribute('aria-valuenow', String(nextWidth))
+          })
+        }
       }
-      if (!frame)
-        frame = requestAnimationFrame(() => {
-          frame = 0
-          setSizes(latest)
-        })
-    }
-    const release = () => {
-      cancelAnimationFrame(frame)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', finish)
-      window.removeEventListener('pointercancel', finish)
-      document.body.style.cursor = previousCursor
-      document.body.style.userSelect = previousSelect
-      cleanup.current = null
-    }
-    const finish = () => {
-      release()
-      persist(latest)
-      setResizing(null)
-    }
-    cleanup.current = release
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', finish, { once: true })
-    window.addEventListener('pointercancel', finish, { once: true })
-  }
+      const release = () => {
+        cancelAnimationFrame(frame)
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', finish)
+        window.removeEventListener('pointercancel', finish)
+        document.body.style.cursor = previousCursor
+        document.body.style.userSelect = previousSelect
+        cleanup.current = null
+      }
+      const finish = () => {
+        release()
+        persist(latest)
+        setResizing(null)
+      }
+      cleanup.current = release
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', finish, { once: true })
+      window.addEventListener('pointercancel', finish, { once: true })
+    },
+    [applyDomSizing, measuredWidth, persist],
+  )
 
-  const resizeWithKeyboard = (id: ColumnId, event: React.KeyboardEvent) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-    event.preventDefault()
-    const column = tableColumns.find((column) => column.id === id)!
-    const initial = measuredSizes()
-    persist({
-      ...initial,
-      [id]: Math.min(
-        column.max,
-        Math.max(column.min, initial[id]! + (event.key === 'ArrowRight' ? 10 : -10)),
-      ),
-    })
-  }
+  const resizeWithKeyboard = useCallback(
+    (id: ColumnId, event: React.KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const column = tableColumns.find((col) => col.id === id)!
+      const currentWidth = measuredWidth(id) ?? sizesRef.current[id] ?? column.width
+      const nextWidth = Math.round(
+        Math.min(
+          column.max,
+          Math.max(column.min, currentWidth + (event.key === 'ArrowRight' ? 10 : -10)),
+        ),
+      )
+      persist({ ...sizesRef.current, [id]: nextWidth })
+    },
+    [measuredWidth, persist],
+  )
 
-  const custom = Object.keys(sizes).length > 0
+  const gridTemplateColumns = useMemo(() => buildGridTemplate(sizes), [sizes])
+  const minWidth = useMemo(() => buildMinWidth(sizes), [sizes])
+
   return {
+    table,
     header,
     sizes,
     resizing,
     startResize,
     resizeWithKeyboard,
-    gridTemplateColumns: custom
-      ? tableColumns.map((column) => `${sizes[column.id] ?? column.width}px`).join(' ')
-      : '36px 40px minmax(140px, 1fr) 138px 112px 52px 32px',
-    width: custom
-      ? tableColumns.reduce((sum, column) => sum + (sizes[column.id] ?? column.width), 0)
-      : '100%',
+    gridTemplateColumns,
+    width: '100%',
+    minWidth,
   }
 }

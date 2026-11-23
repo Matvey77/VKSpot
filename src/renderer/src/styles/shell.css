@@ -30,6 +30,18 @@
   letter-spacing: -0.035em;
   text-decoration: none;
 }
+.brand-link {
+  width: 100%;
+  height: auto;
+  border: 0;
+  background: transparent;
+  justify-content: flex-start;
+  text-align: left;
+  border-radius: var(--radius-navigation);
+}
+.brand-link:hover:not(:disabled) {
+  background: transparent;
+}
 .brand-mark {
   width: 44px;
   height: 44px;

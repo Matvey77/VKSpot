@@ -1,24 +1,10 @@
-import { useState } from 'react'
-import {
-  ArrowDown,
-  ArrowRight,
-  ArrowUp,
-  Check,
-  GripVertical,
-  LoaderCircle,
-  Music2,
-  Pencil,
-  Star,
-  Upload,
-  Wrench,
-  X,
-} from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
+import { LoaderCircle, Music2, Upload, X } from 'lucide-react'
+import { useState } from 'react'
 import type { Collection, MatchingRules } from '../../../../shared/types'
-import { summarizeCollection } from '../../../../core/library'
-import IconButton from '../../components/ui/IconButton'
 import { VKIcon } from '../../components/brand/BrandIcons'
-import CollectionOptions, { type ExportFormat } from './CollectionOptions'
+import { CollectionCard } from './CollectionCard'
+import type { ExportFormat } from './CollectionOptions'
 
 const count = (number: number) => number.toLocaleString('ru-RU')
 
@@ -30,23 +16,11 @@ function formatCollectionsCount(n: number): string {
   return `${n} коллекций`
 }
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  } catch {
-    return iso
-  }
-}
-
 interface CollectionsOverviewProps {
   collections: Collection[]
   matchingRules?: MatchingRules
   onOpenCollection: (id: string) => void
-  onRenameCollection: (id: string, newName: string) => Promise<void>
+  onRenameCollection: (id: string, newName: string) => Promise<boolean>
   onDeleteCollection: (id: string) => Promise<void>
   onReorderCollections: (ids: string[]) => Promise<void>
   onImportFile: () => void
@@ -82,9 +56,10 @@ export function CollectionsOverview({
   }
 
   const handleSaveRename = async (id: string) => {
-    if (!editName.trim()) return
-    await onRenameCollection(id, editName.trim())
-    setEditingId(null)
+    const trimmed = editName.trim()
+    if (!trimmed) return
+    const ok = await onRenameCollection(id, trimmed)
+    if (ok) setEditingId(null)
   }
 
   const handleMove = async (index: number, direction: 'up' | 'down') => {
@@ -92,6 +67,7 @@ export function CollectionsOverview({
     if (targetIndex < 0 || targetIndex >= collections.length) return
     const reordered = [...collections]
     const [moved] = reordered.splice(index, 1)
+    if (!moved) return
     reordered.splice(targetIndex, 0, moved)
     await onReorderCollections(reordered.map((c) => c.id))
   }
@@ -104,11 +80,15 @@ export function CollectionsOverview({
 
   const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault()
-    if (draggedIdx === null || draggedIdx === dropIndex) return
+    if (draggedIdx === null || draggedIdx === dropIndex) {
+      setDraggedIdx(null)
+      return
+    }
     const reordered = [...collections]
     const [moved] = reordered.splice(draggedIdx, 1)
-    reordered.splice(dropIndex, 0, moved)
     setDraggedIdx(null)
+    if (!moved) return
+    reordered.splice(dropIndex, 0, moved)
     await onReorderCollections(reordered.map((c) => c.id))
   }
 
@@ -119,7 +99,7 @@ export function CollectionsOverview({
       <header className="collections-header">
         <div>
           <h1 className="collections-header-title">
-            <Music2 size={28} className="brand-accent-icon" />
+            <Music2 size={28} className="brand-accent-icon" aria-hidden="true" />
             Коллекции
           </h1>
           <p className="collections-header-subtitle">
@@ -130,7 +110,7 @@ export function CollectionsOverview({
         </div>
         <div className="collections-header-actions">
           <button type="button" onClick={onImportFile} disabled={!!busy}>
-            <Upload size={15} />
+            <Upload size={15} aria-hidden="true" />
             Импорт списка
           </button>
           <button
@@ -141,7 +121,7 @@ export function CollectionsOverview({
           >
             {busy === 'extract' ? (
               <>
-                <LoaderCircle className="spinning" size={15} />
+                <LoaderCircle className="spinning" size={15} aria-hidden="true" />
                 Выгрузка из VK…
               </>
             ) : (
@@ -158,7 +138,7 @@ export function CollectionsOverview({
         <section className="empty-library collections-empty">
           <div className="collections-empty-inner">
             <div className="collections-empty-icon">
-              <Music2 size={36} />
+              <Music2 size={36} aria-hidden="true" />
             </div>
             <h2>Нет сохранённых коллекций</h2>
             <p>
@@ -171,7 +151,7 @@ export function CollectionsOverview({
                 Выгрузить из VK
               </button>
               <button type="button" onClick={onImportFile} disabled={!!busy}>
-                <Upload size={15} />
+                <Upload size={15} aria-hidden="true" />
                 Импортировать файл
               </button>
             </div>
@@ -179,198 +159,33 @@ export function CollectionsOverview({
         </section>
       ) : (
         <div className="collections-list">
-          {collections.map((c, index) => {
-            const isPrimary = index === 0
-            const isEditing = editingId === c.id
-
-            // Breakdown stats
-            const total = c.rows.length
-            const summary = summarizeCollection(c, matchingRules)
-            const resolved = total - summary.unresolved
-            const spotifyCount = summary.destinations.spotify
-            const reviewVersions = summary.groups.review
-            const localPending = summary.localPending
-
-            const spotifyPct = total > 0 ? (spotifyCount / total) * 100 : 0
-            const reviewPct = total > 0 ? (reviewVersions / total) * 100 : 0
-            const localPct = total > 0 ? (localPending / total) * 100 : 0
-
-            const isVK = c.origin.toLowerCase().includes('vk')
-
-            return (
-              <div
-                key={c.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => void handleDrop(e, index)}
-                className={`collection-card ${isPrimary ? 'is-primary' : ''}`}
-              >
-                {/* Reorder controls */}
-                <div className="collection-reorder-col">
-                  <IconButton
-                    title="Переместить выше"
-                    disabled={index === 0 || !!busy}
-                    onClick={() => void handleMove(index, 'up')}
-                  >
-                    <ArrowUp size={14} />
-                  </IconButton>
-                  <GripVertical size={16} className="grip" />
-                  <IconButton
-                    title="Переместить ниже"
-                    disabled={index === collections.length - 1 || !!busy}
-                    onClick={() => void handleMove(index, 'down')}
-                  >
-                    <ArrowDown size={14} />
-                  </IconButton>
-                </div>
-
-                {/* Album / Playlist Cover Badge */}
-                <div
-                  className={`collection-cover-box ${isVK ? 'vk-cover' : 'file-cover'}`}
-                  title={c.name}
-                >
-                  {isVK ? <VKIcon size={34} /> : <Music2 size={34} />}
-                  {isPrimary && (
-                    <div className="collection-cover-star" title="Основная коллекция">
-                      <Star size={13} fill="currentColor" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Details */}
-                <div className="collection-info-col">
-                  <div className="collection-title-row">
-                    {isEditing ? (
-                      <div className="collection-rename-row">
-                        <input
-                          type="text"
-                          className="collection-rename-input"
-                          value={editName}
-                          autoFocus
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') void handleSaveRename(c.id)
-                            if (e.key === 'Escape') setEditingId(null)
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="primary collection-rename-btn"
-                          onClick={() => void handleSaveRename(c.id)}
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="collection-rename-btn"
-                          onClick={() => setEditingId(null)}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="collection-title-link"
-                          onClick={() => onOpenCollection(c.id)}
-                          title="Открыть коллекцию"
-                        >
-                          {c.name}
-                        </button>
-                        <IconButton
-                          title="Переименовать коллекцию"
-                          onClick={() => handleStartRename(c)}
-                        >
-                          <Pencil size={13} />
-                        </IconButton>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="collection-meta-line">
-                    <span>
-                      <strong>{count(total)}</strong> записей
-                    </span>
-                    <span className="dot">•</span>
-                    <span>Импортировано {formatDate(c.importedAt)}</span>
-                  </div>
-
-                  {/* Multi-segment matching progress */}
-                  <div className="collection-progress-wrap">
-                    <div className="collection-segmented-bar">
-                      <div
-                        className="segmented-part spotify"
-                        style={{ width: `${spotifyPct}%` }}
-                        title={`Выбрано Spotify: ${count(spotifyCount)} (${Math.round(spotifyPct)}%)`}
-                      />
-                      <div
-                        className="segmented-part local"
-                        style={{ width: `${localPct}%` }}
-                        title={`Нужен локальный файл: ${count(localPending)} (${Math.round(localPct)}%)`}
-                      />
-                      <div
-                        className="segmented-part review"
-                        style={{ width: `${reviewPct}%` }}
-                        title={`Требует проверки: ${count(reviewVersions)} (${Math.round(reviewPct)}%)`}
-                      />
-                    </div>
-
-                    <div className="collection-progress-legend">
-                      {spotifyCount > 0 && (
-                        <span className="legend-item">
-                          <span className="legend-dot spotify" />
-                          {count(spotifyCount)} выбрано в Spotify
-                        </span>
-                      )}
-                      {reviewVersions > 0 && (
-                        <span className="legend-item">
-                          <span className="legend-dot review" />
-                          {count(reviewVersions)} проверить
-                        </span>
-                      )}
-                      <span className="legend-item">
-                        <span className="legend-dot resolved" />
-                        {count(resolved)} решено
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="collection-actions-col">
-                  <button
-                    type="button"
-                    className="primary open-btn"
-                    onClick={() => onOpenCollection(c.id)}
-                  >
-                    Открыть
-                    <ArrowRight size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    className="repair-btn"
-                    onClick={() => onOpenRepair(c)}
-                    title="Сверить исходный список без потери решений"
-                  >
-                    <Wrench size={14} />
-                    Сверить список
-                  </button>
-                  <CollectionOptions
-                    collection={c}
-                    busy={!!busy}
-                    onExport={(format) => onExportCollection(c.id, format)}
-                    onDelete={() => setConfirmDeleteId(c.id)}
-                  />
-                </div>
-              </div>
-            )
-          })}
+          {collections.map((c, index) => (
+            <CollectionCard
+              key={c.id}
+              collection={c}
+              index={index}
+              totalCollections={collections.length}
+              matchingRules={matchingRules}
+              busy={busy}
+              isEditing={editingId === c.id}
+              editName={editName}
+              onEditNameChange={setEditName}
+              onStartRename={handleStartRename}
+              onSaveRename={(id) => void handleSaveRename(id)}
+              onCancelRename={() => setEditingId(null)}
+              onOpen={onOpenCollection}
+              onMove={(idx, dir) => void handleMove(idx, dir)}
+              onDragStart={handleDragStart}
+              onDragEnd={() => setDraggedIdx(null)}
+              onDrop={(e, dropIndex) => void handleDrop(e, dropIndex)}
+              onRepair={onOpenRepair}
+              onExport={onExportCollection}
+              onRequestDelete={setConfirmDeleteId}
+            />
+          ))}
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       <Dialog.Root
         open={!!confirmDeleteId}
         onOpenChange={(open) => {
@@ -405,7 +220,7 @@ export function CollectionsOverview({
             </div>
             <Dialog.Close asChild>
               <button className="dialog-close" aria-label="Закрыть">
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
             </Dialog.Close>
           </Dialog.Content>
@@ -414,3 +229,5 @@ export function CollectionsOverview({
     </div>
   )
 }
+
+export default CollectionsOverview

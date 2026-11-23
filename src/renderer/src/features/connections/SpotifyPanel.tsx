@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowLeft, Play, RotateCcw, ExternalLink, LoaderCircle } from 'lucide-react'
-import type { AppState, Result } from '../../../../shared/types'
+import type { AppState } from '../../../../shared/types'
+import { api } from '../../state/api'
 
 type BrowserPageState = {
   state: 'idle' | 'loading' | 'ready' | 'error'
@@ -10,9 +11,6 @@ type BrowserPageState = {
 type BrowserStateWithPage = NonNullable<AppState['spotifyBrowser']> & {
   page?: BrowserPageState
   reason?: 'verification' | 'load' | 'read'
-}
-type SpotifyBridgeWithReload = typeof window.vkspot & {
-  reloadSpotifyBrowser?: (owner?: string) => Promise<Result<void>>
 }
 
 export default function SpotifyPanel({
@@ -30,12 +28,17 @@ export default function SpotifyPanel({
   if (!owner.current) owner.current = crypto.randomUUID()
   const [commandError, setCommandError] = useState('')
   const [reloading, setReloading] = useState(false)
+  const reloadingRef = useRef(false)
+  const hiddenRef = useRef(false)
+  const leavingRef = useRef(false)
   const status = browserState as BrowserStateWithPage | undefined
   useEffect(() => {
     if (!areaNode) return
     let alive = true
     let queue = Promise.resolve()
+    hiddenRef.current = false
     const update = () => {
+      if (!alive || leavingRef.current) return
       const box = areaNode.getBoundingClientRect()
       if (box.width < 1 || box.height < 1) return
       const bounds = {
@@ -46,12 +49,12 @@ export default function SpotifyPanel({
       }
       queue = queue
         .then(async () => {
-          if (!alive) return
-          const result = await window.vkspot.showSpotifyBrowser(bounds, owner.current!)
-          if (!result.ok && alive) setCommandError(result.error)
+          if (!alive || leavingRef.current) return
+          const result = await api.showSpotifyBrowser(bounds, owner.current!)
+          if (!result.ok && alive && !leavingRef.current) setCommandError(result.error)
         })
         .catch((reason: unknown) => {
-          if (alive)
+          if (alive && !leavingRef.current)
             setCommandError(
               reason instanceof Error ? reason.message : 'Не удалось открыть страницу Spotify.',
             )
@@ -65,28 +68,29 @@ export default function SpotifyPanel({
       alive = false
       observer.disconnect()
       window.removeEventListener('resize', update)
-      void window.vkspot.showSpotifyBrowser(null, owner.current!)
+      if (!hiddenRef.current) {
+        hiddenRef.current = true
+        void api.showSpotifyBrowser(null, owner.current!)
+      }
     }
   }, [areaNode])
-  const reload = async () => {
+  const reload = useCallback(async () => {
+    if (reloadingRef.current) return
+    reloadingRef.current = true
     setReloading(true)
     setCommandError('')
     try {
-      const bridge = window.vkspot as SpotifyBridgeWithReload
-      if (!bridge.reloadSpotifyBrowser) {
-        setCommandError('Обновление страницы Spotify недоступно.')
-        return
-      }
-      const result = await bridge.reloadSpotifyBrowser(owner.current!)
+      const result = await api.reloadSpotifyBrowser(owner.current!)
       if (!result.ok) setCommandError(result.error)
     } catch (reason) {
       setCommandError(
         reason instanceof Error ? reason.message : 'Не удалось обновить страницу Spotify.',
       )
     } finally {
+      reloadingRef.current = false
       setReloading(false)
     }
-  }
+  }, [])
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
@@ -99,11 +103,19 @@ export default function SpotifyPanel({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [reload])
   const leave = async (resume = false) => {
-    await window.vkspot.showSpotifyBrowser(null, owner.current!)
-    onClose()
-    if (resume) onResume?.()
+    if (leavingRef.current) return
+    leavingRef.current = true
+    hiddenRef.current = true
+    try {
+      await api.showSpotifyBrowser(null, owner.current!)
+    } catch {
+      /* Dialog still closes so the user is never trapped in the modal. */
+    } finally {
+      onClose()
+      if (resume) onResume?.()
+    }
   }
   return (
     <Dialog.Root
@@ -118,7 +130,7 @@ export default function SpotifyPanel({
           <header>
             <div className="header-actions">
               <button onClick={() => void leave()}>
-                <ArrowLeft size={16} />
+                <ArrowLeft size={16} aria-hidden="true" />
                 Вернуться к коллекции
               </button>
               <button
@@ -127,15 +139,15 @@ export default function SpotifyPanel({
                 onClick={() => void reload()}
                 title="Обновить страницу Spotify (F5, Ctrl+R или ⌘R)"
               >
-                <RotateCcw size={15} className={reloading ? 'spinning' : ''} />
+                <RotateCcw size={15} className={reloading ? 'spinning' : ''} aria-hidden="true" />
                 {reloading ? 'Обновляем…' : 'Обновить'}
               </button>
               <button
                 className="secondary"
-                onClick={() => void window.vkspot.openExternal('https://open.spotify.com/search')}
+                onClick={() => void api.openExternal('https://open.spotify.com/search')}
                 title="Открыть Spotify в системном браузере"
               >
-                <ExternalLink size={15} />В браузере
+                <ExternalLink size={15} aria-hidden="true" />В браузере
               </button>
             </div>
             <div>
@@ -150,7 +162,7 @@ export default function SpotifyPanel({
             </div>
             {onResume && (
               <button className="primary" onClick={() => void leave(true)}>
-                <Play size={16} />
+                <Play size={16} aria-hidden="true" />
                 Продолжить поиск
               </button>
             )}
@@ -176,7 +188,7 @@ export default function SpotifyPanel({
           <div className="spotify-native-area" ref={setArea} aria-label="Страница Spotify">
             {(!status?.page || status?.page?.state === 'loading') && (
               <div className="spotify-placeholder" role="status">
-                <LoaderCircle className="spinning" size={24} />
+                <LoaderCircle className="spinning" size={24} aria-hidden="true" />
                 <span>{status?.page?.message || 'Загружаем страницу Spotify…'}</span>
               </div>
             )}

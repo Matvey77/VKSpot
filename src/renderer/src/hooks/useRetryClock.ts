@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // UI-only clock: no polling of Spotify or the database while waiting.
 export default function useRetryClock(deadline: number): number {
   const [now, setNow] = useState(Date.now)
+  const nowRef = useRef(now)
+  nowRef.current = now
+
   useEffect(() => {
-    setNow(Date.now())
-    if (deadline <= Date.now()) return
+    const current = Date.now()
+    if (Math.abs(current - nowRef.current) >= 500) setNow(current)
+    if (deadline <= current) return
     const update = () => setNow(Date.now())
     const timer = window.setInterval(() => {
       update()
@@ -17,5 +21,6 @@ export default function useRetryClock(deadline: number): number {
       document.removeEventListener('visibilitychange', update)
     }
   }, [deadline])
+
   return now
 }
