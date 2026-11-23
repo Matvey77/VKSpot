@@ -1,6 +1,7 @@
 import { makePlan, reconcilePrefix, mixedOrder } from '../../core/collection'
 import { searchText, reviewGroup } from '../../core/matching'
 import type { Job, TrackRow, Working } from '../../shared/model'
+import { formatRecordsCount } from '../../shared/ru'
 import type { Store } from '../storage'
 import type { WorkingPatchItem } from '../storage/collection-repository'
 import { Spotify, SpotifyError } from '../integrations/spotify/api'
@@ -115,16 +116,16 @@ export class Jobs {
       )
   }
   search(collectionId: string, rowIds: string[], background = false): string {
-    if (this.active) throw new Error('Другое задание уже работает. Приостановите его.')
+    if (this.active) throw new Error('Другое задание уже работает. Приостанови его.')
     const provider = this.browser ? this.store.settings().searchProvider : 'api'
     if (provider === 'api') {
-      if (!this.spotify.connected()) throw new Error('Подключите Spotify для поиска через API.')
+      if (!this.spotify.connected()) throw new Error('Подключи Spotify для поиска через API.')
       this.checkCooldown()
     } else this.checkBrowserCooldown()
     const collection = this.store.get(collectionId),
       valid = new Set(collection.rows.map((r) => r.id))
     if (!rowIds.length || rowIds.some((id) => !valid.has(id)))
-      throw new Error('Выберите записи из этой коллекции.')
+      throw new Error('Выбери записи из этой коллекции.')
     const job = this.store.newJob(collectionId, 'search', [...new Set(rowIds)])
     job.backgroundSearch = background
     job.refreshSearchResults = !background
@@ -135,14 +136,14 @@ export class Jobs {
     return job.id
   }
   transfer(collectionId: string): string {
-    if (this.active) throw new Error('Другое задание уже работает. Приостановите его.')
-    if (!this.spotify.connected()) throw new Error('Для переноса через API подключите Spotify.')
+    if (this.active) throw new Error('Другое задание уже работает. Приостанови его.')
+    if (!this.spotify.connected()) throw new Error('Для переноса через API подключи Spotify.')
     this.checkCooldown()
     const plan = makePlan(this.store.get(collectionId))
     if (!plan.length) throw new Error('Нет записей для переноса.')
     const remote = plan.filter((p) => p.destination === 'spotify')
     if (!remote.length)
-      throw new Error('В плане только локальные записи. Используйте подготовку локальных файлов.')
+      throw new Error('В плане только локальные записи. Используй подготовку локальных файлов.')
     if (
       this.store
         .jobSummaries()
@@ -150,7 +151,7 @@ export class Jobs {
           (j) => j.collectionId === collectionId && j.kind === 'transfer' && j.state !== 'complete',
         )
     )
-      throw new Error('У этой коллекции уже есть незавершённый перенос. Продолжите его в заданиях.')
+      throw new Error('У этой коллекции уже есть незавершённый перенос. Продолжи его в заданиях.')
     const job = this.store.newJob(
       collectionId,
       'transfer',
@@ -163,15 +164,14 @@ export class Jobs {
     return job.id
   }
   private runnable(id: string): Job {
-    if (this.active)
-      throw new Error('Другое задание уже работает. Приостановите его перед запуском.')
+    if (this.active) throw new Error('Другое задание уже работает. Приостанови его перед запуском.')
     const job = this.store.job(id)
     if (job.state === 'complete') return job
     if (job.searchProvider !== 'browser') this.checkCooldown()
     else this.checkBrowserCooldown()
     if (job.state === 'needs-review')
       throw new Error(
-        'Создание плейлиста могло выполниться. Проверьте Spotify; автоматический повтор отключён, чтобы не создать второй плейлист.',
+        'Создание плейлиста могло выполниться. Проверь Spotify; автоматический повтор отключён, чтобы не создать второй плейлист.',
       )
     return job
   }
@@ -219,7 +219,7 @@ export class Jobs {
     const job = this.runnable(id)
     if (job.state === 'complete') return
     if (job.searchProvider !== 'browser' && !this.spotify.connected())
-      throw new Error('Подключите Spotify для продолжения задания.')
+      throw new Error('Подключи Spotify для продолжения задания.')
     // Validate synchronously so IPC reports refusals, then release the UI while
     // the runner persists progress and any subsequent network error.
     void this.run(id).catch(() => undefined)
@@ -362,9 +362,9 @@ export class Jobs {
       job.message = paused
         ? 'Приостановлено. Можно продолжить.'
         : job.kind === 'search'
-          ? 'Поиск завершён. Подтвердите нужные версии в коллекции.'
+          ? 'Поиск завершён. Подтверди нужные версии в коллекции.'
           : localCount
-            ? `Каталог Spotify перенесён. ${localCount} локальных записей нужно добавить по плану; смешанный порядок ещё не подтверждён.`
+            ? `Каталог Spotify перенесён. ${formatRecordsCount(localCount)} с локальными файлами нужно добавить по плану; смешанный порядок ещё не подтверждён.`
             : 'Перенос завершён. Состав и порядок каталожных записей сверены.'
       this.save(job, true)
     } catch (error) {
@@ -409,13 +409,13 @@ export class Jobs {
       this.pause(this.active)
   }
   async recoverPlaylist(id: string, playlistId: string): Promise<void> {
-    if (this.active) throw new Error('Сначала остановите текущее задание.')
+    if (this.active) throw new Error('Сначала останови текущее задание.')
     const job = this.store.job(id)
     if (job.state !== 'needs-review' || job.kind !== 'transfer' || !job.plan)
       throw new Error('Это задание не требует восстановления плейлиста.')
     const metadata = await this.spotify.request<{ description: string }>(`/playlists/${playlistId}`)
     if (!metadata.description?.includes(job.id))
-      throw new Error('Этот плейлист не содержит отметку данного задания VKSpot. Проверьте ссылку.')
+      throw new Error('Этот плейлист не содержит отметку данного задания VKSpot. Проверь ссылку.')
     reconcilePrefix(
       job.plan.filter((p) => p.destination === 'spotify').map((p) => p.uri!),
       await this.spotify.playlistItems(playlistId),
@@ -426,10 +426,10 @@ export class Jobs {
     this.save(job, true)
   }
   async reconcileMixed(id: string): Promise<void> {
-    if (this.active) throw new Error('Сначала остановите текущее задание.')
+    if (this.active) throw new Error('Сначала останови текущее задание.')
     const job = this.store.job(id)
     if (job.kind !== 'transfer' || !job.playlistId || !job.plan || job.state !== 'complete')
-      throw new Error('Сначала завершите каталожный этап переноса.')
+      throw new Error('Сначала заверши каталожный этап переноса.')
     this.active = id
     this.activeCollectionId = job.collectionId
     this.interrupted.delete(id)
@@ -455,7 +455,7 @@ export class Jobs {
       }
       actual = await this.spotify.playlistItems(job.playlistId)
       if (actual.length !== desired.length || actual.some((uri, i) => uri !== desired[i]))
-        throw new Error('Порядок изменился во время проверки. Повторите сверку.')
+        throw new Error('Порядок изменился во время проверки. Повтори сверку.')
       job.message = 'Смешанный плейлист сверён: каталожные и локальные записи идут в порядке плана.'
       this.save(job, true)
     } catch (error) {

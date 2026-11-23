@@ -1,5 +1,6 @@
-import { Loader2 } from 'lucide-react'
+import { Check, Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { humanizeError } from '../../../../shared/ru'
 import type { Settings } from '../../../../shared/types'
 import { SpotifyIcon } from '../../components/brand/BrandIcons'
 import { useProxyTester, validateProxyUrl } from './useProxyTester'
@@ -91,14 +92,22 @@ export function SpotifySettings({
         )}
         {proxyResult && (
           <div className={`proxy-result-hint ${proxyResult.ok ? 'success' : 'error'}`}>
-            {proxyResult.ok
-              ? `✓ Подключение успешно (${proxyResult.latencyMs} мс)`
-              : `✕ Ошибка подключения: ${proxyResult.error}`}
+            {proxyResult.ok ? (
+              <>
+                <Check size={14} aria-hidden="true" />
+                <span>Подключение успешно ({proxyResult.latencyMs} мс)</span>
+              </>
+            ) : (
+              <>
+                <X size={14} aria-hidden="true" />
+                <span>Ошибка подключения: {humanizeError(proxyResult.error)}</span>
+              </>
+            )}
           </div>
         )}
       </div>
       <p id="spotify-proxy-hint" className="helper-text">
-        Адрес HTTP или SOCKS5 прокси вашего VPN. Пустое поле — системные настройки сети. Применяется
+        Адрес HTTP или SOCKS5 прокси твоего VPN. Пустое поле — системные настройки сети. Применяется
         только к Spotify.
       </p>
       <div className="button-row">

@@ -41,8 +41,10 @@ export function createOAuthCallbackHandler(
         return
       }
       if (url.searchParams.get('state') !== expectedState) {
-        res.writeHead(400)
-        res.end('Invalid state')
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end(
+          '<!doctype html><meta charset="utf-8"><title>VKSpot</title><p>Не удалось подтвердить сессию входа Spotify (устаревшая или неверная ссылка). Закрой эту вкладку и повтори подключение в VKSpot.</p>',
+        )
         return
       }
       const result = url.searchParams.get('code'),
@@ -53,7 +55,7 @@ export function createOAuthCallbackHandler(
         () => {
           onComplete(
             error || !result
-              ? new Error('Spotify не подтвердил вход. Повторите подключение.')
+              ? new Error('Spotify не подтвердил вход. Повтори подключение.')
               : undefined,
             result ?? undefined,
           )
@@ -112,7 +114,7 @@ export async function authorizeSpotifyPKCE(
   fetchImplementation: (url: string, init?: RequestInit) => Promise<Response>,
 ): Promise<SpotifyToken> {
   if (!/^[a-fA-F0-9]{32}$/.test(clientId))
-    throw new Error('Укажите Client ID из настроек приложения Spotify Developer.')
+    throw new Error('Укажи Client ID из настроек приложения Spotify Developer.')
   const verifier = randomBytes(48).toString('base64url'),
     state = randomBytes(24).toString('base64url')
   const code = await new Promise<string>((resolve, reject) => {
@@ -128,11 +130,11 @@ export async function authorizeSpotifyPKCE(
     }
     const server = createServer(createOAuthCallbackHandler(state, finish))
     const timeout = setTimeout(
-      () => finish(new Error('Время входа истекло. Подключитесь ещё раз.')),
+      () => finish(new Error('Время входа истекло. Подключись ещё раз.')),
       180000,
     )
     server.once('error', () =>
-      finish(new Error('Порт 43823 занят. Закройте другое подключение и повторите вход.')),
+      finish(new Error('Порт 43823 занят. Закрой другое подключение и повтори вход.')),
     )
     server.listen(43823, '127.0.0.1', () => {
       const params = new URLSearchParams({
@@ -161,7 +163,7 @@ export async function authorizeSpotifyPKCE(
     signal: AbortSignal.timeout(30000),
   })
   if (!response.ok)
-    throw new Error('Не удалось получить доступ Spotify. Проверьте Client ID и Redirect URI.')
+    throw new Error('Не удалось получить доступ Spotify. Проверь Client ID и Redirect URI.')
   const data = (await response.json()) as {
     access_token: string
     refresh_token: string

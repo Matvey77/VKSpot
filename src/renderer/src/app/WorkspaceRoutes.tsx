@@ -2,7 +2,8 @@ import { LoaderCircle } from 'lucide-react'
 import { lazy, Suspense, useCallback } from 'react'
 import type { LibraryFilter } from '../../../core/library'
 import type { SearchResultGroup } from '../../../core/matching'
-import type { ExportFormat, Settings } from '../../../shared/types'
+import { formatCount, pluralize } from '../../../shared/ru'
+import type { ExportFormat, ImportPreview, Settings } from '../../../shared/types'
 import ErrorBoundary from '../components/ui/ErrorBoundary'
 import CollectionsOverview from '../features/collections/CollectionsOverview'
 import LibraryView from '../features/library/LibraryView'
@@ -14,6 +15,48 @@ const Welcome = lazy(() => import('../features/start/Welcome'))
 const ConnectionsView = lazy(() => import('../features/connections/ConnectionsView'))
 const JobsView = lazy(() => import('../features/jobs/JobsView'))
 const SettingsView = lazy(() => import('../features/settings/SettingsView'))
+
+function formatSpotifyInspectSummary(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return 'Окно Spotify найдено, но элементы управления не обнаружены.'
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    const items = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object'
+        ? [parsed]
+        : null
+    if (!items) {
+      return 'Окно Spotify доступно для проверки.'
+    }
+    if (items.length === 0) {
+      return 'Окно Spotify открыто, но интерактивные элементы не найдены.'
+    }
+    const countType = (target: string) =>
+      items.filter(
+        (item) =>
+          typeof item === 'object' && item !== null && (item as { Type?: string }).Type === target,
+      ).length
+    const buttons = countType('ControlType.Button')
+    const menus = countType('ControlType.MenuItem')
+    const tabs = countType('ControlType.TabItem')
+    const details = [
+      buttons
+        ? `${formatCount(buttons)} ${pluralize(buttons, ['кнопка', 'кнопки', 'кнопок'])}`
+        : '',
+      menus
+        ? `${formatCount(menus)} ${pluralize(menus, ['пункт меню', 'пункта меню', 'пунктов меню'])}`
+        : '',
+      tabs ? `${formatCount(tabs)} ${pluralize(tabs, ['вкладка', 'вкладки', 'вкладок'])}` : '',
+    ].filter(Boolean)
+    const summary = details.length ? ` (${details.join(', ')})` : ''
+    return `Окно Spotify доступно: ${formatCount(items.length)} ${pluralize(items.length, ['элемент', 'элемента', 'элементов'])} управления${summary}.`
+  } catch {
+    return 'Окно Spotify проверено.'
+  }
+}
 
 export function WorkspaceRoutes({ controller }: { controller: WorkspaceController }) {
   const {
@@ -69,7 +112,7 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
     openRepair,
     openVK,
     cancelVKExtraction,
-    extractVKPreview,
+    setPreview,
     prepareLocal,
   } = controller
 
@@ -196,15 +239,40 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
   const handleInspectHelper = useCallback(
     () =>
       void run('inspect', () => api.helper('inspect')).then((text) => {
-        if (text) {
+        if (typeof text === 'string') {
           setNotice({
-            message: 'Диагностика: ' + text.slice(0, 1200),
+            message: formatSpotifyInspectSummary(text),
             error: false,
           })
         }
       }),
     [run, setNotice],
   )
+
+  const handleCollectionsExtractVK = useCallback(() => {
+    if (data?.vk?.state !== 'connected') {
+      void run(
+        'vk',
+        () => api.openVK(),
+        'Окно VK открыто. Войди в аккаунт, перейди в раздел «Моя музыка» и нажми «Выгрузить из VK» ещё раз.',
+      )
+      return
+    }
+    void run<ImportPreview | null>('extract', async () => {
+      const result = await api.extractVK({ expectedCount: vkExpectedCount })
+      if (!result.ok && /Сначала открой/i.test(result.error)) {
+        setNotice({
+          message:
+            'Окно VK открыто. Перейди в раздел «Моя музыка» и нажми «Выгрузить из VK» ещё раз.',
+          error: false,
+        })
+        return { ok: true as const, value: null }
+      }
+      return result
+    }).then((value) => {
+      if (value) setPreview(value)
+    })
+  }, [data?.vk?.state, run, setNotice, setPreview, vkExpectedCount])
 
   const handleArchiveFinishedJobs = useCallback(
     () =>
@@ -283,7 +351,7 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
         {!data ? (
           <div className="loading" role="status">
             <LoaderCircle className="spinning" size={24} aria-hidden="true" />
-            Открываем локальную библиотеку…
+            Открываем локальную коллекцию…
           </div>
         ) : (
           <>
@@ -333,7 +401,7 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
                 onDeleteCollection={deleteCollection}
                 onReorderCollections={reorderCollections}
                 onImportFile={handleImport}
-                onExtractVK={extractVKPreview}
+                onExtractVK={handleCollectionsExtractVK}
                 onOpenVK={openVK}
                 onOpenRepair={openRepair}
                 onExportCollection={handleExportCollection}
@@ -386,7 +454,7 @@ export function WorkspaceRoutes({ controller }: { controller: WorkspaceControlle
                 vkExpectedCount={vkExpectedCount}
                 vkProgress={vkProgress}
                 onOpenVK={openVK}
-                onExtractVK={extractVKPreview}
+                onExtractVK={controller.extractVKPreview}
                 onClearVK={handleClearVK}
                 onCancelVKExtraction={cancelVKExtraction}
                 onSaveVKSettings={handleSaveVKSettings}

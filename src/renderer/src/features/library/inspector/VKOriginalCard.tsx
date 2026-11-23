@@ -43,7 +43,7 @@ export function VKOriginalCard({
           onClick={onTogglePlay}
           title={
             row.source.availability === 'blocked'
-              ? 'Аудиозапись недоступна в VK'
+              ? 'Запись недоступна в VK'
               : loading
                 ? 'Отменить поиск оригинала VK'
                 : playing

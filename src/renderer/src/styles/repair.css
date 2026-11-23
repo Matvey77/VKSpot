@@ -260,6 +260,9 @@
   color: var(--success-ink);
 }
 .repair-preview-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   background: var(--canvas);
   border: 1px solid var(--line);
   border-radius: var(--radius-navigation);
@@ -267,6 +270,11 @@
   font-size: 12px;
   color: var(--muted);
   line-height: 1.4;
+}
+.repair-preview-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--success-ink);
 }
 .repair-confirm-check {
   gap: 10px;

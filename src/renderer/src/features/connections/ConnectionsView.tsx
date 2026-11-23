@@ -1,12 +1,11 @@
 import { ArrowRight, Download, FileAudio, FolderOpen, LoaderCircle } from 'lucide-react'
+import { formatCount, formatRecordsGenitive, pluralize } from '../../../../shared/ru'
 import type { Collection, Settings, VKExportProgress } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import { SpotifyIcon, VKIcon } from '../../components/brand/BrandIcons'
 import { api } from '../../state/api'
 import { SpotifySettings } from './SpotifySettings'
 import { VKSettings } from './VKSettings'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 interface ConnectionsViewProps {
   data: ViewState
@@ -138,11 +137,10 @@ export function ConnectionsView({
               <div className="vk-extraction">
                 <div role="status" aria-live="polite">
                   <strong>
-                    Собрано {count(vkProgress?.collected ?? 0)}
+                    Собрано: {formatCount(vkProgress?.collected ?? 0)}
                     {(vkProgress?.expected ?? vkExpectedCount) !== null
-                      ? ` из ${count((vkProgress?.expected ?? vkExpectedCount)!)}`
-                      : ''}{' '}
-                    записей
+                      ? ` из ${formatRecordsGenitive((vkProgress?.expected ?? vkExpectedCount)!)}`
+                      : ` ${pluralize(vkProgress?.collected ?? 0, ['запись', 'записи', 'записей'])}`}
                   </strong>
                   <p>{vkProgress?.message ?? 'Возвращаемся к началу списка…'}</p>
                 </div>
@@ -150,8 +148,8 @@ export function ConnectionsView({
               </div>
             )}
             <p className="helper-text">
-              После выгрузки сравни количество и крайние записи. Заблокированные треки сохраняются
-              как записи списка; их файлы не обещаем восстановить.
+              После выгрузки сравни количество и крайние записи. Недоступные в VK треки сохраняются
+              как записи списка; для переноса понадобится собственный аудиофайл.
             </p>
             <VKSettings settings={data.settings} busy={!!busy} save={onSaveVKSettings} />
           </div>
@@ -214,7 +212,7 @@ export function ConnectionsView({
               </button>
               {api.canInspectSpotify && (
                 <button disabled={!!busy} onClick={onInspectHelper}>
-                  Проверить доступность управления
+                  Проверить окно Spotify
                 </button>
               )}
             </div>

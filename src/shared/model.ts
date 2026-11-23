@@ -185,7 +185,7 @@ export const proxySchema = z
     } catch {
       return false
     }
-  }, 'Укажите HTTP или SOCKS5 адрес прокси без логина, пароля и пути.')
+  }, 'Укажи HTTP или SOCKS5 адрес прокси без логина, пароля и пути.')
   .default('')
 
 export const settingsSchema = z.object({

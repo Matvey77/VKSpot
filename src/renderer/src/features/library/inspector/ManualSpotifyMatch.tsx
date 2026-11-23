@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { Headphones } from 'lucide-react'
 import { manualSpotifyTrack, parseSpotifyTrackLink } from '../../../../../core/spotify-link'
 import { formatDuration } from '../../../../../core/library'
+import { humanizeError } from '../../../../../shared/ru'
 import type { TrackRow, Working } from '../../../../../shared/types'
 import { SpotifyEmbedPlayer } from './SpotifyEmbedPlayer'
 
@@ -62,11 +63,7 @@ export default function ManualSpotifyMatch({
             } else
               setError('Привязка не сохранена. Проверь сообщение приложения и повтори попытку.')
           } catch (cause) {
-            setError(
-              cause instanceof Error
-                ? cause.message
-                : 'Не удалось привязать трек. Повтори попытку.',
-            )
+            setError(humanizeError(cause, 'Не удалось привязать трек. Повтори попытку.'))
           } finally {
             setSaving(false)
           }

@@ -7,7 +7,7 @@ import {
   SlidersHorizontal,
   Undo2,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { Settings } from '../../../../shared/types'
 
 const sections = [
@@ -101,6 +101,8 @@ export function Preferences({
   const [delayInput, setDelayInput] = useState(() => formatDelaySeconds(settings.searchDelayMs))
   const [section, setSection] = useState<Section>('search')
   const [error, setError] = useState('')
+  const autoResumeTitleId = useId()
+  const autoResumeDescId = useId()
 
   const appliedSettingsRef = useRef(settings)
   const draftSnapshotRef = useRef({ draft, delayInput })
@@ -280,12 +282,13 @@ export function Preferences({
                 <input
                   type="checkbox"
                   checked={draft.autoResumeSearch}
+                  aria-labelledby={autoResumeTitleId}
+                  aria-describedby={autoResumeDescId}
                   onChange={(event) => edit({ autoResumeSearch: event.target.checked })}
-                  aria-label="Автоматически продолжать фоновый поиск"
                 />
                 <span>
-                  <strong>Автоматически продолжать фоновый поиск</strong>
-                  <small>
+                  <strong id={autoResumeTitleId}>Автоматически продолжать фоновый поиск</strong>
+                  <small id={autoResumeDescId}>
                     После ожидания Spotify или перезапуска — с сохранённого места. Ручная пауза
                     остаётся до команды «Продолжить».
                   </small>

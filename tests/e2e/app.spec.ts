@@ -130,7 +130,7 @@ test('native file import and export, local audio checksum and copying', async ()
     await page
       .getByRole('checkbox', { name: 'Начать поиск после сохранения', exact: true })
       .uncheck()
-    await page.getByRole('button', { name: 'Сохранить 2 записей' }).click()
+    await page.getByRole('button', { name: 'Сохранить 2 записи' }).click()
     await expect(page.getByRole('row', { name: 'Запись 1: Silence', exact: true })).toBeVisible()
     await app.evaluate(({ dialog }, path) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: path })

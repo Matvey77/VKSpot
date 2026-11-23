@@ -15,7 +15,7 @@ test('desktop integration exposes supported actions and opens Spotify through th
     await page.getByRole('button', { name: 'Подключения', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Открыть Spotify', exact: true })).toBeVisible()
     await expect(
-      page.getByRole('button', { name: 'Проверить доступность управления', exact: true }),
+      page.getByRole('button', { name: 'Проверить окно Spotify', exact: true }),
     ).toHaveCount(platform === 'win32' ? 1 : 0)
     await mkdir('.local/evidence/e2e', { recursive: true })
     await page.screenshot({ path: `.local/evidence/e2e/platform-${platform}.png` })

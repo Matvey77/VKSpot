@@ -259,7 +259,7 @@ export class VKSessionManager {
     if (!this.vkView || this.vkView.webContents.isDestroyed()) {
       this.openVK()
       throw new Error(
-        'Сначала откройте VK. Авторизуйтесь и перейдите в раздел «Моя музыка», затем запустите выгрузку.',
+        'Сначала открой VK. Авторизуйся и перейди в раздел «Моя музыка», затем запусти выгрузку.',
       )
     }
     const parsed = new URL(this.vkView.webContents.getURL())
@@ -268,7 +268,7 @@ export class VKSessionManager {
       !/^\/(audio|music)/.test(parsed.pathname)
     ) {
       if (this.vkWindow && !this.vkWindow.isDestroyed()) this.vkWindow.focus()
-      throw new Error('В окне VK перейдите в раздел «Моя музыка» перед запуском выгрузки.')
+      throw new Error('В окне VK перейди в раздел «Моя музыка» перед запуском выгрузки.')
     }
     const contents = this.vkView.webContents
     this.vkExtracting = true
@@ -318,7 +318,7 @@ export class VKSessionManager {
           if (mainFrame && !inPlace && !allowExpectedNavigation) {
             reject(
               new Error(
-                'Чтение VK прервано сменой страницы. Откройте «Моя музыка» и повторите сбор.',
+                'Чтение VK прервано сменой страницы. Открой раздел «Моя музыка» и повтори сбор.',
               ),
             )
           }
@@ -334,7 +334,7 @@ export class VKSessionManager {
               ])
               .catch(() => {})
           }
-          reject(new Error('VK не сообщает о новых записях уже 3 минуты. Повторите выгрузку.'))
+          reject(new Error('VK не сообщает о новых записях уже 3 минуты. Повтори выгрузку.'))
         }, 5000)
         contents.once('destroyed', destroyed)
         contents.on('did-start-navigation', navigating)
@@ -360,7 +360,7 @@ export class VKSessionManager {
           !/^\/(audio|music)/.test(target.pathname)
         ) {
           throw new Error(
-            'VK вернул неподдерживаемую ссылку «Моя музыка». Откройте этот раздел вручную.',
+            'VK вернул неподдерживаемую ссылку «Моя музыка». Открой этот раздел вручную.',
           )
         }
         this.options.onProgress({
@@ -410,7 +410,7 @@ export class VKSessionManager {
       const data: unknown = await Promise.race([execPromise, interrupted])
       if (!data || typeof data !== 'object') {
         throw new Error(
-          'Скрипт VK не вернул данные. Убедитесь, что окно VK открыто на странице «Моя музыка» и список треков загружен.',
+          'Скрипт VK не вернул данные. Убедись, что окно VK открыто на странице «Моя музыка» и список записей загружен.',
         )
       }
       const payload = data as { ok?: boolean; error?: string; result?: unknown }
@@ -419,11 +419,11 @@ export class VKSessionManager {
       }
       const exportResult = payload.result ?? data
       const preview = vkImportPreview(exportResult, parsedOptions)
-      this.finishVKCheck({ state: 'connected', message: 'Успешно прочитана личная библиотека VK.' })
+      this.finishVKCheck({ state: 'connected', message: 'Успешно прочитана медиатека VK.' })
       return preview
     } catch (error) {
       if (contents.isDestroyed()) {
-        throw new Error('Окно VK закрыто. Список не сохранён. Откройте VK и повторите сбор.', {
+        throw new Error('Окно VK закрыто. Список не сохранён. Открой VK и повтори сбор.', {
           cause: error,
         })
       }
@@ -432,7 +432,7 @@ export class VKSessionManager {
         /context was destroyed|frame was disposed|object has been destroyed/i.test(error.message)
       ) {
         throw new Error(
-          'Чтение VK прервано сменой страницы. Откройте «Моя музыка» и повторите сбор.',
+          'Чтение VK прервано сменой страницы. Открой раздел «Моя музыка» и повтори сбор.',
           { cause: error },
         )
       }
@@ -462,7 +462,7 @@ export class VKSessionManager {
 
   public async clearVK(): Promise<void> {
     if (this.vkExtracting) {
-      throw new Error('Остановите сбор списка VK перед выходом из аккаунта.')
+      throw new Error('Останови сбор списка VK перед выходом из аккаунта.')
     }
     const vkSession =
       this.vkView && !this.vkView.webContents.isDestroyed()

@@ -1,9 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { formatCount, formatRecordsCount, pluralize } from '../../../../shared/ru'
 import type { ImportPreview } from '../../../../shared/types'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 interface ImportDialogProps {
   preview: ImportPreview | null
@@ -59,10 +58,17 @@ export function ImportDialog({ preview, busy, onClose, onSave }: ImportDialogPro
                 <input value={name} onChange={(e) => setName(e.target.value)} />
               </label>
               <div className="import-summary">
-                <strong>{count(totalTracks)}</strong>
-                <span>записей из {preview.origin}</span>
+                <strong>{formatCount(totalTracks)}</strong>
+                <span>
+                  {pluralize(totalTracks, ['запись', 'записи', 'записей'])} из {preview.origin}
+                </span>
               </div>
               <p className="inline-warning">{preview.completeness.message}</p>
+              {preview.origin === 'TXT' && (
+                <p className="helper-text">
+                  Формат TXT: по одной записи на строку — «Исполнитель - Название».
+                </p>
+              )}
               <p className="helper-text">
                 {totalTracks > 6 ? 'Первые три и последние три записи:' : 'Записи списка:'}
               </p>
@@ -109,7 +115,7 @@ export function ImportDialog({ preview, busy, onClose, onSave }: ImportDialogPro
                   <ShieldCheck size={16} aria-hidden="true" />
                   {reviewVK
                     ? 'Сохранить непроверенный список'
-                    : `Сохранить ${count(totalTracks)} записей`}
+                    : `Сохранить ${formatRecordsCount(totalTracks)}`}
                 </button>
               </div>
             </>

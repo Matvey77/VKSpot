@@ -130,7 +130,7 @@ export function useModalActions({
       const res = await run(
         'repair',
         () => api.repairCollection(collId, previewItem),
-        'Коллекция успешно обновлена без потери решений!',
+        'Коллекция обновлена без потери решений.',
       )
       if (res !== undefined) {
         setRepairTarget(null)

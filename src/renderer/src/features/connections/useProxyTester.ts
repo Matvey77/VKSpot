@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { humanizeError } from '../../../../shared/ru'
 import { api } from '../../state/api'
 
 export type ProxyTestOutcome = { ok: true; latencyMs: number } | { ok: false; error: string }
 
 export const PROXY_VALIDATION_ERROR =
-  'Укажите HTTP или SOCKS5 адрес прокси без логина, пароля и пути.'
+  'Укажи HTTP или SOCKS5 адрес прокси без логина, пароля и пути.'
 
 const ALLOWED_PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks5:', 'socks5h:'])
 const MAX_PROXY_LENGTH = 1000
@@ -66,16 +67,22 @@ export function useProxyTester(target: 'spotify' | 'vk') {
           setResult(
             response.value.ok
               ? { ok: true, latencyMs: response.value.latencyMs }
-              : { ok: false, error: response.value.error },
+              : {
+                  ok: false,
+                  error: humanizeError(response.value.error, 'Ошибка проверки подключения.'),
+                },
           )
         } else {
-          setResult({ ok: false, error: response.error })
+          setResult({
+            ok: false,
+            error: humanizeError(response.error, 'Ошибка проверки подключения.'),
+          })
         }
       } catch (error) {
         if (!mountedRef.current || requestId !== requestIdRef.current) return
         setResult({
           ok: false,
-          error: error instanceof Error ? error.message : 'Ошибка проверки',
+          error: humanizeError(error, 'Ошибка проверки подключения.'),
         })
       } finally {
         if (mountedRef.current && requestId === requestIdRef.current) {

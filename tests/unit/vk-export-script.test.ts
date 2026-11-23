@@ -352,4 +352,26 @@ describe('vk-export.js script execution', () => {
       }),
     ])
   })
+
+  it.each([
+    [1, '1 запись'],
+    [2, '2 записи'],
+    [5, '5 записей'],
+  ])('declines empty-metadata error count (%i -> %s) in Russian', async (count, expected) => {
+    const doc = new MockDocument()
+    const list = new MockElement(doc, 'div', { id: 'au_search_items' })
+    for (let i = 0; i < count; i++) {
+      const row = new MockElement(doc, 'div', {
+        class: 'audio_item',
+        'data-audio': JSON.stringify({ id: i + 1, owner_id: 1, artist: '', title: '' }),
+      })
+      row.top = i * 40
+      list.append(row)
+    }
+    doc.body.append(list)
+
+    const output = await runExportScript(doc)
+    expect(output.ok).toBe(false)
+    expect(output.error).toContain(`VK показал ${expected},`)
+  })
 })

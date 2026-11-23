@@ -162,7 +162,7 @@ export function parseImport(text: string, extension: string, name: string): Impo
     expected: null,
     status: 'unverified' as const,
     reason: 'file-import' as const,
-    message: 'Файл сохранён целиком. Полнота коллекции VK не подтверждена.',
+    message: 'Файл сохранён целиком. Полнота списка VK не подтверждена.',
   }
   if (extension.toLowerCase() === '.json') {
     const jsonText = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text

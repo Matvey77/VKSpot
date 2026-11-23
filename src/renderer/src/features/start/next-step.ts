@@ -1,4 +1,5 @@
 import type { CollectionSummary } from '../../../../core/library'
+import { formatCount } from '../../../../shared/ru'
 import type { JobSummary } from '../../../../shared/sync'
 import type { Collection, Settings, SpotifyBrowserState } from '../../../../shared/types'
 
@@ -66,7 +67,7 @@ export function selectNextStep({
 
   if (job?.state === 'running' || job?.state === 'pausing') {
     title = 'Поиск уже работает'
-    description = `Обработано ${job.cursor.toLocaleString('ru-RU')} из ${job.total.toLocaleString('ru-RU')}. Можно разбирать найденное.`
+    description = `Обработано ${formatCount(job.cursor)} из ${formatCount(job.total)}. Можно разбирать найденное.`
     actionLabel = 'Открыть результаты'
     action = { kind: 'library' }
   } else if (job) {

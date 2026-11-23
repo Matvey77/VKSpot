@@ -4,6 +4,7 @@ import type { Collection, Working } from '../../../../shared/types'
 import type { ViewState } from '../../../../shared/sync'
 import type { SearchResultGroup } from '../../../../core/matching'
 import { analyzeRow, type LibraryFilter } from '../../../../core/library'
+import { formatCount, formatRecordsCount, formatRecordsGenitive } from '../../../../shared/ru'
 import type { RowDraft } from '../../state/drafts'
 import ExplainedButton from '../../components/ui/ExplainedButton'
 import IconButton from '../../components/ui/IconButton'
@@ -18,7 +19,6 @@ import { useLibraryRows } from './useLibraryRows'
 import { useInspectorLayout } from './inspector/useInspectorLayout'
 
 export type Filter = LibraryFilter
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 export type Draft = RowDraft
 
@@ -151,20 +151,20 @@ export function LibraryView({
   }, [onFocusIdChange])
 
   const navigateReview = useCallback(
-    (index: number, direction: 'Предыдущая запись' | 'Следующая запись') => {
+    (index: number, action: 'prev' | 'next') => {
       const targetRow = rows[index]
       if (!targetRow) return
       handleFocusRow(targetRow.id)
       requestAnimationFrame(() => {
         const target =
           inspector.panel.current?.querySelector<HTMLButtonElement>(
-            `button[title="${direction}"]:not(:disabled)`,
+            `button[data-inspector-action="${action}"]:not(:disabled)`,
           ) ??
           inspector.panel.current?.querySelector<HTMLButtonElement>(
             '.inspector-track-navigation button:not(:disabled)',
           ) ??
           inspector.panel.current?.querySelector<HTMLButtonElement>(
-            'button[title="Закрыть запись"]',
+            'button[data-inspector-action="close"]',
           )
         target?.focus()
       })
@@ -237,7 +237,7 @@ export function LibraryView({
           <h1>{collection?.name ?? 'Твоя музыка, целиком'}</h1>
           <p>
             {collection
-              ? `${count(collection.rows.length)} записей · исходный порядок сохранён`
+              ? `${formatRecordsCount(collection.rows.length)} · исходный порядок сохранён`
               : 'Сначала сохраним исходный список. Затем выберем путь для каждой записи.'}
           </p>
         </div>
@@ -354,9 +354,9 @@ export function LibraryView({
               />
               <footer className="collection-footer">
                 <span>
-                  {count(rows.length)} из {count(effectiveCounts.all)} записей
+                  {formatCount(rows.length)} из {formatRecordsGenitive(effectiveCounts.all)}
                   {effectiveCounts.excluded > 0 && (
-                    <> · {count(effectiveCounts.excluded)} исключено, сохранено в списке</>
+                    <> · {formatCount(effectiveCounts.excluded)} исключено, сохранено в списке</>
                   )}
                 </span>
                 <span>Порядок VK сохранён</span>
@@ -375,7 +375,7 @@ export function LibraryView({
                   aria-valuemin={340}
                   aria-valuemax={800}
                   tabIndex={0}
-                  title="Потяните для изменения ширины панели"
+                  title="Потяни, чтобы изменить ширину панели"
                 />
                 <Inspector
                   key={focused.id}
@@ -394,13 +394,11 @@ export function LibraryView({
                   isOverlay={compactOverlayOpen}
                   onLayoutChange={inspector.changeLayout}
                   onPrevious={
-                    focusedIndex > 0
-                      ? () => navigateReview(focusedIndex - 1, 'Предыдущая запись')
-                      : undefined
+                    focusedIndex > 0 ? () => navigateReview(focusedIndex - 1, 'prev') : undefined
                   }
                   onNext={
                     focusedIndex < rows.length - 1
-                      ? () => navigateReview(focusedIndex + 1, 'Следующая запись')
+                      ? () => navigateReview(focusedIndex + 1, 'next')
                       : undefined
                   }
                 />

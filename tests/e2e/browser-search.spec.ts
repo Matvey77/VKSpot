@@ -466,7 +466,7 @@ test('file import starts search by default and a manual pause survives restart w
     await expect(
       page.getByRole('checkbox', { name: 'Начать поиск после сохранения', exact: true }),
     ).toBeChecked()
-    await page.getByRole('button', { name: 'Сохранить 2 записей', exact: true }).click()
+    await page.getByRole('button', { name: 'Сохранить 2 записи', exact: true }).click()
     await expect
       .poll(async () => {
         const s = await page.evaluate(() => window.vkspot.state())

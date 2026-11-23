@@ -48,11 +48,10 @@ function RepairDialogContent({
     <Dialog.Content className="dialog repair-dialog">
       <Dialog.Title className="repair-dialog-title">
         <Wrench size={22} className="brand-accent-icon" aria-hidden="true" />
-        Починить и синхронизировать коллекцию
+        Сверить и обновить список
       </Dialog.Title>
       <Dialog.Description>
-        Обновим список треков из VK для «{collection.name}» с гарантированным сохранением всех ваших
-        решений.
+        Обновим исходный список из VK для «{collection.name}» с сохранением всех твоих решений.
       </Dialog.Description>
 
       {!preview ? (

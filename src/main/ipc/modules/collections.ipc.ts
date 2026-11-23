@@ -77,7 +77,7 @@ export function registerCollectionsIpc(handler: IpcHandler, services: IpcService
     const collectionId = uuid.parse(id)
     if (jobs.isBusyWithCollection(collectionId))
       throw new Error(
-        'Перед удалением коллекции приостановите её задание и дождитесь завершения текущего запроса.',
+        'Перед удалением коллекции приостанови её задание и дождись завершения текущего запроса.',
       )
     store.deleteCollection(collectionId)
     changed()
@@ -92,7 +92,7 @@ export function registerCollectionsIpc(handler: IpcHandler, services: IpcService
     const collectionId = uuid.parse(id)
     if (jobs.isBusyWithCollection(collectionId))
       throw new Error(
-        'Перед синхронизацией приостановите задание этой коллекции и дождитесь завершения текущего запроса.',
+        'Перед синхронизацией приостанови задание этой коллекции и дождись завершения текущего запроса.',
       )
     const result = store.repairCollection(collectionId, previewSchema.parse(preview))
     changed()

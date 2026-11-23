@@ -17,6 +17,20 @@
   const limit = Number.isInteger(config.limit) && config.limit > 0 ? config.limit : null
   const maxCollectionCount = limit ? limit : rangeTo ? rangeTo : null
 
+  function formatRecordsCount(count) {
+    const n = Math.abs(Math.trunc(count))
+    const mod100 = n % 100
+    const mod10 = n % 10
+    const noun =
+      mod100 >= 11 && mod100 <= 14
+        ? 'записей'
+        : mod10 === 1
+          ? 'запись'
+          : mod10 >= 2 && mod10 <= 4
+            ? 'записи'
+            : 'записей'
+    return `${count.toLocaleString('ru-RU')} ${noun}`
+  }
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   const rowSelector =
     '.audio_row[data-full-id], .audio_row[data-audio], .audio_item[data-audio], [data-audio-id], [data-testid="MusicTrackRow"]'
@@ -318,7 +332,7 @@
     }
     if (!first)
       throw new Error(
-        'Не найдены строки музыки. Откройте «Моя музыка» и дождитесь загрузки списка. Если список виден, разметка VK не поддерживается этой версией.',
+        'Не найдены строки музыки. Открой раздел «Моя музыка» и дождись загрузки списка. Если список виден, разметка VK не поддерживается этой версией.',
       )
 
     let node = first.parentElement
@@ -414,10 +428,10 @@
           : tracks.length
       tracks = tracks.slice(startIdx, endIdx)
     }
-    if (!tracks.length) throw new Error('Сбор остановлен до чтения записей. Повторите выгрузку.')
+    if (!tracks.length) throw new Error('Сбор остановлен до чтения записей. Повтори выгрузку.')
     if (tracks.every((track) => !track.artist && !track.title))
       throw new Error(
-        `VK показал ${tracks.length} строк, но названия и исполнители не прочитаны. Пустая выгрузка не сохранена. Нужен адаптер для этой разметки VK.`,
+        `VK показал ${formatRecordsCount(tracks.length)}, но названия и исполнители не прочитаны. Пустая выгрузка не сохранена. Нужен адаптер для этой разметки VK.`,
       )
     const missingMetadata = tracks.filter((track) => !track.artist || !track.title).length
     const positioned = saved.filter((item) => item.position !== null)

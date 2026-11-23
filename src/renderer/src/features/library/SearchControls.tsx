@@ -8,10 +8,10 @@ import {
   retryDeadline,
   waitingJob,
 } from '../../../../shared/job-status'
+import { formatCount } from '../../../../shared/ru'
 import ExplainedButton from '../../components/ui/ExplainedButton'
 import useRetryClock from '../../hooks/useRetryClock'
 
-const count = (n: number) => n.toLocaleString('ru-RU')
 const SearchControls = memo(function SearchControls({
   collectionId,
   jobs,
@@ -89,8 +89,8 @@ const SearchControls = memo(function SearchControls({
           <div>
             <h2>Найти совпадения, проверить спорное</h2>
             <p>
-              Решено {count(resolved)} из {count(total)}. Названия, исходный порядок и повторы
-              сохраняются.
+              Решено {formatCount(resolved)} из {formatCount(total)}. Названия, исходный порядок и
+              повторы сохраняются.
             </p>
           </div>
         )}
@@ -106,7 +106,7 @@ const SearchControls = memo(function SearchControls({
             }
             onClick={onStart}
           >
-            <Search size={16} aria-hidden="true" /> Фоновый поиск ({count(pending)})
+            <Search size={16} aria-hidden="true" /> Фоновый поиск ({formatCount(pending)})
           </ExplainedButton>
         )}
       </div>
@@ -119,7 +119,7 @@ const SearchControls = memo(function SearchControls({
         <div className="review-progress" role="status" aria-live="polite">
           <div>
             <strong>
-              {title} · {count(job.cursor)} / {count(job.total)}
+              {title} · {formatCount(job.cursor)} / {formatCount(job.total)}
             </strong>
             {(!compact ||
               (job.state !== 'running' && job.state !== 'complete' && job.state !== 'pausing')) && (

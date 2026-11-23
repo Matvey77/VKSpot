@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowLeft, Play, RotateCcw, ExternalLink, LoaderCircle } from 'lucide-react'
+import { humanizeError } from '../../../../shared/ru'
 import type { AppState } from '../../../../shared/types'
 import { api } from '../../state/api'
 
@@ -51,13 +52,12 @@ export default function SpotifyPanel({
         .then(async () => {
           if (!alive || leavingRef.current) return
           const result = await api.showSpotifyBrowser(bounds, owner.current!)
-          if (!result.ok && alive && !leavingRef.current) setCommandError(result.error)
+          if (!result.ok && alive && !leavingRef.current)
+            setCommandError(humanizeError(result.error, 'Не удалось открыть страницу Spotify.'))
         })
         .catch((reason: unknown) => {
           if (alive && !leavingRef.current)
-            setCommandError(
-              reason instanceof Error ? reason.message : 'Не удалось открыть страницу Spotify.',
-            )
+            setCommandError(humanizeError(reason, 'Не удалось открыть страницу Spotify.'))
         })
     }
     const observer = new ResizeObserver(update)
@@ -81,11 +81,10 @@ export default function SpotifyPanel({
     setCommandError('')
     try {
       const result = await api.reloadSpotifyBrowser(owner.current!)
-      if (!result.ok) setCommandError(result.error)
+      if (!result.ok)
+        setCommandError(humanizeError(result.error, 'Не удалось обновить страницу Spotify.'))
     } catch (reason) {
-      setCommandError(
-        reason instanceof Error ? reason.message : 'Не удалось обновить страницу Spotify.',
-      )
+      setCommandError(humanizeError(reason, 'Не удалось обновить страницу Spotify.'))
     } finally {
       reloadingRef.current = false
       setReloading(false)
@@ -174,7 +173,11 @@ export default function SpotifyPanel({
           )}
           {status?.page?.state === 'error' && (
             <div className="inline-warning" role="alert">
-              <span>{status.page.message || 'Не удалось загрузить страницу Spotify.'}</span>
+              <span>
+                {status.page.message
+                  ? humanizeError(status.page.message, 'Не удалось загрузить страницу Spotify.')
+                  : 'Не удалось загрузить страницу Spotify.'}
+              </span>
               <button className="secondary" disabled={reloading} onClick={() => void reload()}>
                 {reloading ? 'Обновляем…' : 'Повторить попытку'}
               </button>

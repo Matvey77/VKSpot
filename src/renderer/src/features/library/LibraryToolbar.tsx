@@ -1,11 +1,11 @@
 import { ListFilter, Search, ShieldCheck, X } from 'lucide-react'
 import { destinationLabels as labels, type LibraryFilter } from '../../../../core/library'
 import { searchResultLabels, type SearchResultGroup } from '../../../../core/matching'
+import { formatCount } from '../../../../shared/ru'
 import { SpotifyIcon } from '../../components/brand/BrandIcons'
 import ExplainedButton from '../../components/ui/ExplainedButton'
 import IconButton from '../../components/ui/IconButton'
 
-const count = (number: number) => number.toLocaleString('ru-RU')
 const quickFilters: LibraryFilter[] = ['all', 'unresolved', 'spotify', 'local', 'excluded']
 
 export function CollectionQuickFilters({
@@ -32,7 +32,7 @@ export function CollectionQuickFilters({
           >
             {value === 'spotify' && <SpotifyIcon size={15} />}
             {labels[value]}
-            <span>{count(destinationSummary[value])}</span>
+            <span>{formatCount(destinationSummary[value])}</span>
           </button>
         ))}
       </div>
@@ -93,14 +93,13 @@ export function LibraryToolbar({
           <div className="filter-select">
             <ListFilter size={16} aria-hidden="true" />
             <select
-              aria-label="Статус записей"
+              aria-label="Решение о переносе"
               value={filter}
               onChange={(e) => onFilterChange(e.target.value as LibraryFilter)}
             >
               {Object.entries(labels).map(([key, name]) => (
                 <option key={key} value={key}>
-                  {key === 'local-pending' ? 'Нужен локальный файл' : name} (
-                  {count(destinationCounts[key as LibraryFilter])})
+                  {name} ({formatCount(destinationCounts[key as LibraryFilter])})
                 </option>
               ))}
             </select>
@@ -116,10 +115,10 @@ export function LibraryToolbar({
               onResultFilterChange(event.target.value as 'all' | SearchResultGroup)
             }
           >
-            <option value="all">Все результаты ({count(baseCount)})</option>
+            <option value="all">Все результаты ({formatCount(baseCount)})</option>
             {Object.entries(searchResultLabels).map(([group, label]) => (
               <option key={group} value={group}>
-                {label} ({count(resultCounts[group as SearchResultGroup])})
+                {label} ({formatCount(resultCounts[group as SearchResultGroup])})
               </option>
             ))}
           </select>
@@ -132,7 +131,7 @@ export function LibraryToolbar({
       </div>
       <div className="table-selection-tools">
         <button disabled={!visibleCount || busy} onClick={onSelectAllVisible}>
-          Выделить выборку ({count(visibleCount)})
+          Выделить выборку ({formatCount(visibleCount)})
         </button>
         <ExplainedButton
           hintLabel="Почему нельзя выделить совпадения"
@@ -145,7 +144,7 @@ export function LibraryToolbar({
           }
           onClick={onSelectMatches}
         >
-          Выделить совпадения ({count(matchingCount)})
+          Выделить совпадения ({formatCount(matchingCount)})
         </ExplainedButton>
         <span className="selection-help">
           Shift + клик — выделить диапазон. Подтверждаются только записи без решения.

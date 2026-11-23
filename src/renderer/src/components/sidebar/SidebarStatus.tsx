@@ -1,10 +1,10 @@
 import type { JobSummary, ViewState } from '../../../../shared/sync'
 import { jobMessage } from '../../../../shared/job-status'
+import { formatCount } from '../../../../shared/ru'
 import { SpotifyIcon, VKIcon } from '../brand/BrandIcons'
 import ExplainedButton from '../ui/ExplainedButton'
 import useRetryClock from '../../hooks/useRetryClock'
 
-const count = (value: number) => value.toLocaleString('ru-RU')
 export default function SidebarStatus({
   data,
   onSpotify,
@@ -131,7 +131,7 @@ export default function SidebarStatus({
         }
         aria-label={
           latest
-            ? `Последнее задание: ${latest.kind === 'search' ? 'Поиск Spotify' : 'Перенос'}, ${state}, ${count(latest.cursor)} из ${count(latest.total)}`
+            ? `Последнее задание: ${latest.kind === 'search' ? 'Поиск Spotify' : 'Перенос'}, ${state}, ${formatCount(latest.cursor)} из ${formatCount(latest.total)}`
             : 'Последнее задание: заданий пока нет'
         }
       >
@@ -143,7 +143,7 @@ export default function SidebarStatus({
             </span>
             <span className="sidebar-job-count">
               <span>
-                {count(latest.cursor)} / {count(latest.total)}
+                {formatCount(latest.cursor)} / {formatCount(latest.total)}
               </span>
               <span>{percent}%</span>
             </span>

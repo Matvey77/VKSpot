@@ -12,6 +12,7 @@ import {
   type TrackRow,
   type Working,
 } from '../../shared/model'
+import { formatRecordsCount } from '../../shared/ru'
 import type { CollectionMetadata, StateCursor } from '../../shared/sync'
 import { CollectionChanges } from './collection-changes'
 import type { Database } from './database'
@@ -149,7 +150,7 @@ export class CollectionRepository {
     const collection = createCollection(preview)
     validateCollection(collection)
     if (this.db.prepare('SELECT id FROM collections WHERE id=?').get(collection.id))
-      throw new Error('Этот архив уже есть в библиотеке. Повторное восстановление не требуется.')
+      throw new Error('Этот архив уже есть в коллекциях. Повторное восстановление не требуется.')
     this.db.transaction(() => {
       const { rows, ...metadata } = collection
       this.db
@@ -262,7 +263,7 @@ export class CollectionRepository {
           : {
               ...completeness,
               status: 'unverified' as const,
-              message: `${completeness.message} После сохранения прежних решений в коллекции ${rows.length} записей. Сверьте состав с VK.`,
+              message: `${completeness.message} После сохранения прежних решений в коллекции ${formatRecordsCount(rows.length)}. Сверь состав с VK.`,
             },
       sourceHash: sourceHash(rows),
       importedAt: new Date().toISOString(),
@@ -412,7 +413,7 @@ export class CollectionRepository {
     if (!Array.isArray(history)) {
       if (history.kind !== 'repair' || !history.collection)
         throw new Error(
-          'Эта старая операция синхронизации не содержит снимок для отмены. Восстановите сохранённый архив.',
+          'Эта старая операция синхронизации не содержит снимка для отмены. Восстанови сохранённый архив.',
         )
       validateCollection(history.collection)
       this.db.transaction(() => {

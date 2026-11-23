@@ -379,7 +379,7 @@ export const TrackTable = memo(function TrackTable({
                   onPointerDown={(event) => columns.startResize(column.id, event)}
                   onKeyDown={(event) => columns.resizeWithKeyboard(column.id, event)}
                   onClick={(event) => event.stopPropagation()}
-                  title="Потяните для изменения ширины столбца"
+                  title="Потяни, чтобы изменить ширину столбца"
                 />
               )}
             </div>

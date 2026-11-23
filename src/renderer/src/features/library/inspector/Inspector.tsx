@@ -173,7 +173,7 @@ export function Inspector({
             : row.working.destination === 'local'
               ? 'локальный файл'
               : row.working.localPending
-                ? 'локальный файл — ожидает привязки'
+                ? 'локальный файл (ожидает привязки)'
                 : row.working.reviewDeferred
                   ? 'разобрать позже'
                   : 'не выбрано'}
@@ -385,13 +385,19 @@ export function Inspector({
             aria-label="Переход между записями"
           >
             <IconButton
+              data-inspector-action="prev"
               title="Предыдущая запись"
               disabled={!onPrevious}
               onClick={() => onPrevious?.()}
             >
               <ChevronLeft size={17} aria-hidden="true" />
             </IconButton>
-            <IconButton title="Следующая запись" disabled={!onNext} onClick={() => onNext?.()}>
+            <IconButton
+              data-inspector-action="next"
+              title="Следующая запись"
+              disabled={!onNext}
+              onClick={() => onNext?.()}
+            >
               <ChevronRight size={17} aria-hidden="true" />
             </IconButton>
           </div>
@@ -417,7 +423,7 @@ export function Inspector({
               </button>
             </div>
           )}
-          <IconButton title="Закрыть запись" onClick={onClose}>
+          <IconButton data-inspector-action="close" title="Закрыть запись" onClick={onClose}>
             <X size={18} aria-hidden="true" />
           </IconButton>
         </div>

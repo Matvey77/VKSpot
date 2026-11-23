@@ -5,12 +5,11 @@ import {
   resumeDisabledReason,
   retryDeadline,
 } from '../../../../shared/job-status'
+import { formatCount } from '../../../../shared/ru'
 import type { ViewState } from '../../../../shared/sync'
 import ExplainedButton from '../../components/ui/ExplainedButton'
 import useRetryClock from '../../hooks/useRetryClock'
 import { PlaylistRecovery } from './PlaylistRecovery'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 interface JobsViewProps {
   data: ViewState
@@ -136,7 +135,7 @@ export function JobsView({
             )}
             <div className="job-actions">
               <span>
-                {count(job.cursor)} / {count(job.total)}
+                {formatCount(job.cursor)} / {formatCount(job.total)}
               </span>
               {job.state === 'paused' &&
                 job.kind === 'search' &&

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import type { IpcInvokeMap } from '../../shared/ipc'
+import { humanizeError, humanizeZodError } from '../../shared/ru'
 import type { Result } from '../../shared/types'
 
 type UnknownArgs<T extends unknown[]> = { [K in keyof T]: unknown }
@@ -102,12 +103,7 @@ export function createHandler(main: BrowserWindow, options: HandlerOptions = {})
           console.error(`[IPC Error: ${name}]`, error)
           return {
             ok: false,
-            error:
-              error instanceof z.ZodError
-                ? `Некорректные данные (${error.issues.map((i) => `${i.path.join('.') || 'корень'}: ${i.message}`).join(', ')})`
-                : error instanceof Error
-                  ? error.message
-                  : 'Не удалось выполнить действие.',
+            error: error instanceof z.ZodError ? humanizeZodError(error) : humanizeError(error),
           }
         }
       },

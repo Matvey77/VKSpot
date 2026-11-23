@@ -10,6 +10,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { formatRecordsCount } from '../../../../shared/ru'
 import type { Collection } from '../../../../shared/types'
 
 export type ExportFormat = 'archive' | 'raw-json' | 'csv' | 'm3u8' | 'plan'
@@ -79,21 +80,19 @@ export default function CollectionOptions({
           </Dialog.Description>
           <div className="collection-options-context">
             <strong>{collection.name}</strong>
-            <span>
-              {collection.rows.length.toLocaleString('ru-RU')} записей · исходный порядок сохранён
-            </span>
+            <span>{formatRecordsCount(collection.rows.length)} · исходный порядок сохранён</span>
           </div>
           <h3>Сохранить на компьютер</h3>
           <div className="collection-export-options">
             {formats.map((format) => (
               <Dialog.Close asChild key={format.value}>
                 <button type="button" disabled={busy} onClick={() => onExport(format.value)}>
-                  <format.icon size={20} />
+                  <format.icon size={20} aria-hidden="true" />
                   <span>
                     <strong>{format.name}</strong>
                     <small>{format.detail}</small>
                   </span>
-                  <Download size={16} />
+                  <Download size={16} aria-hidden="true" />
                 </button>
               </Dialog.Close>
             ))}
@@ -105,14 +104,14 @@ export default function CollectionOptions({
             <span>Удаление коллекции нельзя отменить.</span>
             <Dialog.Close asChild>
               <button type="button" disabled={busy} onClick={onDelete}>
-                <Trash2 size={15} />
+                <Trash2 size={15} aria-hidden="true" />
                 Удалить коллекцию
               </button>
             </Dialog.Close>
           </div>
           <Dialog.Close asChild>
             <button type="button" className="dialog-close" aria-label="Закрыть параметры коллекции">
-              <X size={18} />
+              <X size={18} aria-hidden="true" />
             </button>
           </Dialog.Close>
         </Dialog.Content>

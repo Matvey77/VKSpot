@@ -1,21 +1,27 @@
-import type { ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
-interface IconButtonProps {
+interface IconButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'children' | 'title' | 'aria-label'
+> {
   children: ReactNode
   title: string
-  onClick: () => void
-  disabled?: boolean
-  className?: string
 }
 
-export function IconButton({ children, title, onClick, disabled, className }: IconButtonProps) {
+export function IconButton({
+  children,
+  title,
+  className,
+  type = 'button',
+  ...rest
+}: IconButtonProps) {
   return (
     <button
+      type={type}
       className={`icon-button ${className ?? ''}`.trim()}
       aria-label={title}
       title={title}
-      onClick={onClick}
-      disabled={disabled}
+      {...rest}
     >
       {children}
     </button>

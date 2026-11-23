@@ -80,9 +80,9 @@ test('overview scopes review queues, collection exports keep their owner and set
       .locator('.overview-review-list')
       .getByRole('button', { name: /Нужен локальный файл/ })
       .click()
-    await expect(page.getByRole('combobox', { name: 'Статус записей', exact: true })).toHaveValue(
-      'local-pending',
-    )
+    await expect(
+      page.getByRole('combobox', { name: 'Решение о переносе', exact: true }),
+    ).toHaveValue('local-pending')
     await expect(page.getByRole('row', { name: 'Запись 4: File', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Коллекции', exact: true }).click()
     const exportOptions = [

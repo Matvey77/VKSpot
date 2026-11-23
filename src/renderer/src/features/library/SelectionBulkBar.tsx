@@ -1,9 +1,8 @@
 import { Ban, CheckCheck, Clock, FileAudio, ListPlus, RefreshCw, RotateCcw, X } from 'lucide-react'
+import { formatCount } from '../../../../shared/ru'
 import type { Working } from '../../../../shared/types'
 import ExplainedButton from '../../components/ui/ExplainedButton'
 import IconButton from '../../components/ui/IconButton'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 export function SelectionBulkBar({
   selectedCount,
@@ -31,13 +30,13 @@ export function SelectionBulkBar({
   return (
     <div className="selection-bar">
       <span>
-        Выбрано {count(selectedCount)}
-        {hiddenSelected > 0 && <> · вне выборки {count(hiddenSelected)}</>}
+        Выбрано {formatCount(selectedCount)}
+        {hiddenSelected > 0 && <> · вне выборки {formatCount(hiddenSelected)}</>}
       </span>
       <ExplainedButton
         className="primary"
         hintLabel="Почему нельзя подтвердить выбранные совпадения"
-        hint="Подтверждаешь только выделенные записи. Название, исполнители и длительность совпадают; это сверка описаний, а не аудио. Группу можно отменить."
+        hint="Подтверждаешь только выделенные записи. Название, исполнители и длительность совпадают; это сверка описаний, а не аудио. Массовое подтверждение можно отменить одной кнопкой."
         reason={
           busy
             ? 'Дождись завершения текущего действия.'
@@ -48,7 +47,7 @@ export function SelectionBulkBar({
         onClick={onConfirmSelection}
       >
         <CheckCheck size={14} aria-hidden="true" />
-        Подтвердить выбранные ({count(selectedMatches)})
+        Подтвердить выбранные ({formatCount(selectedMatches)})
       </ExplainedButton>
       <div className="selection-decisions" role="group" aria-label="Решения для выбранных записей">
         <button

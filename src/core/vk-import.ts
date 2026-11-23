@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { rawTrackSchema } from '../shared/model'
+import { formatCount, formatRecordsGenitive } from '../shared/ru'
 import type { CompletenessReason, ImportPreview } from '../shared/types'
 
 export const vkExportOptionsSchema = z
@@ -98,17 +99,22 @@ export function vkImportPreview(
   }
   const details = [reasons[data.extraction.reason]]
   if (expected !== null)
-    details.push(`Собрано ${data.tracks.length} из ожидаемых ${expected} записей.`)
+    details.push(
+      `Собрано ${formatCount(data.tracks.length)} из ожидаемых ${formatRecordsGenitive(expected)}.`,
+    )
   else details.push('Счётчик общего числа записей в разметке VK не указан.')
-  if (conflictingCount)
-    details.push(`VK сообщает другое число: ${data.expectedCount}. Проверьте выбранный список.`)
-  if (missing) details.push(`У ${missing} записей не прочитано название или исполнитель.`)
+  if (conflictingCount && data.expectedCount !== null)
+    details.push(
+      `VK сообщает другое число: ${formatCount(data.expectedCount)}. Проверь выбранный список.`,
+    )
+  if (missing)
+    details.push(`У ${formatRecordsGenitive(missing)} не прочитано название или исполнитель.`)
   details.push(
     verified
       ? isPartialRange
         ? 'Выбранный диапазон успешно собран.'
-        : 'Количество совпало. Сверьте первые и последние записи с VK.'
-      : 'Рекомендуем сверить количество с «Моя музыка» в VK.',
+        : 'Количество совпало. Сверь первые и последние записи с VK.'
+      : 'Сверь количество с разделом «Моя музыка» в VK.',
   )
   const completenessReason: CompletenessReason = verified
     ? 'verified'

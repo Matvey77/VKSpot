@@ -9,6 +9,7 @@ import {
   Upload,
 } from 'lucide-react'
 import type { Collection } from '../../../../shared/types'
+import { formatCount, formatRecordsCount } from '../../../../shared/ru'
 import type { ViewState } from '../../../../shared/sync'
 import { summarizeCollection, type LibraryFilter } from '../../../../core/library'
 import type { SearchResultGroup } from '../../../../core/matching'
@@ -198,13 +199,13 @@ export default function StartPage({
           <section className="overview-review" aria-label="Состояние коллекции">
             <div className="overview-section-heading">
               <h2>Разбор коллекции</h2>
-              <span>{rows.length.toLocaleString('ru-RU')} записей</span>
+              <span>{formatRecordsCount(rows.length)}</span>
             </div>
             <div className="overview-readiness">
               <div>
                 <strong>Готово к переносу</strong>
                 <span>
-                  {ready.toLocaleString('ru-RU')} из {included.toLocaleString('ru-RU')}
+                  {formatCount(ready)} из {formatCount(included)}
                 </span>
               </div>
               <progress
@@ -213,9 +214,9 @@ export default function StartPage({
                 aria-label="Готовность коллекции к переносу"
               />
               <p>
-                Spotify: {summary.destinations.spotify.toLocaleString('ru-RU')} · Локальные файлы:{' '}
-                {summary.destinations.local.toLocaleString('ru-RU')} · Исключено:{' '}
-                {summary.destinations.excluded.toLocaleString('ru-RU')}
+                Spotify: {formatCount(summary.destinations.spotify)} · Локальные файлы:{' '}
+                {formatCount(summary.destinations.local)} · Исключено:{' '}
+                {formatCount(summary.destinations.excluded)}
               </p>
             </div>
             <div className="overview-review-list">
@@ -230,7 +231,7 @@ export default function StartPage({
                     <strong>{queue.name}</strong>
                     <small>{queue.description}</small>
                   </span>
-                  <b>{queue.count.toLocaleString('ru-RU')}</b>
+                  <b>{formatCount(queue.count)}</b>
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
               ))}

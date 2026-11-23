@@ -44,7 +44,7 @@ describe('transactional collection storage', () => {
       expect(store.undo(id)).toBe(false)
       expect(() =>
         store.import(parseImport(exportText(store.get(id), 'archive'), '.json', 'Test')),
-      ).toThrow('уже')
+      ).toThrow('уже есть в коллекциях')
     } finally {
       store.close()
     }
@@ -210,6 +210,12 @@ describe('transactional collection storage', () => {
       expect(repaired.rows[0].working.note).toBe('Original vinyl master')
       expect(repaired.rows[1].working.destination).toBe('unresolved')
       expect(repaired.rows[1].source.title).toBe('Heroes')
+
+      // Repair omitting a decided row retains it and declines the resulting collection size
+      store.repairCollection(id1, parseImport('David Bowie - Heroes', '.txt', 'Trimmed'))
+      expect(store.get(id1).completeness.message).toContain(
+        'в коллекции 2 записи. Сверь состав с VK.',
+      )
 
       // Delete collection
       store.deleteCollection(id3)

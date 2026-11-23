@@ -1,3 +1,4 @@
+import { formatCount, formatRecordsCount } from '../../shared/ru'
 import type { Collection, PlanItem } from '../../shared/types'
 
 export function makePlan(collection: Collection): PlanItem[] {
@@ -28,7 +29,7 @@ export function makePlan(collection: Collection): PlanItem[] {
           local: w.local,
         }
       throw new Error(
-        `Запись №${r.position} «${w.title}» не готова. Выберите совпадение, локальный файл или отметьте «исключить».`,
+        `Запись №${r.position} «${w.title}» не готова. Выбери совпадение, локальный файл или отметь «Исключить».`,
       )
     })
 }
@@ -44,7 +45,7 @@ export function reconcilePrefix(expected: string[], actual: string[]): number {
 export function mixedOrder(plan: PlanItem[], actual: string[]): string[] {
   if (actual.length !== plan.length)
     throw new Error(
-      `В плейлисте ${actual.length} записей, в плане ${plan.length}. Добавьте все локальные записи, включая повторы, и удалите посторонние записи.`,
+      `В плейлисте ${formatRecordsCount(actual.length)}, в плане — ${formatCount(plan.length)}. Добавь все локальные записи, включая повторы, и удали посторонние записи.`,
     )
   const norm = (s: string) => s.normalize('NFC').trim().toLowerCase()
   const decode = (s: string): string | null => {
@@ -76,7 +77,7 @@ export function mixedOrder(plan: PlanItem[], actual: string[]): string[] {
     })
     if (index < 0)
       throw new Error(
-        `Не удалось однозначно связать запись №${item.position} с плейлистом. Для локальных файлов нужны корректные теги исполнителя, названия и длительность. Сверьте запись вручную; перестановка не начата.`,
+        `Не удалось однозначно связать запись №${item.position} с плейлистом. Для локальных файлов нужны корректные теги исполнителя, названия и длительность. Сверь запись вручную; перестановка не начата.`,
       )
     used.add(index)
     return actual[index]

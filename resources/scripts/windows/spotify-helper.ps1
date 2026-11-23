@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $processes = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }
-if (-not $processes) { throw 'Откройте приложение Spotify и повторите.' }
+if (-not $processes) { throw 'Открой приложение Spotify и повтори.' }
 $window = [System.Windows.Automation.AutomationElement]::FromHandle($processes[0].MainWindowHandle)
 if ($Action -eq 'inspect') {
   $controlType = [System.Windows.Automation.AutomationElement]::ControlTypeProperty

@@ -34,7 +34,7 @@ function sanitizeHelperError(error: unknown): Error {
     stderr?: string | Buffer
   }
   if (err?.killed || err?.signal === 'SIGTERM' || err?.code === 'ETIMEDOUT') {
-    return new Error('Системный помощник не ответил вовремя. Повторите проверку.', { cause: error })
+    return new Error('Системный помощник не ответил вовремя. Повтори проверку.', { cause: error })
   }
   const rawStderr =
     typeof err?.stderr === 'string'
@@ -61,7 +61,8 @@ function sanitizeHelperError(error: unknown): Error {
         !line.startsWith('CategoryInfo') &&
         !line.startsWith('FullyQualifiedErrorId'),
     )
-  return new Error(firstLine || 'Не удалось выполнить системную проверку Spotify.', {
+  const russianLine = firstLine && /[А-Яа-яЁё]/.test(firstLine) ? firstLine : ''
+  return new Error(russianLine || 'Не удалось выполнить системную проверку Spotify.', {
     cause: error,
   })
 }
@@ -115,7 +116,7 @@ export async function previewImportDialog(main: BrowserWindow): Promise<ImportPr
   const filePath = filePaths[0]
   const stat = await fs.stat(filePath)
   if (!stat.isFile()) {
-    throw new Error('Выберите обычный файл для импорта.')
+    throw new Error('Выбери обычный файл для импорта.')
   }
   if (stat.size > MAX_IMPORT_BYTES) {
     throw new Error('Файл слишком большой для импорта (максимум 100 МБ).')
@@ -165,10 +166,10 @@ export async function linkFileDialog(
   const path = result.filePaths[0]
   const stat = await fs.lstat(path)
   if (stat.isSymbolicLink() || !stat.isFile()) {
-    throw new Error('Выберите обычный аудиофайл, а не символическую ссылку или папку.')
+    throw new Error('Выбери обычный аудиофайл, а не символическую ссылку или папку.')
   }
   if (!localExtensions.has(extname(path).toLowerCase())) {
-    throw new Error('Выберите аудиофайл поддерживаемого формата.')
+    throw new Error('Выбери аудиофайл поддерживаемого формата.')
   }
   const { parseFile } = await import('music-metadata')
   const metadata = await parseFile(path, { skipCovers: true })
@@ -228,7 +229,7 @@ export async function prepareLocalDialog(
       stat = await fs.lstat(file.path)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        throw new Error(`Файл записи №${item.position} не найден. Привяжите его заново.`, {
+        throw new Error(`Файл записи №${item.position} не найден. Привяжи его заново.`, {
           cause: error,
         })
       }
@@ -236,13 +237,13 @@ export async function prepareLocalDialog(
     }
     if (stat.isSymbolicLink() || !stat.isFile()) {
       throw new Error(
-        `Файл записи №${item.position} недоступен или является символической ссылкой. Привяжите его заново.`,
+        `Файл записи №${item.position} недоступен или является символической ссылкой. Привяжи его заново.`,
       )
     }
     const hash = createHash('sha256')
     for await (const chunk of createReadStream(file.path)) hash.update(chunk)
     if (hash.digest('hex') !== file.sha256) {
-      throw new Error(`Файл записи №${item.position} изменился. Привяжите его заново.`)
+      throw new Error(`Файл записи №${item.position} изменился. Привяжи его заново.`)
     }
     const filename = `${String(item.position).padStart(6, '0')}-${item.rowId.slice(0, 8)}${extension}`
     const target = join(folder, filename)
@@ -253,7 +254,7 @@ export async function prepareLocalDialog(
       const existing = createHash('sha256')
       for await (const chunk of createReadStream(target)) existing.update(chunk)
       if (existing.digest('hex') !== file.sha256) {
-        throw new Error('В папке уже есть другой файл с этим именем. Выберите новую папку.', {
+        throw new Error('В папке уже есть другой файл с этим именем. Выбери новую папку.', {
           cause: e,
         })
       }
@@ -287,7 +288,7 @@ export async function prepareLocalDialog(
   )
   await writeFileAtomically(
     join(folder, 'READ_ME.txt'),
-    'VKSpot: файлы скопированы без перекодирования. Исходные файлы не изменены.\nПодключите эту папку в настройках Spotify → Локальные файлы. Добавьте записи в плейлист. transfer-plan.json содержит полный смешанный порядок.\nИмена файлов обозначают позиции; они не заменяют встроенные теги. Мобильное устройство требует отдельной копии файлов.\n',
+    'VKSpot: файлы скопированы без перекодирования. Исходные файлы не изменены.\nПодключи эту папку в настройках Spotify → Локальные файлы. Добавь записи в плейлист. transfer-plan.json содержит полный смешанный порядок.\nИмена файлов обозначают позиции; они не заменяют встроенные теги. Мобильное устройство требует отдельной копии файлов.\n',
   )
   return folder
 }
@@ -299,7 +300,7 @@ export async function executeSpotifyHelper(action: unknown): Promise<string> {
       await shell.openExternal('spotify:')
       return 'Spotify открыт.'
     } catch (error) {
-      throw new Error('Не удалось открыть Spotify. Установите настольное приложение Spotify.', {
+      throw new Error('Не удалось открыть Spotify. Установи настольное приложение Spotify.', {
         cause: error,
       })
     }

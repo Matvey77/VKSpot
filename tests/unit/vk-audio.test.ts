@@ -208,4 +208,20 @@ describe('VK audio personal-library navigation', () => {
     expect(mockWebContents.loadURL).toHaveBeenCalledTimes(4)
     player.close()
   })
+
+  it('translates Chromium network errors during playback without leaking raw ERR_* codes', async () => {
+    mockWebContents.loadURL.mockRejectedValueOnce(new Error('net::ERR_PROXY_CONNECTION_FAILED'))
+    const player = new VKAudioPlayer(host)
+    const proxyResult = await player.play({ artist: 'Artist', title: 'Track' })
+    expect(proxyResult.playing).toBe(false)
+    expect(proxyResult.error).toContain('прокси')
+    expect(proxyResult.error).not.toContain('ERR_')
+
+    mockWebContents.loadURL.mockRejectedValueOnce(new Error('net::ERR_TIMED_OUT'))
+    const timeoutResult = await player.play({ artist: 'Artist', title: 'Track' })
+    expect(timeoutResult.playing).toBe(false)
+    expect(timeoutResult.error).toContain('вовремя')
+    expect(timeoutResult.error).not.toContain('ERR_')
+    player.close()
+  })
 })

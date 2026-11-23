@@ -1,8 +1,7 @@
 import { Check } from 'lucide-react'
 import { useState } from 'react'
+import { formatCount, formatRecordsGenitive } from '../../../../shared/ru'
 import type { Collection, ImportPreview } from '../../../../shared/types'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 interface RepairPreviewConfirmProps {
   collection: Collection
@@ -32,38 +31,39 @@ export function RepairPreviewConfirm({
         </div>
         <div className="repair-preview-grid">
           <div>
-            В коллекции сейчас: <strong>{count(collection.rows.length)}</strong>
+            В коллекции сейчас: <strong>{formatCount(collection.rows.length)}</strong>
           </div>
           <div>
             {preview.range ? (
               <>
                 Обновляемый диапазон:{' '}
                 <strong>
-                  с {preview.range.from} по {preview.range.to} ({count(preview.tracks.length)})
+                  с {preview.range.from} по {preview.range.to} ({formatCount(preview.tracks.length)}
+                  )
                 </strong>
               </>
             ) : (
               <>
-                В новом списке: <strong>{count(preview.tracks.length)}</strong>
+                В новом списке: <strong>{formatCount(preview.tracks.length)}</strong>
               </>
             )}
           </div>
           <div>
-            Будет сохранено решений: <strong>~{count(resolvedCount)}</strong>
+            Будет сохранено решений: <strong>~{formatCount(resolvedCount)}</strong>
           </div>
           <div>
             {preview.range ? (
               <>
                 Остаётся без изменений:{' '}
                 <strong>
-                  {count(Math.max(0, collection.rows.length - preview.tracks.length))}
+                  {formatCount(Math.max(0, collection.rows.length - preview.tracks.length))}
                 </strong>
               </>
             ) : (
               <>
-                Новых треков:{' '}
+                Новых записей:{' '}
                 <strong className="repair-new-tracks-count">
-                  +{count(Math.max(0, preview.tracks.length - collection.rows.length))}
+                  +{formatCount(Math.max(0, preview.tracks.length - collection.rows.length))}
                 </strong>
               </>
             )}
@@ -72,15 +72,18 @@ export function RepairPreviewConfirm({
       </div>
 
       <div className="repair-preview-note">
-        ✓ Все подтверждённые совпадения Spotify, привязанные файлы и исключения останутся в силе.
-        Новые найденные треки добавятся со статусом «Нужен выбор».
+        <Check size={15} aria-hidden="true" />
+        <span>
+          Все подтверждённые совпадения Spotify, привязанные файлы и исключения останутся в силе.
+          Новые записи из VK добавятся со статусом «Нужен выбор».
+        </span>
       </div>
 
       <label className="check-field repair-confirm-check">
         <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
         <span>
           Подтверждаю синхронизацию коллекции «{collection.name}» с новым списком из{' '}
-          {count(preview.tracks.length)} треков
+          {formatRecordsGenitive(preview.tracks.length)}
         </span>
       </label>
 

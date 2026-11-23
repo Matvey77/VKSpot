@@ -71,7 +71,7 @@ export default function App() {
           <div className="activity" role="status">
             <LoaderCircle className="spinning" size={15} aria-hidden="true" />
             {busy === 'extract'
-              ? 'Собираем строки VK. Это может занять время…'
+              ? 'Собираем записи из VK. Это может занять время…'
               : busy === 'connect'
                 ? 'Подтверди вход в браузере…'
                 : 'Выполняется…'}

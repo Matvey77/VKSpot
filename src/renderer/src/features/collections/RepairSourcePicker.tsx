@@ -1,9 +1,13 @@
 import { CheckCircle2, LoaderCircle, RefreshCw, SlidersHorizontal, Upload } from 'lucide-react'
 import { useState } from 'react'
+import {
+  formatCount,
+  formatRecordsCount,
+  formatRecordsGenitive,
+  pluralize,
+} from '../../../../shared/ru'
 import type { VKExportProgress, VKStatus } from '../../../../shared/types'
 import { VKIcon } from '../../components/brand/BrandIcons'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 function parsePositiveInt(raw: string, max = 1_000_000): number | null {
   const trimmed = raw.trim()
@@ -60,23 +64,26 @@ export function RepairSourcePicker({
     <div className="repair-dialog-body">
       <div className="repair-current-box">
         <div className="repair-current-title">
-          Текущее состояние: {count(totalCount)} записей ({count(resolvedCount)} с решениями)
+          Текущее состояние: {formatRecordsCount(totalCount)} ({formatCount(resolvedCount)} с
+          решениями)
         </div>
         <div className="repair-current-desc">
-          Если прошлая выгрузка пропустила часть аудиозаписей из-за скролла VK или выгрузила их не
-          полностью, запустите выгрузку заново или укажите файл списка. Все подтверждённые треки
-          Spotify, локальные файлы, пометки и исключения перенесутся автоматически!
+          Если прошлый сбор пропустил часть списка при прокрутке VK или сохранился не полностью,
+          запусти выгрузку заново или укажи файл. Подтверждённые треки Spotify, локальные файлы,
+          заметки и исключения сохранятся.
         </div>
       </div>
 
       {isExtracting ? (
         <div className="repair-extracting-box">
           <LoaderCircle className="spinning" size={28} aria-hidden="true" />
-          <div className="repair-extracting-title">Выгружаем аудиозаписи из VK Музыки…</div>
+          <div className="repair-extracting-title">Выгружаем записи из «Моей музыки» VK…</div>
           <div className="repair-extracting-desc">
-            Собрано <strong>{count(vkProgress?.collected ?? 0)}</strong> записей
-            {vkProgress?.expected ? ` из ${count(vkProgress.expected)}` : ''} ·{' '}
-            {vkProgress?.message ?? 'Прокручиваем список…'}
+            Собрано: <strong>{formatCount(vkProgress?.collected ?? 0)}</strong>
+            {vkProgress?.expected
+              ? ` из ${formatRecordsGenitive(vkProgress.expected)}`
+              : ` ${pluralize(vkProgress?.collected ?? 0, ['запись', 'записи', 'записей'])}`}{' '}
+            · {vkProgress?.message ?? 'Прокручиваем список…'}
           </div>
           <button type="button" className="repair-extract-cancel" onClick={onCancelVKExtraction}>
             Остановить выгрузку
@@ -103,10 +110,10 @@ export function RepairSourcePicker({
                 </div>
                 <div className="repair-status-desc">
                   {isVKConnected
-                    ? 'Раздел «Моя музыка» открыт. Нажмите кнопку сбора, чтобы обновить список.'
+                    ? 'Раздел «Моя музыка» открыт. Нажми кнопку выгрузки ниже, чтобы обновить список.'
                     : vkStatus?.state === 'sign-in'
-                      ? 'В открытом окне VK авторизуйтесь и перейдите в «Моя музыка».'
-                      : 'Убедитесь, что в окне VK открыт раздел «Моя музыка», затем нажмите «Выгрузить из VK заново».'}
+                      ? 'В открытом окне VK авторизуйся и перейди в раздел «Моя музыка».'
+                      : 'Открой в окне VK раздел «Моя музыка» и нажми кнопку выгрузки ниже.'}
                 </div>
               </div>
             </div>
@@ -122,14 +129,14 @@ export function RepairSourcePicker({
                   className={`range-tab-btn ${rangeMode === 'all' ? 'active' : ''}`}
                   onClick={() => setRangeMode('all')}
                 >
-                  Вся библиотека
+                  Вся медиатека VK
                 </button>
                 <button
                   type="button"
                   className={`range-tab-btn ${rangeMode === 'firstN' ? 'active' : ''}`}
                   onClick={() => setRangeMode('firstN')}
                 >
-                  Первые N треков
+                  Первые N записей
                 </button>
                 <button
                   type="button"
@@ -147,12 +154,12 @@ export function RepairSourcePicker({
                     type="number"
                     min={1}
                     max={100000}
-                    aria-label="Количество первых треков"
+                    aria-label="Количество первых записей"
                     value={firstNInput}
                     onChange={(e) => setFirstNInput(e.target.value)}
                     className="range-input"
                   />
-                  <span>треков</span>
+                  <span>{pluralize(firstNValue ?? 0, ['запись', 'записи', 'записей'])}</span>
                   <div className="range-presets">
                     {[50, 100, 200, 500].map((num) => (
                       <button
@@ -170,7 +177,7 @@ export function RepairSourcePicker({
 
               {rangeMode === 'custom' && (
                 <div className="range-controls-row">
-                  <span>С трека №:</span>
+                  <span>С записи №:</span>
                   <input
                     type="number"
                     min={1}
@@ -193,14 +200,14 @@ export function RepairSourcePicker({
 
               <div className="range-hint">
                 {rangeMode === 'all'
-                  ? 'Будет прокручена вся библиотека VK до последней записи.'
+                  ? 'Будет прокручена вся медиатека VK до последней записи.'
                   : rangeMode === 'firstN'
                     ? firstNValue !== null
-                      ? `Выгрузка остановится сразу после сбора указанного диапазона (${firstNValue} треков) — это займёт пару секунд.`
-                      : 'Укажите целое число от 1 до 100 000.'
+                      ? `Выгрузка остановится сразу после сбора указанного диапазона (${formatRecordsCount(firstNValue)}) — это займёт пару секунд.`
+                      : 'Укажи целое число от 1 до 100 000.'
                     : validCustomRange
-                      ? `Выгрузка остановится сразу после сбора указанного диапазона (${rangeToValue - rangeFromValue + 1} треков) — это займёт пару секунд.`
-                      : 'Укажите корректный диапазон: начало не меньше 1 и конец не меньше начала.'}
+                      ? `Выгрузка остановится сразу после сбора указанного диапазона (${formatRecordsCount(rangeToValue - rangeFromValue + 1)}) — это займёт пару секунд.`
+                      : 'Укажи корректный диапазон: начало не меньше 1 и конец не меньше начала.'}
               </div>
             </div>
 
@@ -225,17 +232,21 @@ export function RepairSourcePicker({
               >
                 <RefreshCw size={15} aria-hidden="true" />
                 {rangeMode === 'all'
-                  ? 'Выгрузить всю библиотеку'
+                  ? 'Выгрузить всю медиатеку'
                   : rangeMode === 'firstN'
-                    ? `Выгрузить первые ${firstNValue ?? '…'} треков`
-                    : `Выгрузить треки ${rangeFromValue ?? '…'}–${rangeToValue ?? '…'}`}
+                    ? firstNValue === null
+                      ? 'Выгрузить первые … записей'
+                      : firstNValue === 1
+                        ? 'Выгрузить первую запись'
+                        : `Выгрузить первые ${formatRecordsCount(firstNValue)}`
+                    : `Выгрузить записи ${rangeFromValue ?? '…'}–${rangeToValue ?? '…'}`}
               </button>
               <button
                 type="button"
                 className="repair-vk-open-btn"
                 disabled={!!busy}
                 onClick={onOpenVK}
-                title="Показать или открыть окно VK Музыки"
+                title="Показать или открыть окно VK"
               >
                 <VKIcon size={16} />
                 {isVKConnected ? 'Окно VK' : 'Показать окно VK'}
@@ -248,7 +259,7 @@ export function RepairSourcePicker({
           <div className="repair-file-box">
             <div>
               <div className="repair-file-title">Файл списка (JSON / CSV / TXT)</div>
-              <div className="repair-file-desc">Импортируйте полный список из файла</div>
+              <div className="repair-file-desc">Импортируй полный список из файла</div>
             </div>
             <button type="button" disabled={!!busy} onClick={onSelectFile}>
               <Upload size={15} aria-hidden="true" />

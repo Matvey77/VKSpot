@@ -11,12 +11,11 @@ import {
   X,
 } from 'lucide-react'
 import { summarizeCollection } from '../../../../core/library'
+import { formatCount, pluralize } from '../../../../shared/ru'
 import type { Collection, MatchingRules } from '../../../../shared/types'
 import { VKIcon } from '../../components/brand/BrandIcons'
 import IconButton from '../../components/ui/IconButton'
 import CollectionOptions, { type ExportFormat } from './CollectionOptions'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 function formatDate(iso: string): string {
   try {
@@ -142,6 +141,7 @@ export function CollectionCard({
                 type="button"
                 className="primary collection-rename-btn"
                 aria-label="Сохранить название"
+                title="Сохранить название"
                 disabled={!!busy || !editName.trim()}
                 onClick={() => onSaveRename(c.id)}
               >
@@ -151,6 +151,7 @@ export function CollectionCard({
                 type="button"
                 className="collection-rename-btn"
                 aria-label="Отменить переименование"
+                title="Отменить переименование"
                 onClick={onCancelRename}
               >
                 <X size={14} aria-hidden="true" />
@@ -175,7 +176,8 @@ export function CollectionCard({
 
         <div className="collection-meta-line">
           <span>
-            <strong>{count(total)}</strong> записей
+            <strong>{formatCount(total)}</strong>{' '}
+            {pluralize(total, ['запись', 'записи', 'записей'])}
           </span>
           <span className="dot">•</span>
           <span>Импортировано {formatDate(c.importedAt)}</span>
@@ -186,17 +188,17 @@ export function CollectionCard({
             <div
               className="segmented-part spotify"
               style={{ width: `${spotifyPct}%` }}
-              title={`Выбрано Spotify: ${count(spotifyCount)} (${Math.round(spotifyPct)}%)`}
+              title={`Выбрано Spotify: ${formatCount(spotifyCount)} (${Math.round(spotifyPct)}%)`}
             />
             <div
               className="segmented-part local"
               style={{ width: `${localPct}%` }}
-              title={`Нужен локальный файл: ${count(localPending)} (${Math.round(localPct)}%)`}
+              title={`Нужен локальный файл: ${formatCount(localPending)} (${Math.round(localPct)}%)`}
             />
             <div
               className="segmented-part review"
               style={{ width: `${reviewPct}%` }}
-              title={`Требует проверки: ${count(reviewVersions)} (${Math.round(reviewPct)}%)`}
+              title={`Требует проверки: ${formatCount(reviewVersions)} (${Math.round(reviewPct)}%)`}
             />
           </div>
 
@@ -204,18 +206,18 @@ export function CollectionCard({
             {spotifyCount > 0 && (
               <span className="legend-item">
                 <span className="legend-dot spotify" />
-                {count(spotifyCount)} выбрано в Spotify
+                {formatCount(spotifyCount)} выбрано в Spotify
               </span>
             )}
             {reviewVersions > 0 && (
               <span className="legend-item">
                 <span className="legend-dot review" />
-                {count(reviewVersions)} проверить
+                {formatCount(reviewVersions)} проверить
               </span>
             )}
             <span className="legend-item">
               <span className="legend-dot resolved" />
-              {count(resolved)} решено
+              {formatCount(resolved)} решено
             </span>
           </div>
         </div>
@@ -230,7 +232,7 @@ export function CollectionCard({
           type="button"
           className="repair-btn"
           onClick={() => onRepair(c)}
-          title="Сверить исходный список без потери решений"
+          title="Сверить и обновить исходный список без потери решений"
         >
           <Wrench size={14} aria-hidden="true" />
           Сверить список

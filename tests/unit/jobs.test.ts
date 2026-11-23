@@ -46,7 +46,7 @@ describe('background collection search', () => {
       job.state = 'paused'
       store.putJob(job)
       connected = false
-      expect(() => jobs.resume(job.id)).toThrow('Подключите Spotify')
+      expect(() => jobs.resume(job.id)).toThrow('Подключи Spotify')
       connected = true
       expect(jobs.resume(job.id)).toBeUndefined()
       expect(store.job(job.id).state).toBe('running')
@@ -246,6 +246,59 @@ describe('migration recovery', () => {
       store.close()
     }
   })
+
+  it('declines remaining local record counts in transfer completion messages', async () => {
+    const store = new Store(':memory:')
+    try {
+      const id = store.import(parseImport('A - Spot\nB - Loc1\nC - Loc2', '.txt', 'LocalMsg'))
+      const rows = store.get(id).rows
+      const uri = 'spotify:track:' + 'a'.repeat(22)
+      const localFile = {
+        path: 'D:/local.mp3',
+        sha256: 'hash',
+        artist: 'B',
+        title: 'Loc1',
+        duration: 180,
+        codec: 'MP3',
+        bitrate: null,
+        size: 100,
+      }
+      store.patch(id, [rows[0].id], {
+        destination: 'spotify',
+        spotify: { uri, title: 'Spot', artists: ['A'], album: '', url: '', duration: 180 },
+      })
+      store.patch(id, [rows[1].id], { destination: 'local', local: localFile })
+      store.patch(id, [rows[2].id], { destination: 'local', local: localFile })
+
+      const fake = {
+        connected: () => true,
+        playlistItems: async () => [uri],
+        request: async (_path: string, method: string) => (method === 'POST' ? { id: 'pl-1' } : {}),
+      } as unknown as Spotify
+      const jobs = new Jobs(store, fake, () => {})
+
+      const twoLocalsJob = store.newJob(id, 'transfer', [rows[0].id])
+      twoLocalsJob.plan = makePlan(store.get(id))
+      twoLocalsJob.total = 1
+      store.putJob(twoLocalsJob)
+      await jobs.run(twoLocalsJob.id)
+      expect(store.job(twoLocalsJob.id).message).toContain(
+        '2 записи с локальными файлами нужно добавить по плану',
+      )
+
+      store.patch(id, [rows[2].id], { excluded: true })
+      const oneLocalJob = store.newJob(id, 'transfer', [rows[0].id])
+      oneLocalJob.plan = makePlan(store.get(id))
+      oneLocalJob.total = 1
+      store.putJob(oneLocalJob)
+      await jobs.run(oneLocalJob.id)
+      expect(store.job(oneLocalJob.id).message).toContain(
+        '1 запись с локальными файлами нужно добавить по плану',
+      )
+    } finally {
+      store.close()
+    }
+  })
   it('refuses another create after an ambiguous playlist creation', async () => {
     const store = new Store(':memory:')
     try {
@@ -309,7 +362,9 @@ describe('migration recovery', () => {
       const plan = makePlan(store.get(id)),
         local = 'spotify:local:C::D:180'
       expect(mixedOrder(plan, [uri, uri, local])).toEqual([uri, local, uri])
-      expect(() => mixedOrder(plan, [uri, uri])).toThrow('Добавьте')
+      expect(() => mixedOrder(plan, [uri, uri])).toThrow('Добавь')
+      expect(() => mixedOrder(plan, [uri])).toThrow('В плейлисте 1 запись, в плане — 3.')
+      expect(() => mixedOrder(plan, [uri, uri])).toThrow('В плейлисте 2 записи, в плане — 3.')
       expect(() => mixedOrder(plan, [uri, uri, 'spotify:local:C::Other:180'])).toThrow('не начата')
       expect(() => mixedOrder(plan, [uri, uri, 'spotify:local:100%::D:180'])).toThrow('не начата')
     } finally {

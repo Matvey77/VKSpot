@@ -1,20 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { LoaderCircle, Music2, Upload, X } from 'lucide-react'
 import { useState } from 'react'
+import { formatCollectionsCount, formatRecordsCount } from '../../../../shared/ru'
 import type { Collection, MatchingRules } from '../../../../shared/types'
 import { VKIcon } from '../../components/brand/BrandIcons'
 import { CollectionCard } from './CollectionCard'
 import type { ExportFormat } from './CollectionOptions'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
-
-function formatCollectionsCount(n: number): string {
-  const mod10 = n % 10
-  const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return `${n} коллекция`
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} коллекции`
-  return `${n} коллекций`
-}
 
 interface CollectionsOverviewProps {
   collections: Collection[]
@@ -105,7 +96,7 @@ export function CollectionsOverview({
           <p className="collections-header-subtitle">
             {collections.length
               ? `${formatCollectionsCount(collections.length)} · Основная коллекция используется по умолчанию`
-              : 'Управляйте вашей музыкой, настраивайте соответствия со Spotify и организуйте плейлисты.'}
+              : 'Собирай музыку из VK, проверяй версии для Spotify и храни резервные копии локально.'}
           </p>
         </div>
         <div className="collections-header-actions">
@@ -142,11 +133,16 @@ export function CollectionsOverview({
             </div>
             <h2>Нет сохранённых коллекций</h2>
             <p>
-              Выгрузите аудиозаписи из вашей VK Музыки или импортируйте готовый файл (JSON, CSV,
-              TXT). Вся музыка будет сохранена локально без потери данных.
+              Выгрузи записи из медиатеки VK или импортируй готовый файл (JSON, CSV, TXT). Список
+              сохранится локально без потери исходных данных.
             </p>
             <div className="collections-empty-actions">
-              <button type="button" className="primary" onClick={onOpenVK} disabled={!!busy}>
+              <button
+                type="button"
+                className="primary"
+                onClick={onExtractVK || onOpenVK}
+                disabled={!!busy}
+              >
                 <VKIcon size={16} />
                 Выгрузить из VK
               </button>
@@ -197,9 +193,9 @@ export function CollectionsOverview({
           <Dialog.Content className="dialog">
             <Dialog.Title>Удалить коллекцию?</Dialog.Title>
             <Dialog.Description>
-              Вы собираетесь удалить коллекцию «{targetDeleteCollection?.name}» (
-              {count(targetDeleteCollection?.rows.length ?? 0)} записей). Это действие нельзя будет
-              отменить.
+              Ты собираешься удалить коллекцию «{targetDeleteCollection?.name}» (
+              {formatRecordsCount(targetDeleteCollection?.rows.length ?? 0)}). Это действие нельзя
+              будет отменить.
             </Dialog.Description>
             <div className="dialog-actions">
               <button type="button" onClick={() => setConfirmDeleteId(null)}>

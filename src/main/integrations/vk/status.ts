@@ -8,8 +8,7 @@ export type VKPageSignals = {
 
 export function classifyVKPage(signals: VKPageSignals): Pick<VKStatus, 'state' | 'message'> {
   if (signals.signInForm) return { state: 'sign-in', message: 'VK просит войти в аккаунт.' }
-  if (signals.personalLibrary)
-    return { state: 'connected', message: 'Личная библиотека VK отображается.' }
+  if (signals.personalLibrary) return { state: 'connected', message: 'Медиатека VK отображается.' }
   if (signals.pageError) return { state: 'error', message: 'VK показал ошибку страницы.' }
   return { state: 'unknown', message: 'Статус не подтверждён по видимому содержимому VK.' }
 }

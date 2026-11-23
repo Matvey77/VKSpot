@@ -177,9 +177,16 @@
   color: var(--ink);
 }
 .review-source-status-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   font-size: 12px;
   line-height: 1.5;
   color: var(--warning-ink);
+}
+.review-source-status-hint svg {
+  flex: none;
+  margin-top: 2px;
 }
 
 /* Completeness Notice Dismiss Button */

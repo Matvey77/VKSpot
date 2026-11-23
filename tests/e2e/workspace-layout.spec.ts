@@ -65,9 +65,9 @@ test('collection workspace preserves drafts, scopes quick filters and fits deskt
     await page.getByRole('button', { name: 'Закрыть запись', exact: true }).click()
     const facets = page.getByRole('group', { name: 'Быстрые фильтры коллекции' })
     await facets.getByRole('button', { name: /^Spotify/ }).click()
-    await expect(page.getByRole('combobox', { name: 'Статус записей', exact: true })).toHaveValue(
-      'spotify',
-    )
+    await expect(
+      page.getByRole('combobox', { name: 'Решение о переносе', exact: true }),
+    ).toHaveValue('spotify')
     await expect(page.locator('.table-panel')).toHaveAttribute('aria-rowcount', '70')
     await page.getByLabel('Найти запись', { exact: true }).fill('не существующий запрос')
     await expect(page.getByRole('heading', { name: 'Нет записей по этому запросу' })).toBeVisible()

@@ -71,7 +71,7 @@ export function WorkingCopyForm({
       </form>
       {modified && (
         <p className="helper-text inspector-save-hint">
-          Не забудьте сохранить правки перед повторным поиском.
+          Не забудь сохранить правки перед повторным поиском.
         </p>
       )}
     </div>

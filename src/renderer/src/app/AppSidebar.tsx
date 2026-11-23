@@ -1,10 +1,9 @@
 import { ArrowRight, History, House, Library, Link2, Music2, Settings2, Upload } from 'lucide-react'
+import { formatCount } from '../../../shared/ru'
 import { ProjectIcon, SpotifyIcon, VKIcon } from '../components/brand/BrandIcons'
 import SidebarStatus from '../components/sidebar/SidebarStatus'
 import { findPausedBrowserJobId } from './browser-job'
 import type { WorkspaceController } from './useWorkspaceController'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
 
 export function AppSidebar({ controller }: { controller: WorkspaceController }) {
   const {
@@ -96,7 +95,7 @@ export function AppSidebar({ controller }: { controller: WorkspaceController }) 
           >
             <Music2 size={15} aria-hidden="true" />
             <span>{c.name}</span>
-            <small>{count(c.rows.length)}</small>
+            <small>{formatCount(c.rows.length)}</small>
           </button>
         ))}
         <button className="add-collection" onClick={() => void importFile()} disabled={!!busy}>

@@ -1,7 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowRight, X } from 'lucide-react'
-
-const count = (number: number) => number.toLocaleString('ru-RU')
+import { formatCount } from '../../../../shared/ru'
 
 interface TransferDialogProps {
   open: boolean
@@ -35,13 +34,13 @@ export function TransferDialog({
           </Dialog.Description>
           <div className="transfer-counts">
             <span>
-              Spotify <strong>{count(counts.spotify)}</strong>
+              Spotify <strong>{formatCount(counts.spotify)}</strong>
             </span>
             <span>
-              Локальные <strong>{count(counts.local)}</strong>
+              Локальные <strong>{formatCount(counts.local)}</strong>
             </span>
             <span>
-              Не готово <strong>{count(counts.unresolved + counts['local-pending'])}</strong>
+              Не готово <strong>{formatCount(counts.unresolved + counts['local-pending'])}</strong>
             </span>
           </div>
           {counts.unresolved + counts['local-pending'] > 0 && (
@@ -67,11 +66,11 @@ export function TransferDialog({
               onClick={onConfirm}
             >
               Создать плейлист
-              <ArrowRight size={16} />
+              <ArrowRight size={16} aria-hidden="true" />
             </button>
           </div>
           <Dialog.Close className="dialog-close" aria-label="Закрыть">
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>

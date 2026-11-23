@@ -65,7 +65,7 @@ export class Spotify {
   }
   async authorize(clientId: string): Promise<void> {
     if (!/^[a-fA-F0-9]{32}$/.test(clientId))
-      throw new Error('Укажите Client ID из настроек приложения Spotify Developer.')
+      throw new Error('Укажи Client ID из настроек приложения Spotify Developer.')
     if (this.authenticating) throw new Error('Вход уже открыт в браузере.')
     this.authenticating = true
     try {
@@ -77,7 +77,7 @@ export class Spotify {
     }
   }
   private async refresh(): Promise<void> {
-    if (!this.token) throw new Error('Подключите Spotify в настройках.')
+    if (!this.token) throw new Error('Подключи Spotify в настройках.')
     const token = this.token
     const response = await this.fetchImplementation('https://accounts.spotify.com/api/token', {
       method: 'POST',
@@ -90,7 +90,7 @@ export class Spotify {
     })
     if (!response.ok) {
       this.verified = false
-      throw new Error('Сессия Spotify истекла. Подключитесь снова.')
+      throw new Error('Сессия Spotify истекла. Подключись снова.')
     }
     const data = (await response.json()) as {
       access_token: string
@@ -107,7 +107,7 @@ export class Spotify {
     this.persist()
   }
   async request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
-    if (!this.token) throw new Error('Подключите Spotify в настройках.')
+    if (!this.token) throw new Error('Подключи Spotify в настройках.')
     signal?.throwIfAborted()
     if (this.token.expiresAt < Date.now() + 30000) {
       this.refreshing ??= this.refresh().finally(() => {
@@ -135,7 +135,7 @@ export class Spotify {
       throw new SpotifyError(
         isWrite
           ? 'Соединение прервано. Запись в Spotify могла выполниться; перед продолжением нужна сверка.'
-          : 'Соединение со Spotify прервано. Проверьте подключение или прокси и повторите запрос.',
+          : 'Соединение со Spotify прервано. Проверь подключение или прокси и повтори запрос.',
         0,
         isWrite,
       )
@@ -149,7 +149,7 @@ export class Spotify {
       const quota = (data.reason ?? data.error?.reason) === 'QUOTA_EXCEEDED'
       throw new SpotifyError(
         quota
-          ? 'Квота Spotify исчерпана. Задание сохранено; продолжите позже.'
+          ? 'Квота Spotify исчерпана. Задание сохранено; продолжи позже.'
           : 'Spotify ограничил частоту запросов. Задание сохранено.',
         delay,
         false,
@@ -167,13 +167,13 @@ export class Spotify {
       ) {
         this.verified = false
         throw new SpotifyError(
-          'Spotify недоступен из страны этого подключения. Укажите прокси вашего VPN в настройках Spotify или включите VPN для всего приложения VKSpot.',
+          'Spotify недоступен из страны этого подключения. Укажи прокси своего VPN в настройках Spotify или включи VPN для всего приложения VKSpot.',
         )
       }
       const messages: Record<number, string> = {
-        401: 'Spotify отклонил сессию. Подключитесь снова.',
-        403: 'Spotify отказал в доступе. Проверьте Premium владельца, разрешённых пользователей и возможности API-приложения.',
-        404: 'Spotify не нашёл объект. Проверьте доступ к плейлисту.',
+        401: 'Spotify отклонил сессию. Подключись снова.',
+        403: 'Spotify отказал в доступе. Проверь Premium владельца, разрешённых пользователей и возможности API-приложения.',
+        404: 'Spotify не нашёл объект. Проверь доступ к плейлисту.',
       }
       throw new SpotifyError(
         messages[response.status] ?? `Spotify вернул ошибку ${response.status}.`,
@@ -190,7 +190,7 @@ export class Spotify {
         '/me',
       )
       const name = p.display_name || p.id || p.account_id
-      if (!name) throw new Error('Spotify не вернул сведения профиля. Повторите подключение.')
+      if (!name) throw new Error('Spotify не вернул сведения профиля. Повтори подключение.')
       this.verified = true
       return name
     } catch (error) {

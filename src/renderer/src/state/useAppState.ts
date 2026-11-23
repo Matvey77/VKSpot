@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Bridge } from '../../../shared/ipc'
+import { humanizeError } from '../../../shared/ru'
 import type { ViewState } from '../../../shared/sync'
 import { StateReplica } from './replica'
 
@@ -21,7 +22,7 @@ export function useAppState(api: Bridge, onError: (message: string) => void) {
         const result = await api.syncState(replica.cursor)
         if (!result.ok) {
           pending.current = false
-          error.current(result.error)
+          error.current(humanizeError(result.error, 'Не удалось обновить состояние приложения.'))
           return
         }
         try {
@@ -35,9 +36,7 @@ export function useAppState(api: Bridge, onError: (message: string) => void) {
     }
     inFlight.current = request()
       .catch((failure) => {
-        error.current(
-          failure instanceof Error ? failure.message : 'Не удалось обновить состояние приложения.',
-        )
+        error.current(humanizeError(failure, 'Не удалось обновить состояние приложения.'))
       })
       .finally(() => {
         inFlight.current = null

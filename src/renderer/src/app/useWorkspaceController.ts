@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { summarizeCollection } from '../../../core/library'
 import { reviewGroup } from '../../../core/matching'
+import { stripIpcErrorPrefix } from '../../../shared/ru'
 import type { ExportFormat, Result, VKExportProgress, Working } from '../../../shared/types'
 import { api } from '../state/api'
 import { clearCollectionDrafts, draftsStore } from '../state/drafts'
@@ -59,7 +60,10 @@ export function useWorkspaceController() {
       try {
         const result = await action()
         if (!result.ok) {
-          setNotice({ message: result.error, error: true })
+          setNotice({
+            message: stripIpcErrorPrefix(result.error) || 'Не удалось выполнить действие.',
+            error: true,
+          })
           return undefined
         }
         if (success) setNotice({ message: success, error: false })
@@ -68,7 +72,7 @@ export function useWorkspaceController() {
       } catch {
         setNotice({
           message:
-            'Связь с приложением прервана. Перезапустите VKSpot; коллекция сохранена локально.',
+            'Связь с приложением прервана. Перезапусти VKSpot; коллекция сохранена локально.',
           error: true,
         })
         return undefined
@@ -85,7 +89,10 @@ export function useWorkspaceController() {
       try {
         const result = await action()
         if (!result.ok) {
-          setNotice({ message: result.error, error: true })
+          setNotice({
+            message: stripIpcErrorPrefix(result.error) || fallbackError,
+            error: true,
+          })
           return undefined
         }
         return result.value

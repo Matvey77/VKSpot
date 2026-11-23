@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { humanizeNetworkError } from '../../../shared/ru'
 import {
   isVKSignInPage,
   playVKLibraryTrack,
@@ -273,12 +274,12 @@ export class VKAudioPlayer {
         return result
       } catch (error) {
         if (cancelled()) return { playing: false }
-        const message = error instanceof Error ? error.message : String(error)
         return {
           playing: false,
-          error: /ERR_NAME_NOT_RESOLVED/.test(message)
-            ? 'Не удалось связаться с серверами VK. Проверь сеть.'
-            : message,
+          error: humanizeNetworkError(
+            error,
+            'Не удалось воспроизвести запись из VK. Проверь сеть и повтори попытку.',
+          ),
         }
       } finally {
         clearInterval(watch)

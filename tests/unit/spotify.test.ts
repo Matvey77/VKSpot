@@ -285,6 +285,42 @@ describe('Spotify connection evidence', () => {
       )
       expect(badState).toEqual({ statusCode: 400, connection: 'close' })
 
+      const badStateDetails = await new Promise<{
+        statusCode: number | undefined
+        contentType: string | undefined
+        body: string
+      }>((resolveReq, rejectReq) => {
+        const req = httpRequest(
+          {
+            host: '127.0.0.1',
+            port: address.port,
+            method: 'GET',
+            path: '/callback?code=abc&state=wrong-state',
+            headers: { Host: '127.0.0.1:43823' },
+          },
+          (res) => {
+            let body = ''
+            res.setEncoding('utf8')
+            res.on('data', (chunk) => {
+              body += chunk
+            })
+            res.on('end', () =>
+              resolveReq({
+                statusCode: res.statusCode,
+                contentType: res.headers['content-type'],
+                body,
+              }),
+            )
+          },
+        )
+        req.on('error', rejectReq)
+        req.end()
+      })
+      expect(badStateDetails.statusCode).toBe(400)
+      expect(badStateDetails.contentType).toContain('text/html; charset=utf-8')
+      expect(badStateDetails.body).toContain('Не удалось подтвердить сессию входа Spotify')
+      expect(badStateDetails.body).not.toContain('Invalid state')
+
       const wrongPath = await sendRaw('GET', '/favicon.ico', '127.0.0.1:43823')
       expect(wrongPath).toEqual({ statusCode: 404, connection: 'close' })
 

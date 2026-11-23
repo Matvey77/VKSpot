@@ -1,5 +1,6 @@
-import { Loader2 } from 'lucide-react'
+import { Check, Loader2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { humanizeError } from '../../../../shared/ru'
 import type { Settings } from '../../../../shared/types'
 import { useProxyTester, validateProxyUrl } from './useProxyTester'
 
@@ -88,9 +89,17 @@ export function VKSettings({
           )}
           {vkProxyResult && (
             <div className={`proxy-result-hint ${vkProxyResult.ok ? 'success' : 'error'}`}>
-              {vkProxyResult.ok
-                ? `✓ Подключение к VK успешно (${vkProxyResult.latencyMs} мс)`
-                : `✕ Ошибка подключения к VK: ${vkProxyResult.error}`}
+              {vkProxyResult.ok ? (
+                <>
+                  <Check size={14} aria-hidden="true" />
+                  <span>Подключение к VK успешно ({vkProxyResult.latencyMs} мс)</span>
+                </>
+              ) : (
+                <>
+                  <X size={14} aria-hidden="true" />
+                  <span>Ошибка подключения к VK: {humanizeError(vkProxyResult.error)}</span>
+                </>
+              )}
             </div>
           )}
         </div>

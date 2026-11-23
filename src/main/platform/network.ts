@@ -1,6 +1,7 @@
 import { session, type Session } from 'electron'
 import { z } from 'zod'
 import { proxySchema } from '../../shared/model'
+import { humanizeNetworkError } from '../../shared/ru'
 
 const PROXY_BYPASS_RULES = '<local>,127.0.0.1,localhost'
 const TEST_PROXY_PARTITION = 'vkspot-proxy-test'
@@ -70,12 +71,16 @@ export async function testProxy(
 
   return withProxyTestLock(async () => {
     const testSession = session.fromPartition(TEST_PROXY_PARTITION)
+    let timedOut = false
     try {
       await applyProxy(testSession, pUrl, 'direct')
       const testUrl = pTarget === 'vk' ? 'https://vk.com/favicon.ico' : 'https://open.spotify.com'
       const start = Date.now()
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 8000)
+      const timer = setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, 8000)
       try {
         const response = await testSession.fetch(testUrl, {
           method: 'HEAD',
@@ -87,8 +92,22 @@ export async function testProxy(
         clearTimeout(timer)
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return { ok: false, error: msg }
+      if (timedOut) return { ok: false, error: humanizeNetworkError('ERR_TIMED_OUT') }
+      const direct = humanizeNetworkError(err, '')
+      if (direct) return { ok: false, error: direct }
+      const cause = err instanceof Error ? err.cause : undefined
+      if (cause instanceof Error) {
+        const causeCode = (cause as NodeJS.ErrnoException).code
+        const translated = humanizeNetworkError(
+          causeCode ? `${cause.message} ${causeCode}` : cause,
+          '',
+        )
+        if (translated) return { ok: false, error: translated }
+      }
+      if (err instanceof Error && err.name) {
+        return { ok: false, error: humanizeNetworkError(err.name) }
+      }
+      return { ok: false, error: humanizeNetworkError(err) }
     } finally {
       await testSession.closeAllConnections().catch(() => {})
     }

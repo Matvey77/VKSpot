@@ -16,7 +16,21 @@ describe('VK extraction evidence', () => {
     expect(vkImportPreview(result(), null).completeness.status).toBe('unverified')
     const partial = vkImportPreview(result(398), 8001)
     expect(partial.completeness).toMatchObject({ expected: 8001, status: 'unverified' })
-    expect(partial.completeness.message).toContain('398 из ожидаемых 8001')
+    expect(partial.completeness.message).toContain('398 из ожидаемых 8\u00a0001 записи')
+    expect(partial.completeness.message).toContain('Сверь количество с разделом «Моя музыка» в VK.')
+
+    const partialMany = vkImportPreview(result(398), 8005)
+    expect(partialMany.completeness.message).toContain('398 из ожидаемых 8\u00a0005 записей')
+
+    const single = vkImportPreview(result(1), 1)
+    expect(single.completeness.message).toContain('1 из ожидаемых 1 записи.')
+    expect(single.completeness.message).toContain('Сверь первые и последние записи с VK.')
+
+    const singlePartial = vkImportPreview(result(1), 2)
+    expect(singlePartial.completeness.message).toContain('1 из ожидаемых 2 записей.')
+
+    const conflicting = vkImportPreview(result(1, 5), 1)
+    expect(conflicting.completeness.message).toContain('Проверь выбранный список.')
   })
   it('verifies count only after an uninterrupted end and consistent count evidence', () => {
     expect(vkImportPreview(result(3, 3), null).completeness.status).toBe('verified-count')
@@ -39,6 +53,12 @@ describe('VK extraction evidence', () => {
     expect(partial.tracks).toHaveLength(3)
     expect(partial.completeness.status).toBe('unverified')
     expect(partial.completeness.message).toContain('У 3 записей')
+
+    const singleMissing = result(1, 1)
+    singleMissing.tracks[0].artist = ''
+    expect(vkImportPreview(singleMissing, 1).completeness.message).toContain(
+      'У 1 записи не прочитано название или исполнитель.',
+    )
   })
   it('handles partial range export preview', () => {
     const options = vkExportOptionsSchema.parse({ limit: 50, rangeFrom: 1, rangeTo: 50 })

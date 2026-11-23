@@ -88,9 +88,9 @@ test('modern virtualized list exports 8307 occurrences, blocked entries and exac
   await page.getByRole('button', { name: 'Выгрузить мой список', exact: true }).click()
   await expect(page.getByText('Собрано', { exact: false }).first()).toBeVisible()
   await expect(page.getByRole('dialog')).toBeVisible({ timeout: 75000 })
-  await expect(page.getByRole('dialog')).toContainText('8307 из ожидаемых 8307')
+  await expect(page.getByRole('dialog')).toContainText(/8\s*307 из ожидаемых 8\s*307 записей/)
   await expect(page.getByRole('dialog')).toContainText('Автор & Гость')
-  await expect(page.getByRole('dialog')).toContainText('8307')
+  await expect(page.getByRole('dialog')).toContainText(/8\s*307/)
   await expect(page.getByRole('button', { name: 'Сохранить 8 307 записей' })).toBeEnabled()
   await page.screenshot({ path: '.local/evidence/e2e/vk-complete-preview.png' })
   await page.getByRole('button', { name: 'Сохранить 8 307 записей' }).click()
@@ -156,7 +156,7 @@ test('geometry anchors preserve identical repeats without ARIA and wait past the
   expect(result.value.tracks).toHaveLength(623)
   expect(result.value.tracks.every((track) => track.artist === 'Автор & Гость')).toBe(true)
   expect(result.value.completeness.status).toBe('unverified')
-  expect(result.value.completeness.message).toContain('623 из ожидаемых 8001')
+  expect(result.value.completeness.message).toMatch(/623 из ожидаемых 8\s*001 записи/)
 })
 
 test('legacy tuple/object metadata and visible version suffixes work without exporting secrets', async () => {
@@ -282,5 +282,5 @@ test('closing the VK window stops extraction and releases the running guard', as
   if (!result.ok) expect(result.error).toContain('Окно VK закрыто')
   const next = await page.evaluate(() => window.vkspot.extractVK())
   expect(next.ok).toBe(false)
-  if (!next.ok) expect(next.error).toContain('Сначала откройте VK')
+  if (!next.ok) expect(next.error).toContain('Сначала открой VK')
 })

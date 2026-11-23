@@ -4,6 +4,7 @@ import {
   type SpotifyTrack,
   type SpotifyBrowserState,
 } from '../../../shared/model'
+import { humanizeNetworkError } from '../../../shared/ru'
 import { parseRetryAfterSeconds, SpotifyError } from './api'
 import {
   readSpotifySearch,
@@ -12,6 +13,32 @@ import {
 } from './browser-dom'
 
 export { readSpotifySearch, readSpotifySearchScript, type SpotifySearchDomResult }
+
+const CHROMIUM_CODE_TO_ERR: Record<number, string> = {
+  [-7]: 'ERR_TIMED_OUT',
+  [-21]: 'ERR_NETWORK_CHANGED',
+  [-101]: 'ERR_CONNECTION_RESET',
+  [-102]: 'ERR_CONNECTION_REFUSED',
+  [-105]: 'ERR_NAME_NOT_RESOLVED',
+  [-106]: 'ERR_INTERNET_DISCONNECTED',
+  [-111]: 'ERR_TUNNEL_CONNECTION_FAILED',
+  [-118]: 'ERR_CONNECTION_TIMED_OUT',
+  [-130]: 'ERR_PROXY_CONNECTION_FAILED',
+  [-131]: 'ERR_PROXY_AUTH_REQUESTED',
+  [-137]: 'ERR_NAME_NOT_RESOLVED',
+}
+
+function translateSpotifyLoadError(error: unknown, fallback: string): string {
+  const direct = humanizeNetworkError(error, '')
+  if (direct) return direct
+  const raw = error instanceof Error ? error.message : String(error ?? '')
+  const codeMatch = raw.match(/-\d{1,3}/)
+  if (codeMatch) {
+    const mapped = CHROMIUM_CODE_TO_ERR[Number(codeMatch[0])]
+    if (mapped) return humanizeNetworkError(mapped, fallback)
+  }
+  return fallback
+}
 
 export function isAllowedSpotifyBrowserUrl(address: string): boolean {
   if (address === 'about:blank') return true
@@ -135,7 +162,7 @@ export class SpotifyBrowser {
       this.loadFailed = false
       this.update('idle', '', undefined, {
         state: 'error',
-        message: 'Страница Spotify завершилась аварийно. Откройте или обновите её снова.',
+        message: 'Страница Spotify завершилась аварийно. Открой или обнови её снова.',
       })
     })
     view.webContents.on(
@@ -143,7 +170,11 @@ export class SpotifyBrowser {
       (_event, errorCode, errorDescription, _url, isMainFrame) => {
         if (isMainFrame && errorCode !== -3) {
           this.loadFailed = true
-          const message = `Не удалось загрузить страницу Spotify (${errorDescription || errorCode}). Проверьте подключение или прокси.`
+          const raw = errorDescription || CHROMIUM_CODE_TO_ERR[errorCode] || String(errorCode)
+          const message = translateSpotifyLoadError(
+            raw,
+            'Не удалось загрузить страницу Spotify. Проверь подключение или прокси.',
+          )
           this.update('attention', message, 'load', {
             state: 'error',
             message,
@@ -239,7 +270,10 @@ export class SpotifyBrowser {
         .catch((error: unknown) => {
           if (view.webContents.isDestroyed()) return
           this.loadFailed = true
-          const message = error instanceof Error ? error.message : 'Не удалось открыть Spotify.'
+          const message = translateSpotifyLoadError(
+            error,
+            'Не удалось открыть Spotify. Проверь подключение или прокси.',
+          )
           this.update('attention', message, 'load', {
             state: 'error',
             message,
@@ -254,7 +288,7 @@ export class SpotifyBrowser {
   async reload(owner?: string): Promise<void> {
     if (this.busy) {
       throw new Error(
-        'Поиск Spotify сейчас выполняется. Дождитесь его остановки перед обновлением страницы.',
+        'Поиск Spotify сейчас выполняется. Дождись его остановки перед обновлением страницы.',
       )
     }
     if (owner && this.owner && this.owner !== owner) return
@@ -286,13 +320,15 @@ export class SpotifyBrowser {
     } catch (error: unknown) {
       if (view.webContents.isDestroyed()) return
       this.loadFailed = true
-      const message =
-        error instanceof Error ? error.message : 'Не удалось обновить страницу Spotify.'
+      const message = translateSpotifyLoadError(
+        error,
+        'Не удалось обновить страницу Spotify. Проверь подключение или прокси.',
+      )
       this.update('attention', message, 'load', {
         state: 'error',
         message,
       })
-      throw error
+      throw new Error(message, { cause: error })
     } finally {
       clearTimeout(timer)
     }
@@ -371,15 +407,12 @@ export class SpotifyBrowser {
         }
       }
       if (loadError) {
-        const raw = loadError.message || ''
-        const friendly = /ERR_CONNECTION_RESET|-101/i.test(raw)
-          ? 'Сбой соединения со Spotify (ERR_CONNECTION_RESET). Проверьте интернет или прокси в подключениях.'
-          : /ERR_INTERNET_DISCONNECTED|-106/i.test(raw)
-            ? 'Нет подключения к интернету. Проверьте соединение.'
-            : /ERR_PROXY|-130|-131|-111/i.test(raw)
-              ? 'Ошибка подключения к прокси-серверу. Проверьте адрес прокси в подключениях.'
-              : raw
-        throw new Error(friendly)
+        throw new Error(
+          translateSpotifyLoadError(
+            loadError,
+            'Не удалось загрузить страницу Spotify. Проверь интернет или прокси в разделе «Подключения».',
+          ),
+        )
       }
       const until = Date.now() + 30000
       let previous = '',
@@ -423,7 +456,7 @@ export class SpotifyBrowser {
         'Не удалось прочитать результаты Spotify. Открой страницу Spotify и проверь её; трек не помечен как ненайденный.',
       )
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось открыть Spotify.'
+      const message = translateSpotifyLoadError(error, 'Не удалось открыть Spotify.')
       const needsHelp = !this.stopped && !(error instanceof SpotifyError && error.retryAfter > 0)
       const reason: SpotifyBrowserState['reason'] =
         lastKind === 'attention' ? 'verification' : 'load'
