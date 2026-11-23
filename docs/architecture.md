@@ -4,12 +4,25 @@ VKSpot — Electron 44 / Node.js 24, React 19 и локальная SQLite (`nod
 
 ## Границы модулей
 
-- `src/core/` — правила коллекций (`collection/`), импорта/экспорта, нормализации (`matching-normalize.ts`), сопоставления (`matching.ts`) и фильтрации (`library.ts`); не зависит от Electron или React.
-- `src/shared/` — разделённые контракты: константы без Zod (`defaults.ts`), чистые типы (`types.ts`, `sync.ts`, `ipc.ts`), общие русские форматтеры и локализация ошибок (`ru.ts`, `job-status.ts`) и серверные Zod-схемы (`model.ts`).
-- `src/main/` — модульные IPC-обработчики (`ipc/router.ts`, `ipc/modules/`), хранилище SQLite (`storage/`), фоновые задания (`jobs/`), интеграции VK (`integrations/vk/` с общей политикой сессии `vk-session-policy.ts`) и Spotify (`integrations/spotify/{api,oauth-pkce,browser,browser-dom}.ts`), системные операции (`platform/`).
-- `src/preload/` — единственная типизированная граница main/renderer (`IpcInvokeMap` / `IpcEventMap`).
-- `src/renderer/src/` — оболочка (`app/`), локальная реплика состояния и изолированное хранилище черновиков (`state/{replica,useAppState,drafts}.ts`), переиспользуемые компоненты (`components/`), экраны-функции (`features/`), таблица, инспектор и стили (`styles/`).
-- `resources/` — скрипты интеграций и ресурсы; `tests/` — unit, Electron E2E и фикстуры (`tests/fixtures/`); `tools/` — локальные разработческие утилиты.
+- `src/core/` — правила коллекций (`collection/`), фильтрации (`library.ts`), валидации ссылок (`spotify-link.ts`), отчётов выгрузки (`vk-import.ts`) и сопоставления (`matching.ts`, нормализация и транслитерация в `matching-normalize.ts`); не зависит от Electron или React.
+- `src/shared/` — разделённые контракты:
+  - `defaults.ts` — константы по умолчанию без Zod (безопасны для бандла renderer);
+  - `types.ts` — чистые доменные типы;
+  - `sync.ts` — курсор и типы дельта-синхронизации;
+  - `ipc.ts` — типизированная карта каналов `IpcInvokeMap` и событий `IpcEventMap`;
+  - `ru.ts` — русская плюрализация, форматирование чисел и человекопонятные сообщения об ошибках;
+  - `job-status.ts` — статусы заданий и вычисление таймеров повтора;
+  - `model.ts` — Zod-схемы валидации (только для main, preload и тестов).
+- `src/main/` — главный процесс:
+  - `ipc/` — `router.ts` (проверка отправителя и Zod-обёртка), `register.ts` и доменные модули в `ipc/modules/` (`collections.ipc.ts`, `jobs.ipc.ts`, `platform.ipc.ts`, `spotify.ipc.ts`, `vk.ipc.ts`);
+  - `storage/` — SQLite (`database.ts` с WAL и триггером неизменяемости `source`), `collection-repository.ts`, `collection-changes.ts`, `job-repository.ts`, `preferences.ts`;
+  - `jobs/` — `runner.ts` (фоновый поиск, перенос и сверка смешанного порядка);
+  - `integrations/spotify/` — `api.ts` (Web API и квоты), `oauth-pkce.ts` (OAuth 2.0 PKCE и `safeStorage`), `browser.ts` (встроенный веб-плеер) и `browser-dom.ts` (чтение выдачи в изолированном мире);
+  - `integrations/vk/` — `session.ts`, `status.ts`, `audio.ts`, `audio-page.ts` и `vk-session-policy.ts` (идемпотентные запреты разрешений и загрузок для сессии VK);
+  - `platform/` — диалоги/файлы (`files.ts`) и прокси/сеть (`network.ts`).
+- `src/preload/` — единственная типизированная граница main/renderer (`contextBridge`, `IpcInvokeMap` / `IpcEventMap`).
+- `src/renderer/src/` — оболочка (`app/`), локальная реплика и изолированные черновики (`state/useAppState.ts`, `state/replica.ts`, `state/drafts.ts`), переиспользуемые компоненты (`components/`), экраны-функции (`features/`, таблица и инспектор) и стили (`styles/`).
+- `resources/` — скрипты интеграций и ресурсы; `tests/` — `unit/`, `e2e/` и `fixtures/`; `tools/` — локальные разработческие утилиты.
 
 ## Данные и синхронизация
 
@@ -20,13 +33,13 @@ SQLite-транзакция фиксирует изменение вместе �
 ## Как проследить изменение
 
 1. При правке записи [контроллер коллекции](../src/renderer/src/app/useWorkspaceController.ts) вызывает `patchRows` через Bridge.
-2. [IPC-обработчик](../src/main/ipc/modules/collections.ipc.ts) (через [роутер](../src/main/ipc/router.ts)) проверяет отправителя и параметры, передаёт правку в Store. [Репозиторий коллекций](../src/main/storage/collection-repository.ts) сохраняет данные и историю, затем обновляет кэш и журнал дельт.
+2. [IPC-обработчик](../src/main/ipc/modules/collections.ipc.ts) (подключённый в [register.ts](../src/main/ipc/register.ts) через [роутер](../src/main/ipc/router.ts)) проверяет отправителя и параметры, затем передаёт правку в Store. [Репозиторий коллекций](../src/main/storage/collection-repository.ts) сохраняет данные и историю, после чего обновляет кэш и журнал дельт.
 3. [Хук синхронизации](../src/renderer/src/state/useAppState.ts) получает дельту. [Реплика](../src/renderer/src/state/replica.ts) применяет её, сохраняя ссылки на неизменённые записи.
 
 ## Правила зависимостей
 
 - Не переносить предметные правила в IPC/React; `core` не импортирует Electron/React.
-- Не загружать схемы Zod ради констант из `shared/defaults.ts`.
+- Не импортировать `zod` и `shared/model` в renderer; для констант использовать `shared/defaults.ts`, для контрактов — `shared/types.ts`, `shared/sync.ts` и `shared/ipc.ts`.
 - Сохранять транзакционность БД и истории; журнал дельт публиковать только после commit.
 - Кэшировать вычисления по идентичности строки и правилам сопоставления. Неизменённые строки должны сохранять ссылки при применении дельт.
 - Исходный хэш относится только к исходнику, не к рабочим изменениям.

@@ -1,101 +1,227 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 
-const ROOT = resolve(__dirname, '../..')
+const rootDir = resolve(__dirname, '../..')
 
-const DOC_FILES = [
-  'README.md',
-  'PRODUCT.md',
-  'DESIGN.md',
-  'SECURITY.md',
-  'AGENTS.md',
-  'docs/architecture.md',
-  'docs/workflows.md',
-  'docs/maintenance.md',
-]
+function listMarkdownDocs(): string[] {
+  const rootDocs = ['README.md', 'PRODUCT.md', 'DESIGN.md', 'SECURITY.md', 'AGENTS.md'].map(
+    (name) => join(rootDir, name),
+  )
+  const docsDir = join(rootDir, 'docs')
+  const nestedDocs = readdirSync(docsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => join(docsDir, entry.name))
+    .sort()
+  return [...rootDocs, ...nestedDocs]
+}
 
-function githubSlug(heading: string): string {
-  return heading
+function stripYamlFrontmatter(content: string): string {
+  return content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, (block) =>
+    block.replace(/[^\r\n]/g, ''),
+  )
+}
+
+function stripFencedCodeBlocks(content: string): string {
+  const lines = content.split(/\r?\n/)
+  const out: string[] = []
+  let activeFence: { char: string; len: number } | null = null
+
+  for (const line of lines) {
+    const trimmed = line.trimStart()
+    const match = trimmed.match(/^(`{3,}|~{3,})(.*)$/)
+    if (match) {
+      const marker = match[1]
+      const rest = match[2]
+      if (!activeFence) {
+        if (marker[0] === '`' && rest.includes('`')) {
+          out.push(line)
+          continue
+        }
+        activeFence = { char: marker[0], len: marker.length }
+        out.push('')
+        continue
+      }
+      if (marker[0] === activeFence.char && marker.length >= activeFence.len && !rest.trim()) {
+        activeFence = null
+        out.push('')
+        continue
+      }
+    }
+    out.push(activeFence ? '' : line)
+  }
+
+  return out.join('\n')
+}
+
+function stripInlineMarkdown(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/(\*\*|__|~~)(.*?)\1/g, '$2')
+    .replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, '$1$2')
+    .replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, '$1$2')
+}
+
+export function slugifyGitHub(rawHeading: string): string {
+  return stripInlineMarkdown(rawHeading)
     .trim()
     .toLowerCase()
-    .replace(/[`*_~]/g, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}\p{M}\s_-]/gu, '')
+    .replace(/\s/g, '-')
 }
 
-function collectAnchors(markdown: string): Set<string> {
-  const anchors = new Set<string>()
+function extractHeadingSlugs(markdown: string): Set<string> {
+  const body = stripFencedCodeBlocks(stripYamlFrontmatter(markdown))
+  const slugs = new Set<string>()
   const counts = new Map<string, number>()
-  let inCodeFence = false
-  for (const line of markdown.split(/\r?\n/)) {
-    if (/^\s*```/.test(line)) {
-      inCodeFence = !inCodeFence
-      continue
+
+  const registerSlug = (base: string) => {
+    if (!base) return
+    let candidate = base
+    let seen = counts.get(base) ?? 0
+    if (seen > 0 || slugs.has(candidate)) {
+      while (slugs.has(`${base}-${seen === 0 ? 1 : seen}`)) {
+        seen = seen === 0 ? 1 : seen + 1
+      }
+      candidate = `${base}-${seen === 0 ? 1 : seen}`
     }
-    if (inCodeFence) continue
-    const match = line.match(/^#{1,6}\s+(.+?)\s*#*$/)
-    if (!match) continue
-    const base = githubSlug(match[1])
-    if (!base) continue
-    const seen = counts.get(base) ?? 0
     counts.set(base, seen + 1)
-    anchors.add(seen === 0 ? base : `${base}-${seen}`)
+    slugs.add(candidate)
   }
-  return anchors
+
+  for (const line of body.split('\n')) {
+    const atx = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/)
+    if (atx) {
+      registerSlug(slugifyGitHub(atx[1]))
+    }
+
+    const htmlHeading = line.match(/<h[1-6]\b[^>]*>(.*?)<\/h[1-6]>/gi)
+    if (htmlHeading) {
+      for (const tag of htmlHeading) {
+        const inner = tag.replace(/^<h[1-6]\b[^>]*>|<\/h[1-6]>$/gi, '')
+        registerSlug(slugifyGitHub(inner))
+      }
+    }
+
+    for (const attr of line.matchAll(/\b(?:id|name)=["']([^"']+)["']/gi)) {
+      slugs.add(attr[1].toLowerCase())
+    }
+  }
+
+  return slugs
 }
 
-function extractLocalLinks(markdown: string): string[] {
-  const links: string[] = []
-  let inCodeFence = false
-  for (const line of markdown.split(/\r?\n/)) {
-    if (/^\s*```/.test(line)) {
-      inCodeFence = !inCodeFence
-      continue
+type LocalLink = {
+  target: string
+  line: number
+}
+
+function isExternalTarget(target: string): boolean {
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target)
+}
+
+function extractLocalLinks(markdown: string): LocalLink[] {
+  const body = stripFencedCodeBlocks(stripYamlFrontmatter(markdown))
+  const links: LocalLink[] = []
+  const lines = body.split('\n')
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const lineWithoutInlineCode = lines[idx].replace(/`[^`]*`/g, '')
+
+    for (const match of lineWithoutInlineCode.matchAll(
+      /!?\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+["'][^"']*["'])?\)/g,
+    )) {
+      let target = match[1].trim()
+      if (target.startsWith('<') && target.endsWith('>')) {
+        target = target.slice(1, -1).trim()
+      }
+      if (!target || isExternalTarget(target)) continue
+      links.push({ target, line: idx + 1 })
     }
-    if (inCodeFence) continue
-    for (const match of line.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
-      const target = match[1]
-      if (!/^(?:https?:|mailto:|data:)/i.test(target)) links.push(target)
-    }
-    for (const match of line.matchAll(/(?:href|src|srcset)="([^"]+)"/g)) {
-      const target = match[1]
-      if (!/^(?:https?:|mailto:|data:)/i.test(target)) links.push(target)
+
+    for (const match of lineWithoutInlineCode.matchAll(
+      /<(?:a|img|source)\b[^>]*?\b(?:href|src|srcset)=["']([^"']+)["']/gi,
+    )) {
+      for (const candidate of match[1].split(',')) {
+        const target = candidate.trim().split(/\s+/)[0]
+        if (!target || isExternalTarget(target)) continue
+        links.push({ target, line: idx + 1 })
+      }
     }
   }
+
   return links
 }
 
-describe('Markdown documentation local links and anchors', () => {
-  it('resolves every relative file path and heading anchor across project docs', () => {
-    const anchorCache = new Map<string, Set<string>>()
-    const getAnchors = (filePath: string) => {
-      let set = anchorCache.get(filePath)
-      if (!set) {
-        set = collectAnchors(readFileSync(filePath, 'utf8'))
-        anchorCache.set(filePath, set)
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+describe('documentation links and anchors', () => {
+  it('slugifies Cyrillic, Latin, punctuation, and duplicate headings like GitHub', () => {
+    expect(slugifyGitHub('Подключение Spotify API')).toBe('подключение-spotify-api')
+    expect(slugifyGitHub('Импорт и выгрузка VK')).toBe('импорт-и-выгрузка-vk')
+    expect(slugifyGitHub('Как проследить изменение')).toBe('как-проследить-изменение')
+    expect(slugifyGitHub("Do's and Don'ts")).toBe('dos-and-donts')
+    expect(slugifyGitHub('Elevation & Depth')).toBe('elevation--depth')
+    expect(slugifyGitHub('`src/shared/` и **types**')).toBe('srcshared-и-types')
+
+    const slugs = extractHeadingSlugs('# Тема\n\n## Тема\n\n### Тема\n')
+    expect(slugs).toEqual(new Set(['тема', 'тема-1', 'тема-2']))
+  })
+
+  it('verifies every relative link and anchor across all project markdown docs', () => {
+    const docs = listMarkdownDocs()
+    expect(docs.length).toBeGreaterThanOrEqual(8)
+
+    const slugCache = new Map<string, Set<string>>()
+    const getSlugs = (filePath: string): Set<string> => {
+      let cached = slugCache.get(filePath)
+      if (!cached) {
+        cached = extractHeadingSlugs(readFileSync(filePath, 'utf8'))
+        slugCache.set(filePath, cached)
       }
-      return set
+      return cached
     }
 
-    for (const rel of DOC_FILES) {
-      const abs = resolve(ROOT, rel)
-      expect(existsSync(abs), `Missing doc file: ${rel}`).toBe(true)
-      const content = readFileSync(abs, 'utf8')
+    const errors: string[] = []
+
+    for (const docPath of docs) {
+      const relDoc = relative(rootDir, docPath).replace(/\\/g, '/')
+      const content = readFileSync(docPath, 'utf8')
       const links = extractLocalLinks(content)
-      for (const link of links) {
-        const [rawPath, rawHash] = link.split('#')
-        const targetAbs = rawPath ? resolve(dirname(abs), rawPath) : abs
-        expect(existsSync(targetAbs), `Broken link in ${rel}: ${link}`).toBe(true)
-        if (rawHash) {
-          const decodedHash = decodeURIComponent(rawHash)
-          expect(
-            getAnchors(targetAbs).has(decodedHash),
-            `Broken anchor in ${rel}: ${link} (expected #${decodedHash} in ${targetAbs})`,
-          ).toBe(true)
+
+      for (const { target, line } of links) {
+        const hashIdx = target.indexOf('#')
+        const rawPath = hashIdx >= 0 ? target.slice(0, hashIdx) : target
+        const rawAnchor = hashIdx >= 0 ? target.slice(hashIdx + 1) : ''
+        const cleanPath = safeDecode(rawPath.split('?')[0])
+
+        const targetFile = cleanPath ? resolve(dirname(docPath), cleanPath) : docPath
+        if (!existsSync(targetFile)) {
+          errors.push(`${relDoc}:${line} -> missing target "${target}"`)
+          continue
+        }
+
+        if (rawAnchor) {
+          if (!targetFile.toLowerCase().endsWith('.md')) continue
+          const slugs = getSlugs(targetFile)
+          const decodedAnchor = safeDecode(rawAnchor).toLowerCase()
+          if (!slugs.has(decodedAnchor)) {
+            const relTarget = relative(rootDir, targetFile).replace(/\\/g, '/')
+            errors.push(`${relDoc}:${line} -> missing anchor "#${decodedAnchor}" in ${relTarget}`)
+          }
         }
       }
     }
+
+    expect(errors).toEqual([])
   })
 })
