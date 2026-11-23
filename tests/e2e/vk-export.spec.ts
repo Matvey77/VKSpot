@@ -2,7 +2,12 @@ import { test, expect, type ElectronApplication } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { classicVKPage, modernVKPage } from '../fixtures/vk-pages'
-import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
+import {
+  cleanupTestProfile,
+  createTestProfile,
+  launchTestApp,
+  setWindowContentSize,
+} from './support'
 
 const adapterPath = resolve('resources/scripts/vk-export.js')
 // Exercise real layout and scrolling. Only isolated-world timeouts and its
@@ -206,11 +211,7 @@ test('cancellation keeps only an explicitly unverified partial list', async () =
   await page.screenshot({ path: '.local/evidence/e2e/vk-partial-preview.png' })
   await page.getByLabel('Сохранить как непроверенный список. Он может содержать пропуски.').check()
   await expect(save).toBeEnabled()
-  await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()
-      .find((window) => window.webContents.getURL().startsWith('file:'))!
-      .setSize(1000, 760),
-  )
+  await setWindowContentSize(app, 1000, 760)
   await page.screenshot({ path: '.local/evidence/e2e/vk-partial-compact.png' })
   await page.evaluate(async () => {
     const result = await window.vkspot.state()

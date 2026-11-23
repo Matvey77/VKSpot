@@ -6,8 +6,26 @@ on:
 permissions:
   contents: read
 jobs:
+  checks:
+    name: Static checks and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run audit
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+
   desktop:
     name: ${{ matrix.name }}
+    needs: checks
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -93,15 +111,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Audit and static checks
-        if: matrix.platform == 'win' && matrix.arch == 'x64'
-        run: |
-          npm run audit
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run lint
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run format:check
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: npm test
       - name: Build installer
         env:
@@ -183,5 +192,5 @@ jobs:
           name: diagnostics-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             .local/test-results
-            .local/evidence/e2e/*.png
+            .local/evidence/**/*.png
           include-hidden-files: true

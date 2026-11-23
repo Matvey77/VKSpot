@@ -1,11 +1,14 @@
 // Real UI screenshots for the welcome guide. Only an isolated synthetic profile.
-const { _electron } = require('@playwright/test')
 const { execFile } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { DatabaseSync } = require('node:sqlite')
 const { promisify } = require('node:util')
+const { launchElectronApp } = require('../lib/electron-harness.cjs')
+const { createTempProfile, removeTempProfile } = require('../lib/profile.cjs')
 
+const PROFILE_PREFIX = 'guide-profile-'
 const execFileAsync = promisify(execFile)
 
 async function convertPngToWebp(inputPng, outputWebp) {
@@ -26,22 +29,13 @@ async function convertPngToWebp(inputPng, outputWebp) {
 
 ;(async () => {
   const root = path.resolve(__dirname, '../..')
-  const profileRoot = path.join(root, '.local/tmp')
-  await fs.mkdir(profileRoot, { recursive: true })
-  const profile = await fs.mkdtemp(path.join(profileRoot, 'guide-profile-'))
-  if (
-    path.dirname(profile) !== profileRoot ||
-    !path.basename(profile).startsWith('guide-profile-')
-  ) {
-    throw new Error('Unsafe guide profile cleanup target')
-  }
+  const profile = await createTempProfile(root, PROFILE_PREFIX)
   const assets = path.join(root, 'src/renderer/src/assets/guide')
   await fs.mkdir(assets, { recursive: true })
-  const env = { ...process.env, VKSPOT_DATA_DIR: profile, VKSPOT_BACKGROUND_TEST: '1' }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await _electron.launch({ args: [root], env })
   const records = []
+  let app
   try {
+    app = await launchElectronApp({ root, profile })
     const page = await app.firstWindow()
     page.setDefaultTimeout(10000)
     // These responses are synthetic. Guide generation never contacts an account.
@@ -210,7 +204,6 @@ async function convertPngToWebp(inputPng, outputWebp) {
         },
       ],
     }
-    const { DatabaseSync } = require('node:sqlite')
     const fixtureDb = new DatabaseSync(path.join(profile, 'collection.db'))
     fixtureDb.prepare('INSERT INTO jobs(id,payload) VALUES(?,?)').run(job.id, JSON.stringify(job))
     fixtureDb.close()
@@ -560,15 +553,13 @@ async function convertPngToWebp(inputPng, outputWebp) {
       'Captured ' + records.length + ' real UI frames with measured control bounds.\n',
     )
   } finally {
-    await app.close()
-    if (
-      path.dirname(profile) === profileRoot &&
-      path.basename(profile).startsWith('guide-profile-')
-    ) {
-      await fs.rm(profile, { recursive: true, force: true })
+    try {
+      if (app) await app.close()
+    } finally {
+      await removeTempProfile(root, profile, PROFILE_PREFIX)
     }
   }
 })().catch((error) => {
-  process.stderr.write(error.stack)
+  process.stderr.write((error && error.stack ? error.stack : String(error)) + '\n')
   process.exitCode = 1
 })

@@ -60,7 +60,7 @@
     if (node.closest(excluded)) return true
     const shuffleBtn = getShuffleBtn()
     if (shuffleBtn && shuffleBtn.isConnected) {
-      if (Boolean(node.compareDocumentPosition(shuffleBtn) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+      if (node.compareDocumentPosition(shuffleBtn) & Node.DOCUMENT_POSITION_FOLLOWING) {
         return true
       }
     }

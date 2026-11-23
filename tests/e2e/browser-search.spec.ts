@@ -1,83 +1,28 @@
-import { test, expect, type ElectronApplication } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import {
+  getAppState,
+  importSyntheticCollection,
+  installSpotifyBrowserMock,
+  updateAppSettings,
+} from './mocks'
 import { openLibrary } from './navigation'
-import { cleanupTestProfile, createTestProfile, launchTestApp as launch } from './support'
-async function mockPages(app: ElectronApplication) {
-  await app.evaluate(async ({ session }) => {
-    Reflect.set(globalThis, '__browserQueries', [])
-    const network = session.fromPartition('persist:vkspot-spotify-browser')
-    // protocol.handle bypasses Chromium's network header events. Deliver the
-    // equivalent event explicitly for the synthetic 429 response below.
-    Object.defineProperty(network.webRequest, 'onHeadersReceived', {
-      value: (_filter: unknown, listener: unknown) =>
-        Reflect.set(globalThis, '__browserHeaders', listener),
-    })
-    await network.protocol.handle('https', async (request) => {
-      const url = new URL(request.url)
-      const query = decodeURIComponent(url.pathname.split('/')[2] ?? '')
-      const calls = Reflect.get(globalThis, '__browserQueries') as string[]
-      calls.push(query)
-      if (Reflect.get(globalThis, '__holdBrowserSearch'))
-        await new Promise<void>((resolve) =>
-          Reflect.set(globalThis, '__releaseBrowserSearch', resolve),
-        )
-      const times = (Reflect.get(globalThis, '__browserCallTimes') ?? []) as number[]
-      times.push(Date.now())
-      Reflect.set(globalThis, '__browserCallTimes', times)
-      if (Reflect.get(globalThis, '__browserLimited') && calls.length === 1) {
-        Reflect.get(globalThis, '__browserHeaders')?.(
-          { resourceType: 'mainFrame', statusCode: 429, responseHeaders: { 'Retry-After': ['2'] } },
-          () => {},
-        )
-        return new Response('<body>Too many requests</body>', {
-          status: 429,
-          headers: { 'Retry-After': '2', 'content-type': 'text/html; charset=utf-8' },
-        })
-      }
-      if (Reflect.get(globalThis, '__browserChallenge'))
-        return new Response('<body><main>Verify you are human</main></body>', {
-          headers: { 'content-type': 'text/html; charset=utf-8' },
-        })
-      const rows =
-        query.includes('Missing') || Reflect.get(globalThis, '__browserEmpty')
-          ? '<h1>Ничего не найдено</h1>'
-          : `
-        <div data-testid="tracklist-row"><div role="gridcell"><a href="/track/${'a'.repeat(22)}">${Reflect.get(globalThis, '__browserUpdated') ? 'Updated Song' : 'Song'}</a><a href="/artist/${'b'.repeat(22)}">Artist</a></div><div role="gridcell"><a href="/album/${'c'.repeat(22)}">Album</a><span>3:00</span></div></div>`
-      return new Response(
-        '<!doctype html><html><body><iframe src="about:blank#captcha" style="display:none"></iframe><main>' +
-          rows +
-          '</main></body></html>',
-        {
-          headers: { 'content-type': 'text/html; charset=utf-8' },
-        },
-      )
-    })
-  })
-}
-const cleanup = (directory: string) =>
-  cleanupTestProfile(directory, 'vkspot-browser-', 'Unsafe cleanup target')
+import { setWindowContentSize, withTestApp } from './support'
 
 test('inspector searches Spotify again after cached results and displays progress, empty results and errors', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app)
     const page = await app.firstWindow()
-    const original = await page.evaluate(async () => {
-      const imported = await window.vkspot.importCollection({
-        name: 'Manual search fixture',
-        origin: 'Synthetic',
-        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-        tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
-      } as never)
-      if (!imported.ok) throw new Error(imported.error)
-      const state = await window.vkspot.state()
-      if (!state.ok) throw new Error(state.error)
-      const collection = state.value.collections[0]
-      await window.vkspot.startSearch(collection.id, [collection.rows[0].id], true)
-      return collection
+    const original = await importSyntheticCollection(page, {
+      name: 'Manual search fixture',
+      origin: 'Synthetic',
+      tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
     })
+    await page.evaluate(
+      ({ collectionId, rowId }) => window.vkspot.startSearch(collectionId, [rowId], true),
+      { collectionId: original.id, rowId: original.rows[0].id },
+    )
     await expect
       .poll(async () => {
         const state = await page.evaluate(() => window.vkspot.state())
@@ -122,21 +67,15 @@ test('inspector searches Spotify again after cached results and displays progres
     expect(await app.evaluate(() => Reflect.get(globalThis, '__browserQueries'))).toEqual(
       Array(4).fill('Artist Song'),
     )
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.collections[0].sourceHash).toBe(original.sourceHash)
-    expect(state.value.collections[0].rows[0].source).toEqual(original.rows[0].source)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+    const state = await getAppState(page)
+    expect(state.collections[0].sourceHash).toBe(original.sourceHash)
+    expect(state.collections[0].rows[0].source).toEqual(original.rows[0].source)
+  })
 })
 
 test('browser search needs no API login, caches repeats, keeps source and offers the next review step', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app)
     const page = await app.firstWindow()
     await expect(
       page.getByRole('heading', { name: 'Твоя музыка из VK — в Spotify', exact: true }),
@@ -144,23 +83,16 @@ test('browser search needs no API login, caches repeats, keeps source and offers
     await expect(page.locator('.next-action')).toHaveCount(1)
     await expect(page.locator('.guide-canvas')).toHaveCount(0)
     await page.screenshot({ path: '.local/evidence/e2e/start-simple.png' })
-    const original = await page.evaluate(async () => {
-      const imported = await window.vkspot.importCollection({
-        name: 'Browser fixture',
-        origin: 'Synthetic',
-        completeness: { expected: 3, status: 'verified-count', message: 'Test only' },
-        tracks: ['Song', 'Song', 'Missing'].map((title) => ({
-          artist: 'Artist',
-          title,
-          duration: 180,
-        })),
-      } as never)
-      if (!imported.ok) throw new Error(imported.error)
-      const state = await window.vkspot.state()
-      if (!state.ok) throw new Error(state.error)
-      await window.vkspot.saveSettings({ ...state.value.settings, searchDelayMs: 1000 })
-      return state.value.collections[0]
+    const original = await importSyntheticCollection(page, {
+      name: 'Browser fixture',
+      origin: 'Synthetic',
+      tracks: ['Song', 'Song', 'Missing'].map((title) => ({
+        artist: 'Artist',
+        title,
+        duration: 180,
+      })),
     })
+    await updateAppSettings(page, { searchDelayMs: 1000 })
     await page.getByRole('button', { name: 'Начать поиск', exact: true }).click()
     await expect
       .poll(
@@ -171,20 +103,19 @@ test('browser search needs no API login, caches repeats, keeps source and offers
         { timeout: 20000 },
       )
       .toBe('complete')
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.spotify.connected).toBe(false)
-    expect(state.value.jobs[0].searchProvider).toBe('browser')
-    expect(state.value.collections[0].sourceHash).toBe(original.sourceHash)
-    expect(state.value.collections[0].rows.map((r) => r.source)).toEqual(
+    const state = await getAppState(page)
+    expect(state.spotify.connected).toBe(false)
+    expect(state.jobs[0].searchProvider).toBe('browser')
+    expect(state.collections[0].sourceHash).toBe(original.sourceHash)
+    expect(state.collections[0].rows.map((r) => r.source)).toEqual(
       original.rows.map((r) => r.source),
     )
-    expect(state.value.collections[0].rows[0].working.candidates[0]).toMatchObject({
+    expect(state.collections[0].rows[0].working.candidates[0]).toMatchObject({
       title: 'Song',
       artists: ['Artist'],
       duration: 180,
     })
-    expect(state.value.collections[0].rows[2].working).toMatchObject({
+    expect(state.collections[0].rows[2].working).toMatchObject({
       candidates: [],
       searchedQuery: 'Artist Missing',
     })
@@ -203,39 +134,28 @@ test('browser search needs no API login, caches repeats, keeps source and offers
       page.getByRole('button', { name: 'Подтвердить выбранные (2)', exact: true }),
     ).toBeEnabled()
     await page.screenshot({ path: '.local/evidence/e2e/browser-results.png' })
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1000, 760))
+    await setWindowContentSize(app, 1000, 760)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: '.local/evidence/e2e/browser-results-compact.png' })
-    await page.evaluate(async () => {
-      const s = await window.vkspot.state()
-      if (s.ok) await window.vkspot.saveSettings({ ...s.value.settings, theme: 'dark' })
-    })
+    await updateAppSettings(page, { theme: 'dark' })
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await page.screenshot({
       path: '.local/evidence/e2e/browser-results-compact-dark.png',
       animations: 'disabled',
     })
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('browser Retry-After resumes automatically without using the API or sending an early request', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app)
     await app.evaluate(() => Reflect.set(globalThis, '__browserLimited', true))
     const page = await app.firstWindow()
-    await page.evaluate(() =>
-      window.vkspot.importCollection({
-        name: 'Browser quota fixture',
-        origin: 'Synthetic',
-        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-        tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
-      } as never),
-    )
+    await importSyntheticCollection(page, {
+      name: 'Browser quota fixture',
+      origin: 'Synthetic',
+      tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
+    })
     await page.getByRole('button', { name: 'Начать поиск', exact: true }).click()
     await expect
       .poll(
@@ -251,26 +171,18 @@ test('browser Retry-After resumes automatically without using the API or sending
     )
     expect(calls).toHaveLength(2)
     expect(calls[1] - calls[0]).toBeGreaterThanOrEqual(2000)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('page challenge keeps the current track pending and recovers inside the app', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app)
     await app.evaluate(() => Reflect.set(globalThis, '__browserChallenge', true))
     const page = await app.firstWindow()
-    await page.evaluate(async () => {
-      await window.vkspot.importCollection({
-        name: 'Challenge fixture',
-        origin: 'Synthetic',
-        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-        tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
-      } as never)
+    await importSyntheticCollection(page, {
+      name: 'Challenge fixture',
+      origin: 'Synthetic',
+      tracks: [{ artist: 'Artist', title: 'Song', duration: 180 }],
     })
     await page.getByRole('button', { name: 'Начать поиск', exact: true }).click()
     await expect
@@ -279,10 +191,9 @@ test('page challenge keeps the current track pending and recovers inside the app
         return s.ok && s.value.jobs[0]?.state
       })
       .toBe('paused')
-    let state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.jobs[0].cursor).toBe(0)
-    expect(state.value.collections[0].rows[0].working.searchedQuery).toBeNull()
+    let state = await getAppState(page)
+    expect(state.jobs[0].cursor).toBe(0)
+    expect(state.collections[0].rows[0].working.searchedQuery).toBeNull()
     await page
       .locator('.context-help')
       .getByRole('button', { name: 'Открыть Spotify здесь' })
@@ -309,20 +220,14 @@ test('page challenge keeps the current track pending and recovers inside the app
         return s.ok && s.value.jobs[0]?.state
       })
       .toBe('complete')
-    state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.collections[0].rows[0].working.candidates).toHaveLength(1)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+    state = await getAppState(page)
+    expect(state.collections[0].rows[0].working.candidates).toHaveLength(1)
+  })
 })
 
 test('a stale Spotify panel owner cannot hide the newer owner view', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app)
     const page = await app.firstWindow()
     const ownerA = crypto.randomUUID()
     const ownerB = crypto.randomUUID()
@@ -361,42 +266,30 @@ test('a stale Spotify panel owner cannot hide the newer owner view', async () =>
     )
     expect(currentHide.ok).toBe(true)
     await expect.poll(visible).toBe(false)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('continuing a challenged job from its Jobs card resumes that collection only', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app)
     await app.evaluate(() => Reflect.set(globalThis, '__browserChallenge', true))
     const page = await app.firstWindow()
-    const createSearch = (name: string, title: string) =>
-      page.evaluate(
-        async ({ name, title }) => {
-          const imported = await window.vkspot.importCollection({
-            name,
-            origin: 'Synthetic',
-            completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-            tracks: [{ artist: 'Artist', title, duration: 180 }],
-          } as never)
-          if (!imported.ok) throw new Error(imported.error)
-          const state = await window.vkspot.state()
-          if (!state.ok) throw new Error(state.error)
-          const collection = state.value.collections.find((item) => item.id === imported.value)!
-          const started = await window.vkspot.startSearch(
-            collection.id,
-            [collection.rows[0].id],
-            true,
-          )
+    const createSearch = async (name: string, title: string) => {
+      const collection = await importSyntheticCollection(page, {
+        name,
+        origin: 'Synthetic',
+        tracks: [{ artist: 'Artist', title, duration: 180 }],
+      })
+      const jobId = await page.evaluate(
+        async ({ collectionId, rowId }) => {
+          const started = await window.vkspot.startSearch(collectionId, [rowId], true)
           if (!started.ok) throw new Error(started.error)
-          return { collectionId: collection.id, jobId: started.value }
+          return started.value
         },
-        { name, title },
+        { collectionId: collection.id, rowId: collection.rows[0].id },
       )
+      return { collectionId: collection.id, jobId }
+    }
 
     const jobA = await createSearch('Browser owner A', 'Song A')
     await expect
@@ -435,29 +328,24 @@ test('continuing a challenged job from its Jobs card resumes that collection onl
       })
       .toBe('complete')
 
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.jobs.find((job) => job.id === jobA.jobId)?.state).toBe('complete')
-    expect(state.value.jobs.find((job) => job.id === jobB.jobId)?.state).toBe('paused')
+    const state = await getAppState(page)
+    expect(state.jobs.find((job) => job.id === jobA.jobId)?.state).toBe('complete')
+    expect(state.jobs.find((job) => job.id === jobB.jobId)?.state).toBe('paused')
     expect(
-      state.value.collections.find((item) => item.id === jobA.collectionId)?.rows[0].working,
+      state.collections.find((item) => item.id === jobA.collectionId)?.rows[0].working,
     ).toMatchObject({ searchedQuery: 'Artist Song A', candidates: [{ title: 'Song' }] })
     expect(
-      state.value.collections.find((item) => item.id === jobB.collectionId)?.rows[0].working,
+      state.collections.find((item) => item.id === jobB.collectionId)?.rows[0].working,
     ).toMatchObject({ searchedQuery: null, candidates: [] })
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('file import starts search by default and a manual pause survives restart without repeating saved rows', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  let app = await launch(directory)
-  try {
-    await mockPages(app)
+  await withTestApp('vkspot-browser-', async (ctx) => {
+    let app = ctx.app
+    await installSpotifyBrowserMock(app)
     let page = await app.firstWindow()
-    const file = join(directory, 'import.csv')
+    const file = join(ctx.directory, 'import.csv')
     await writeFile(file, 'artist,title,duration\nArtist,Song,180\nArtist,Missing,180\n')
     await app.evaluate(({ dialog }, file) => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] })
@@ -480,19 +368,17 @@ test('file import starts search by default and a manual pause survives restart w
         return s.ok && s.value.jobs[0]?.state
       })
       .toBe('paused')
-    await app.close()
-    app = await launch(directory)
-    await mockPages(app)
+    app = await ctx.relaunch()
+    await installSpotifyBrowserMock(app)
     page = await app.firstWindow()
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.jobs[0]).toMatchObject({
+    const state = await getAppState(page)
+    expect(state.jobs[0]).toMatchObject({
       state: 'paused',
       cursor: 1,
       autoResume: false,
       searchProvider: 'browser',
     })
-    expect(state.value.collections[0].rows[0].working.candidates).toHaveLength(1)
+    expect(state.collections[0].rows[0].working.candidates).toHaveLength(1)
     expect(await app.evaluate(() => Reflect.get(globalThis, '__browserQueries'))).toEqual([])
     await page.getByRole('button', { name: 'Продолжить поиск', exact: true }).click()
     await expect
@@ -504,39 +390,22 @@ test('file import starts search by default and a manual pause survives restart w
     expect(await app.evaluate(() => Reflect.get(globalThis, '__browserQueries'))).toEqual([
       'Artist Missing',
     ])
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('a song title that looks like an error does not stop a valid search', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await app.evaluate(async ({ session }) => {
-      await session
-        .fromPartition('persist:vkspot-spotify-browser')
-        .protocol.handle(
-          'https',
-          () =>
-            new Response(
-              '<!doctype html><main><div data-testid="tracklist-row"><a href="/track/aaaaaaaaaaaaaaaaaaaaaa">Something Went Wrong / Too Many Requests</a><a href="/artist/bbbbbbbbbbbbbbbbbbbbbb">Artist</a><span>3:00</span></div></main>',
-              { headers: { 'content-type': 'text/html; charset=utf-8' } },
-            ),
-        )
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app, {
+      html: '<!doctype html><main><div data-testid="tracklist-row"><a href="/track/aaaaaaaaaaaaaaaaaaaaaa">Something Went Wrong / Too Many Requests</a><a href="/artist/bbbbbbbbbbbbbbbbbbbbbb">Artist</a><span>3:00</span></div></main>',
     })
     const page = await app.firstWindow()
-    await page.evaluate(() =>
-      window.vkspot.importCollection({
-        name: 'Error-like title',
-        origin: 'Synthetic',
-        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-        tracks: [
-          { artist: 'Artist', title: 'Something Went Wrong / Too Many Requests', duration: 180 },
-        ],
-      } as never),
-    )
+    await importSyntheticCollection(page, {
+      name: 'Error-like title',
+      origin: 'Synthetic',
+      tracks: [
+        { artist: 'Artist', title: 'Something Went Wrong / Too Many Requests', duration: 180 },
+      ],
+    })
     await page.getByRole('button', { name: 'Начать поиск', exact: true }).click()
     await expect
       .poll(async () => {
@@ -544,42 +413,24 @@ test('a song title that looks like an error does not stop a valid search', async
         return s.ok && s.value.jobs[0]?.state
       })
       .toBe('complete')
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    expect(state.value.collections[0].rows[0].working.candidates[0].title).toBe(
+    const state = await getAppState(page)
+    expect(state.collections[0].rows[0].working.candidates[0].title).toBe(
       'Something Went Wrong / Too Many Requests',
     )
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('search handles hour-long track durations such as 1:12:28', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await app.evaluate(async ({ session }) => {
-      await session
-        .fromPartition('persist:vkspot-spotify-browser')
-        .protocol.handle(
-          'https',
-          () =>
-            new Response(
-              '<!doctype html><main><div data-testid="tracklist-row"><a href="/track/1111111111111111111111">Standard Track</a><a href="/artist/aaaaaaaaaaaaaaaaaaaaaa">Artist</a><span>3:19</span></div><div data-testid="tracklist-row"><a href="/track/2222222222222222222222">Live Festival Mix</a><a href="/artist/bbbbbbbbbbbbbbbbbbbbbb">Groove Armada</a><span>1:12:28</span></div></main>',
-              { headers: { 'content-type': 'text/html; charset=utf-8' } },
-            ),
-        )
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app, {
+      html: '<!doctype html><main><div data-testid="tracklist-row"><a href="/track/1111111111111111111111">Standard Track</a><a href="/artist/aaaaaaaaaaaaaaaaaaaaaa">Artist</a><span>3:19</span></div><div data-testid="tracklist-row"><a href="/track/2222222222222222222222">Live Festival Mix</a><a href="/artist/bbbbbbbbbbbbbbbbbbbbbb">Groove Armada</a><span>1:12:28</span></div></main>',
     })
     const page = await app.firstWindow()
-    await page.evaluate(() =>
-      window.vkspot.importCollection({
-        name: 'Long track test',
-        origin: 'Synthetic',
-        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-        tracks: [{ artist: 'Artist', title: 'Standard Track', duration: 199 }],
-      } as never),
-    )
+    await importSyntheticCollection(page, {
+      name: 'Long track test',
+      origin: 'Synthetic',
+      tracks: [{ artist: 'Artist', title: 'Standard Track', duration: 199 }],
+    })
     await page.getByRole('button', { name: 'Начать поиск', exact: true }).click()
     await expect
       .poll(async () => {
@@ -587,43 +438,25 @@ test('search handles hour-long track durations such as 1:12:28', async () => {
         return s.ok && s.value.jobs[0]?.state
       })
       .toBe('complete')
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    const candidates = state.value.collections[0].rows[0].working.candidates
+    const state = await getAppState(page)
+    const candidates = state.collections[0].rows[0].working.candidates
     expect(candidates).toHaveLength(2)
     expect(candidates[0].duration).toBe(199)
     expect(candidates[1].duration).toBe(4348)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('search handles Russian localized empty search results such as "Треки не найдены"', async () => {
-  const directory = await createTestProfile('vkspot-browser-')
-  const app = await launch(directory)
-  try {
-    await app.evaluate(async ({ session }) => {
-      await session
-        .fromPartition('persist:vkspot-spotify-browser')
-        .protocol.handle(
-          'https',
-          () =>
-            new Response(
-              '<!doctype html><main><h2>По запросу «Cascade Everytime We Touch Radio Edit» Треки не найдены</h2><p>Проверь, нет ли опечаток, сократи запрос или перефразируй его.</p><button>Все</button></main>',
-              { headers: { 'content-type': 'text/html; charset=utf-8' } },
-            ),
-        )
+  await withTestApp('vkspot-browser-', async ({ app }) => {
+    await installSpotifyBrowserMock(app, {
+      html: '<!doctype html><main><h2>По запросу «Cascade Everytime We Touch Radio Edit» Треки не найдены</h2><p>Проверь, нет ли опечаток, сократи запрос или перефразируй его.</p><button>Все</button></main>',
     })
     const page = await app.firstWindow()
-    await page.evaluate(() =>
-      window.vkspot.importCollection({
-        name: 'Empty search localization test',
-        origin: 'Synthetic',
-        completeness: { expected: 1, status: 'verified-count', message: 'Test only' },
-        tracks: [{ artist: 'Cascade', title: 'Everytime We Touch Radio Edit', duration: 199 }],
-      } as never),
-    )
+    await importSyntheticCollection(page, {
+      name: 'Empty search localization test',
+      origin: 'Synthetic',
+      tracks: [{ artist: 'Cascade', title: 'Everytime We Touch Radio Edit', duration: 199 }],
+    })
     await page.getByRole('button', { name: 'Начать поиск', exact: true }).click()
     await expect
       .poll(
@@ -634,15 +467,11 @@ test('search handles Russian localized empty search results such as "Треки 
         { timeout: 15000 },
       )
       .toBe('complete')
-    const state = await page.evaluate(() => window.vkspot.state())
-    if (!state.ok) throw new Error(state.error)
-    const candidates = state.value.collections[0].rows[0].working.candidates
+    const state = await getAppState(page)
+    const candidates = state.collections[0].rows[0].working.candidates
     expect(candidates).toHaveLength(0)
-    expect(state.value.collections[0].rows[0].working.searchedQuery).toBe(
+    expect(state.collections[0].rows[0].working.searchedQuery).toBe(
       'Cascade Everytime We Touch Radio Edit',
     )
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })

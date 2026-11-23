@@ -4,6 +4,13 @@ import { tmpdir } from 'node:os'
 import { _electron as electron } from '@playwright/test'
 import type { ElectronApplication } from '@playwright/test'
 
+export type TestAppContext = {
+  readonly directory: string
+  readonly app: ElectronApplication
+  close: () => Promise<void>
+  relaunch: () => Promise<ElectronApplication>
+}
+
 export function createTestProfile(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), prefix))
 }
@@ -37,4 +44,70 @@ export async function launchTestApp(directory: string): Promise<ElectronApplicat
     args: executablePath ? [] : ['.'],
     env,
   })
+}
+
+export async function withTestApp<T>(
+  prefix: string,
+  callback: (context: TestAppContext) => Promise<T>,
+): Promise<T> {
+  const directory = await createTestProfile(prefix)
+  let current: ElectronApplication | null = await launchTestApp(directory)
+  const context: TestAppContext = {
+    directory,
+    get app() {
+      if (!current) throw new Error('Test Electron application is currently closed')
+      return current
+    },
+    async close() {
+      if (!current) return
+      const target = current
+      current = null
+      await target.close()
+    },
+    async relaunch() {
+      if (current) {
+        const previous = current
+        current = null
+        await previous.close()
+      }
+      current = await launchTestApp(directory)
+      return current
+    },
+  }
+  try {
+    return await callback(context)
+  } finally {
+    try {
+      if (current) {
+        const target = current
+        current = null
+        await target.close()
+      }
+    } finally {
+      await cleanupTestProfile(directory, prefix)
+    }
+  }
+}
+
+export async function setWindowContentSize(
+  app: ElectronApplication,
+  width: number,
+  height: number,
+): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, size) => {
+      const target =
+        BrowserWindow.getAllWindows().find((win) => win.webContents.getURL().startsWith('file:')) ??
+        BrowserWindow.getAllWindows()[0]
+      if (!target) throw new Error('No BrowserWindow available to resize')
+      target.setContentSize(size.width, size.height)
+    },
+    { width, height },
+  )
+  const page =
+    app.windows().find((win) => win.url().startsWith('file:')) ?? (await app.firstWindow())
+  await page.waitForFunction(
+    (size) => window.innerWidth === size.width && window.innerHeight === size.height,
+    { width, height },
+  )
 }

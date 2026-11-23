@@ -1,24 +1,23 @@
 // Actual UI, synthetic records, no service login or network-dependent actions.
 // Run after `npm run build`; optionally set VKSPOT_TEST_EXECUTABLE to a packaged EXE.
-const { _electron, expect } = require('@playwright/test')
+const { expect } = require('@playwright/test')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { launchElectronApp } = require('../lib/electron-harness.cjs')
+const { createTempProfile, removeTempProfile } = require('../lib/profile.cjs')
+
+const PROFILE_PREFIX = 'readme-profile-'
 
 ;(async () => {
   const root = path.resolve(__dirname, '../..')
-  const profileRoot = path.join(root, '.local/tmp')
-  await fs.mkdir(profileRoot, { recursive: true })
-  const profile = await fs.mkdtemp(path.join(profileRoot, 'readme-profile-'))
+  const profile = await createTempProfile(root, PROFILE_PREFIX)
   const assets = path.join(root, 'docs/images')
-  const env = { ...process.env, VKSPOT_DATA_DIR: profile, VKSPOT_BACKGROUND_TEST: '1' }
-  delete env.ELECTRON_RUN_AS_NODE
   let app
   try {
-    const executablePath = process.env.VKSPOT_TEST_EXECUTABLE
-    app = await _electron.launch({
-      ...(executablePath ? { executablePath } : {}),
-      args: executablePath ? [] : [root],
-      env,
+    app = await launchElectronApp({
+      root,
+      profile,
+      executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
     })
     const page = await app.firstWindow()
     page.setDefaultTimeout(10000)
@@ -96,7 +95,7 @@ const path = require('node:path')
       await page
         .locator('.collection-card')
         .first()
-        .getByRole('button', { name: 'Открыть' })
+        .getByRole('button', { name: 'Открыть', exact: true })
         .click()
       await page.getByRole('row', { name: 'Запись 1: Северный свет (Remix)', exact: true }).click()
       await expect(page.locator('.inspector')).toBeVisible()
@@ -115,15 +114,10 @@ const path = require('node:path')
     try {
       if (app) await app.close()
     } finally {
-      if (
-        path.dirname(profile) !== profileRoot ||
-        !path.basename(profile).startsWith('readme-profile-')
-      )
-        throw new Error('Unsafe README profile cleanup target')
-      await fs.rm(profile, { recursive: true, force: true })
+      await removeTempProfile(root, profile, PROFILE_PREFIX)
     }
   }
 })().catch((error) => {
-  process.stderr.write(error.stack + '\n')
+  process.stderr.write((error && error.stack ? error.stack : String(error)) + '\n')
   process.exitCode = 1
 })

@@ -1,5 +1,6 @@
-import { test, expect, type ElectronApplication } from '@playwright/test'
-import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
+import { expect, test, type ElectronApplication } from '@playwright/test'
+import { installSpotifyBrowserMock } from './mocks'
+import { withTestApp } from './support'
 
 type NativePanelState = {
   visible: boolean
@@ -7,25 +8,8 @@ type NativePanelState = {
   page: { text: string; node: string; bridge: string; process: string }
 }
 
-async function setup(directory: string) {
-  const app = await launchTestApp(directory)
-  await app.evaluate(async ({ session }) => {
-    await session
-      .fromPartition('persist:vkspot-spotify-browser')
-      .protocol.handle('https', (request) => {
-        const url = new URL(request.url)
-        if (url.hostname !== 'open.spotify.com') return new Response('', { status: 404 })
-        return new Response(
-          '<!doctype html><html><body><h1>SYNTHETIC SPOTIFY PANEL</h1><p>Isolated page fixture</p></body></html>',
-          { headers: { 'content-type': 'text/html; charset=utf-8' } },
-        )
-      })
-  })
-  return app
-}
-
-const cleanup = (directory: string) =>
-  cleanupTestProfile(directory, 'vkspot-spotify-panel-', 'Unsafe Spotify panel cleanup target')
+const panelHtml =
+  '<!doctype html><html><body><h1>SYNTHETIC SPOTIFY PANEL</h1><p>Isolated page fixture</p></body></html>'
 
 async function openFromConnections(page: Awaited<ReturnType<ElectronApplication['firstWindow']>>) {
   await page.getByRole('button', { name: 'Подключения', exact: true }).click()
@@ -101,22 +85,17 @@ async function expectVisiblePage(
 }
 
 test('Spotify native panel opens after the Radix portal mounts without resizing', async () => {
-  const directory = await createTestProfile('vkspot-spotify-panel-')
-  const app = await setup(directory)
-  try {
+  await withTestApp('vkspot-spotify-panel-', async ({ app }) => {
+    await installSpotifyBrowserMock(app, { html: panelHtml })
     const page = await app.firstWindow()
     await openFromConnections(page)
     await expectVisiblePage(app, page)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })
 
 test('reopening the Spotify panel restores the native view without resizing', async () => {
-  const directory = await createTestProfile('vkspot-spotify-panel-')
-  const app = await setup(directory)
-  try {
+  await withTestApp('vkspot-spotify-panel-', async ({ app }) => {
+    await installSpotifyBrowserMock(app, { html: panelHtml })
     const page = await app.firstWindow()
     await openFromConnections(page)
     await expectVisiblePage(app, page)
@@ -127,8 +106,5 @@ test('reopening the Spotify panel restores the native view without resizing', as
 
     await openFromConnections(page)
     await expectVisiblePage(app, page)
-  } finally {
-    await app.close()
-    await cleanup(directory)
-  }
+  })
 })

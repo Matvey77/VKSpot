@@ -21,11 +21,14 @@
     "dist:linux": "npm run build && electron-builder --linux AppImage deb",
     "rebuild": "electron-builder install-app-deps",
     "postinstall": "electron-builder install-app-deps",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests tools resources/scripts/vk-export.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "audit": "npm audit --audit-level=high",
-    "perf": "node tools/performance/benchmark.cjs"
+    "perf": "node tools/performance/benchmark.cjs",
+    "guide:capture": "node tools/guide/capture.cjs",
+    "guide:readme": "node tools/guide/capture-readme.cjs",
+    "icons:generate": "node tools/icons/generate.cjs"
   },
   "dependencies": {
     "csv-parse": "^7.0.3",

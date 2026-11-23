@@ -1,22 +1,25 @@
 // Reproducible performance probe. Only isolated synthetic records are used.
-const { _electron, expect } = require('@playwright/test')
+const { expect } = require('@playwright/test')
 const fs = require('node:fs/promises')
 const path = require('node:path')
-const { performance } = require('node:perf_hooks')
+const { launchElectronApp } = require('../lib/electron-harness.cjs')
+const { createTempProfile, removeTempProfile } = require('../lib/profile.cjs')
+
+const PROFILE_PREFIX = 'performance-'
 
 const percentile = (values, fraction) =>
   [...values].sort((a, b) => a - b)[Math.floor((values.length - 1) * fraction)] ?? 0
 
 ;(async () => {
   const root = path.resolve(__dirname, '../..')
-  const profileRoot = path.join(root, '.local/tmp')
-  await fs.mkdir(profileRoot, { recursive: true })
-  const profile = await fs.mkdtemp(path.join(profileRoot, 'performance-'))
-  const env = { ...process.env, VKSPOT_DATA_DIR: profile, VKSPOT_BACKGROUND_TEST: '1' }
-  delete env.ELECTRON_RUN_AS_NODE
-  const executablePath = process.env.VKSPOT_TEST_EXECUTABLE
-  const app = await _electron.launch({ executablePath, args: executablePath ? [] : [root], env })
+  const profile = await createTempProfile(root, PROFILE_PREFIX)
+  let app
   try {
+    app = await launchElectronApp({
+      root,
+      profile,
+      executablePath: process.env.VKSPOT_TEST_EXECUTABLE,
+    })
     const page = await app.firstWindow()
     await page.evaluate(() => {
       window.__performanceProbe = { tasks: [], frames: [], running: false }
@@ -173,10 +176,11 @@ const percentile = (values, fraction) =>
     await fs.writeFile(output, JSON.stringify(report, null, 2) + '\n')
     console.log(JSON.stringify(report, null, 2))
   } finally {
-    await app.close()
-    if (path.dirname(profile) !== profileRoot || !path.basename(profile).startsWith('performance-'))
-      throw new Error('Unsafe cleanup')
-    await fs.rm(profile, { recursive: true, force: true })
+    try {
+      if (app) await app.close()
+    } finally {
+      await removeTempProfile(root, profile, PROFILE_PREFIX)
+    }
   }
 })().catch((error) => {
   console.error(error)

@@ -1,17 +1,18 @@
 // Reproducible code-native desktop icon. Run after `npm run build`.
 // This script uses an isolated Electron profile and never touches real collections.
-const { _electron } = require('@playwright/test')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { launchElectronApp } = require('../lib/electron-harness.cjs')
+const { createTempProfile, removeTempProfile } = require('../lib/profile.cjs')
+
+const PROFILE_PREFIX = 'icon-profile-'
+
 ;(async () => {
   const root = path.resolve(__dirname, '../..')
-  const profileRoot = path.join(root, '.local/tmp')
-  await fs.mkdir(profileRoot, { recursive: true })
-  const profile = await fs.mkdtemp(path.join(profileRoot, 'icon-profile-'))
-  const env = { ...process.env, VKSPOT_DATA_DIR: profile }
-  delete env.ELECTRON_RUN_AS_NODE
-  const app = await _electron.launch({ args: [root], env })
+  const profile = await createTempProfile(root, PROFILE_PREFIX)
+  let app
   try {
+    app = await launchElectronApp({ root, profile, background: false })
     const page = await app.firstWindow(),
       svg = await fs.readFile(path.join(root, 'resources/icon.svg'), 'utf8')
     const image = await page.evaluate(async (svg) => {
@@ -25,15 +26,13 @@ const path = require('node:path')
     }, svg)
     await fs.writeFile(path.join(root, 'resources/icon.png'), Buffer.from(image, 'base64'))
   } finally {
-    await app.close()
-    if (
-      path.dirname(profile) !== profileRoot ||
-      !path.basename(profile).startsWith('icon-profile-')
-    )
-      throw new Error('Unsafe icon profile cleanup target')
-    await fs.rm(profile, { recursive: true, force: true })
+    try {
+      if (app) await app.close()
+    } finally {
+      await removeTempProfile(root, profile, PROFILE_PREFIX)
+    }
   }
 })().catch((error) => {
-  process.stderr.write(error.stack)
+  process.stderr.write((error && error.stack ? error.stack : String(error)) + '\n')
   process.exitCode = 1
 })
