@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Вопросы, установка и настройка прокси
+    url: https://github.com/Matvey77/VKSpot/discussions
+    about: Задать вопрос по использованию, прокси или подключению Spotify/VK
+  - name: Сообщить об уязвимости безопасности
+    url: https://github.com/Matvey77/VKSpot/security/policy
+    about: Порядок конфиденциального сообщения об уязвимости (см. SECURITY.md)

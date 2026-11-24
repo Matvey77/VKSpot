@@ -1,0 +1,62 @@
+name: Сообщить об ошибке
+description: Описать сбой в приложении, выгрузке VK, поиске или переносе
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > [!CAUTION]
+        > Не прикрепляй к обращению личную базу `collection.db`, cookies, пароли, токены Spotify или реальный архив медиатеки. Используй обезличенный пример.
+  - type: input
+    id: version
+    attributes:
+      label: Версия VKSpot
+      description: Посмотри в названии установщика или в настройках приложения
+      placeholder: 0.3.1
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Система и архитектура
+      options:
+        - Windows x64
+        - Windows ARM64
+        - macOS Apple Silicon (arm64)
+        - macOS Intel (x64)
+        - Linux x64 (AppImage)
+        - Linux x64 (DEB)
+        - Linux ARM64 (AppImage)
+        - Linux ARM64 (DEB)
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Что произошло
+      description: Кратко опиши ошибку и какое поведение ожидалось
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открываю...
+        2. Нажимаю...
+        3. Вижу ошибку...
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Текст ошибки или обезличенный пример
+      description: Можно приложить сообщение из интерфейса или синтетический фрагмент списка
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Проверка приватности
+      options:
+        - label: Я удалил(а) личные данные, токены, cookies и реальную медиатеку перед отправкой
+          required: true
