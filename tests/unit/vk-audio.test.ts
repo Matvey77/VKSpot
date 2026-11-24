@@ -65,6 +65,9 @@ beforeEach(() => {
   state.link = 'https://vk.ru/audios42?section=all'
   state.signIn = false
   state.result = { playing: true }
+  mockWebContents.loadURL.mockImplementation(async (address: string) => {
+    state.url = address
+  })
   mockWebContents.executeJavaScriptInIsolatedWorld.mockImplementation(
     async (_world, scripts: { code: string }[]) => {
       if (scripts[0].code.includes('function readVKLibraryLink')) {
@@ -222,6 +225,82 @@ describe('VK audio personal-library navigation', () => {
     expect(timeoutResult.playing).toBe(false)
     expect(timeoutResult.error).toContain('вовремя')
     expect(timeoutResult.error).not.toContain('ERR_')
+    player.close()
+  })
+
+  it('settles immediately and avoids deadlock when pause destroys the window during stopPage', async () => {
+    let hung = false
+    mockWebContents.executeJavaScriptInIsolatedWorld.mockImplementation(
+      async (_world, scripts: { code: string }[]) => {
+        if (scripts[0].code.includes('function readVKLibraryLink')) {
+          return { link: state.link, signIn: state.signIn }
+        }
+        if (scripts[0].code.includes('function stopVKAudioPage')) {
+          if (!hung) {
+            hung = true
+            return new Promise(() => {})
+          }
+          return undefined
+        }
+        if (scripts[0].code.includes('function playVKLibraryTrack')) return state.result
+        return undefined
+      },
+    )
+    const player = new VKAudioPlayer(host)
+    const first = player.play({ artist: 'Artist', title: 'First' })
+    await vi.waitFor(() => expect(hung).toBe(true))
+    expect(await player.pause()).toEqual({ playing: false })
+    expect(await first).toEqual({ playing: false })
+
+    state.url = ''
+    expect(await player.play({ artist: 'Artist', title: 'Second' })).toEqual({ playing: true })
+    player.close()
+  })
+
+  it('settles immediately when pause interrupts a hanging loadURL navigation', async () => {
+    let hung = false
+    mockWebContents.loadURL.mockImplementation(async (address: string) => {
+      if (address === state.link && !hung) {
+        hung = true
+        return new Promise<void>(() => {})
+      }
+      state.url = address
+    })
+    const player = new VKAudioPlayer(host)
+    const first = player.play({ artist: 'Artist', title: 'First' })
+    await vi.waitFor(() => expect(hung).toBe(true))
+    expect(await player.pause()).toEqual({ playing: false })
+    expect(await first).toEqual({ playing: false })
+    expect(mockWebContents.stop).toHaveBeenCalled()
+
+    state.url = ''
+    expect(await player.play({ artist: 'Artist', title: 'Second' })).toEqual({ playing: true })
+    player.close()
+  })
+
+  it('settles immediately when pause interrupts a hanging library probe', async () => {
+    let hung = false
+    mockWebContents.executeJavaScriptInIsolatedWorld.mockImplementation(
+      async (_world, scripts: { code: string }[]) => {
+        if (scripts[0].code.includes('function readVKLibraryLink')) {
+          if (!hung) {
+            hung = true
+            return new Promise(() => {})
+          }
+          return { link: state.link, signIn: state.signIn }
+        }
+        if (scripts[0].code.includes('function playVKLibraryTrack')) return state.result
+        return undefined
+      },
+    )
+    const player = new VKAudioPlayer(host)
+    const first = player.play({ artist: 'Artist', title: 'First' })
+    await vi.waitFor(() => expect(hung).toBe(true))
+    expect(await player.pause()).toEqual({ playing: false })
+    expect(await first).toEqual({ playing: false })
+
+    state.url = ''
+    expect(await player.play({ artist: 'Artist', title: 'Second' })).toEqual({ playing: true })
     player.close()
   })
 })

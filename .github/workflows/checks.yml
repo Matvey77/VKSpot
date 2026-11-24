@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -84,7 +84,7 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Configure Windows desktop for Electron tests
         if: matrix.platform == 'win'
         shell: powershell
@@ -106,7 +106,7 @@ jobs:
           test -n "$screen_id"
           displayplacer "id:$screen_id res:1920x1080 scaling:off origin:(0,0) degree:0"
           displayplacer list
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -175,7 +175,7 @@ jobs:
             "$hash  $($file.Name)"
           }
           $lines | Set-Content "release/$version/SHA256SUMS.txt" -Encoding utf8
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}-${{ matrix.arch }}
           path: |
@@ -186,7 +186,7 @@ jobs:
             release/*/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: diagnostics-${{ matrix.platform }}-${{ matrix.arch }}

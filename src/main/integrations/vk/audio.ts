@@ -44,6 +44,7 @@ export class VKAudioPlayer {
   private lastTrack: VKAudioTrack | undefined
   private startingRevision: number | undefined
   private cancellation: AbortController | undefined
+  private readonly viewAbort = new WeakMap<BrowserWindow, AbortController>()
   private readonly world = 1003
 
   constructor(
@@ -99,6 +100,8 @@ export class VKAudioPlayer {
     })
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     ensureVKSessionPolicy(view.webContents.session)
+    const life = new AbortController()
+    this.viewAbort.set(view, life)
     const resetViewState = () => {
       if (this.view !== view) return
       ++this.revision
@@ -107,55 +110,137 @@ export class VKAudioPlayer {
       this.currentKey = null
       this.view = null
     }
+    const teardown = () => {
+      life.abort()
+      main.off('closed', closeWithHost)
+      resetViewState()
+    }
     const closeWithHost = () => this.close()
     main.once('closed', closeWithHost)
-    view.once('closed', () => {
-      main.off('closed', closeWithHost)
-      resetViewState()
-    })
-    view.webContents.on('destroyed', () => {
-      main.off('closed', closeWithHost)
-      resetViewState()
-    })
+    view.once('closed', teardown)
+    view.webContents.on('destroyed', teardown)
     view.webContents.on('render-process-gone', () => {
-      main.off('closed', closeWithHost)
-      resetViewState()
+      teardown()
       if (!view.isDestroyed()) view.destroy()
     })
     return view
   }
 
-  private async execute<T>(view: BrowserWindow, code: string): Promise<T> {
-    return view.webContents.executeJavaScriptInIsolatedWorld(this.world, [{ code }]) as Promise<T>
+  private destroyView(view: BrowserWindow | null): void {
+    if (!view) return
+    this.viewAbort.get(view)?.abort()
+    if (!view.isDestroyed()) view.destroy()
   }
 
-  private async load(view: BrowserWindow, address: string): Promise<void> {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    try {
-      await Promise.race([
-        view.webContents.loadURL(address),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            if (!view.webContents.isDestroyed()) view.webContents.stop()
-            reject(
-              new Error(
-                'Страница VK не загрузилась за 20 секунд. Проверь сеть или подключение VK.',
-              ),
-            )
-          }, 20000)
-        }),
-      ])
-    } finally {
-      clearTimeout(timer)
+  private raceWithLifecycle<T>(
+    view: BrowserWindow,
+    start: () => Promise<T>,
+    options: {
+      signal?: AbortSignal
+      timeoutMs?: number
+      timeoutError?: string
+      onAbort?: () => void
+    } = {},
+  ): Promise<T> {
+    const life = this.viewAbort.get(view)?.signal
+    if (view.webContents.isDestroyed() || life?.aborted) {
+      return Promise.reject(new Error('Окно аудио VK закрыто.'))
     }
+    if (options.signal?.aborted) {
+      options.onAbort?.()
+      return Promise.reject(new Error('Поиск оригинала VK отменён.'))
+    }
+    let promise: Promise<T>
+    try {
+      promise = start()
+    } catch (error) {
+      return Promise.reject(error)
+    }
+    return new Promise<T>((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const cleanup = () => {
+        if (timer !== undefined) clearTimeout(timer)
+        life?.removeEventListener('abort', onLifeAbort)
+        options.signal?.removeEventListener('abort', onSignalAbort)
+      }
+      const finish = (action: () => void) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        action()
+      }
+      const onLifeAbort = () => finish(() => reject(new Error('Окно аудио VK закрыто.')))
+      const onSignalAbort = () =>
+        finish(() => {
+          options.onAbort?.()
+          reject(new Error('Поиск оригинала VK отменён.'))
+        })
+      life?.addEventListener('abort', onLifeAbort, { once: true })
+      options.signal?.addEventListener('abort', onSignalAbort, { once: true })
+      if (options.timeoutMs !== undefined) {
+        timer = setTimeout(() => {
+          finish(() => {
+            options.onAbort?.()
+            reject(new Error(options.timeoutError ?? 'Операция аудио VK превысила время ожидания.'))
+          })
+        }, options.timeoutMs)
+      }
+      promise.then(
+        (value) => finish(() => resolve(value)),
+        (error) => finish(() => reject(error)),
+      )
+    })
   }
 
-  private async stopPage(): Promise<void> {
-    const view = this.view
+  private delay(ms: number, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', done)
+        resolve()
+      }
+      const timer = setTimeout(done, ms)
+      signal?.addEventListener('abort', done, { once: true })
+    })
+  }
+
+  private async execute<T>(
+    view: BrowserWindow,
+    code: string,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<T> {
+    return this.raceWithLifecycle(
+      view,
+      () => view.webContents.executeJavaScriptInIsolatedWorld(this.world, [{ code }]) as Promise<T>,
+      options,
+    )
+  }
+
+  private async load(view: BrowserWindow, address: string, signal?: AbortSignal): Promise<void> {
+    return this.raceWithLifecycle(view, () => view.webContents.loadURL(address), {
+      signal,
+      timeoutMs: 20000,
+      timeoutError: 'Страница VK не загрузилась за 20 секунд. Проверь сеть или подключение VK.',
+      onAbort: () => {
+        if (!view.webContents.isDestroyed()) view.webContents.stop()
+      },
+    })
+  }
+
+  private async stopPage(
+    targetView: BrowserWindow | null = this.view,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const view = targetView
     if (!view || view.webContents.isDestroyed()) return
     if (view.webContents.isLoadingMainFrame()) view.webContents.stop()
     try {
-      await this.execute(view, `(${stopVKAudioPage.toString()})()`)
+      await this.execute(view, `(${stopVKAudioPage.toString()})()`, {
+        signal,
+        timeoutMs: 3000,
+      })
     } catch {
       /* Navigation or closing already stops this document. */
     }
@@ -180,7 +265,7 @@ export class VKAudioPlayer {
     this.lastTrack = undefined
     // Interrupt immediately, then serialize navigation so an older request cannot
     // navigate or start playing after the user selected another original.
-    const stopped = this.stopPage()
+    const stopped = this.stopPage(this.view, cancellation.signal)
     const previous = this.pending
     const task = (async (): Promise<VKAudioResult> => {
       await stopped
@@ -194,7 +279,7 @@ export class VKAudioPlayer {
         const personal = vkLibraryURL(this.personalLibrary())
         const current = vkLibraryURL(view.webContents.getURL())
         if (!current || (personal && personal !== current))
-          await this.load(view, personal ?? 'https://vk.com/audio')
+          await this.load(view, personal ?? 'https://vk.com/audio', cancellation.signal)
         if (cancelled()) return { playing: false }
         // Catalogue home is not the user's list. Follow the same public tab as
         // the export adapter, including vk.com -> vk.ru redirects and hydration.
@@ -205,6 +290,7 @@ export class VKAudioPlayer {
           >(
             view,
             `(() => { const readVKLibraryLink = ${readVKLibraryLink.toString()}; const isVKSignInPage = ${isVKSignInPage.toString()}; return { link: readVKLibraryLink(), signIn: isVKSignInPage() }; })()`,
+            { signal: cancellation.signal },
           )
           if (typeof probe === 'object' && probe !== null && probe.signIn === true) {
             return {
@@ -214,11 +300,11 @@ export class VKAudioPlayer {
           }
           const link = vkLibraryURL(typeof probe === 'string' ? probe : (probe?.link ?? null))
           if (link && view.webContents.getURL() !== link) {
-            await this.load(view, link)
+            await this.load(view, link, cancellation.signal)
             break
           }
           if (vkLibraryURL(view.webContents.getURL())) break
-          await new Promise((resolve) => setTimeout(resolve, 150))
+          await this.delay(150, cancellation.signal)
         }
         if (cancelled()) return { playing: false }
         if (!vkLibraryURL(view.webContents.getURL()))
@@ -227,7 +313,7 @@ export class VKAudioPlayer {
             error:
               'VK не открыл личную медиатеку. Открой «Подключения → VK» и перейди в «Мою музыку», затем повтори прослушивание.',
           }
-        await this.stopPage()
+        await this.stopPage(view, cancellation.signal)
         if (cancelled()) return { playing: false }
         view.webContents.setAudioMuted(false)
         let polling = false,
@@ -239,6 +325,7 @@ export class VKAudioPlayer {
             const message = await this.execute<unknown>(
               view,
               'globalThis.__VKSPOT_AUDIO__?.message ?? null',
+              { signal: cancellation.signal, timeoutMs: 2000 },
             )
             if (!cancelled() && typeof message === 'string' && message !== lastProgress) {
               lastProgress = message
@@ -250,26 +337,19 @@ export class VKAudioPlayer {
             polling = false
           }
         }, 350)
-        const interrupted = new Promise<never>((_resolve, reject) => {
-          const abort = () => reject(new Error('Поиск оригинала VK отменён.'))
-          if (cancellation.signal.aborted) abort()
-          else cancellation.signal.addEventListener('abort', abort, { once: true })
-        })
-        const result = await Promise.race([
-          this.execute<VKAudioResult>(
-            view,
-            `(${playVKLibraryTrack.toString()})(${JSON.stringify(track)})`,
-          ),
-          interrupted,
-        ])
+        const result = await this.execute<VKAudioResult>(
+          view,
+          `(${playVKLibraryTrack.toString()})(${JSON.stringify(track)})`,
+          { signal: cancellation.signal },
+        )
         if (cancelled()) return { playing: false }
         if (result.playing) {
           this.playing = true
           this.currentKey = key
           this.lastTrack = track
         } else {
-          await this.stopPage()
-          view.webContents.setAudioMuted(true)
+          await this.stopPage(view, cancellation.signal)
+          if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(true)
         }
         return result
       } catch (error) {
@@ -295,13 +375,14 @@ export class VKAudioPlayer {
     ++this.revision
     this.cancellation?.abort()
     this.playing = false
-    if (this.view && !this.view.webContents.isDestroyed()) this.view.webContents.setAudioMuted(true)
+    const view = this.view
+    if (view && !view.webContents.isDestroyed()) view.webContents.setAudioMuted(true)
     if (starting) {
-      this.view?.destroy()
       this.view = null
+      this.destroyView(view)
       return { playing: false }
     }
-    await this.stopPage()
+    await this.stopPage(view)
     return { playing: false }
   }
 
@@ -320,7 +401,8 @@ export class VKAudioPlayer {
     this.playing = false
     this.currentKey = null
     this.lastTrack = undefined
-    if (this.view && !this.view.isDestroyed()) this.view.destroy()
+    const view = this.view
     this.view = null
+    this.destroyView(view)
   }
 }

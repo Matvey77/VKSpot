@@ -43,10 +43,10 @@ async function playback() {
   return app.evaluate(async ({ webContents }) => {
     const view = webContents
       .getAllWebContents()
-      .find((item) => item.getURL().startsWith('https://vk.ru/audios42'))
+      .find((item) => !item.isDestroyed() && item.getURL().startsWith('https://vk.ru/audios42'))
     return view
       ? view.executeJavaScript(
-          '({clicked:window.__clicked,wrong:window.__wrong,paused:document.querySelector("audio").paused,time:document.querySelector("audio").currentTime})',
+          '(() => { const audio = document.querySelector("audio"); return audio ? { clicked: window.__clicked, wrong: window.__wrong, paused: audio.paused, time: audio.currentTime } : null })()',
         )
       : null
   })
