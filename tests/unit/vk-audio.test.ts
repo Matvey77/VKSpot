@@ -303,4 +303,14 @@ describe('VK audio personal-library navigation', () => {
     expect(await player.play({ artist: 'Artist', title: 'Second' })).toEqual({ playing: true })
     player.close()
   })
+
+  it('reloads the clean personal-library URL when the hidden view still has an active search query', async () => {
+    const player = new VKAudioPlayer(host, () => 'https://vk.ru/audios42?section=all')
+    expect(await player.play({ artist: 'Artist', title: 'First' })).toEqual({ playing: true })
+    state.url = 'https://vk.ru/audios42?q=First&section=all'
+    expect(await player.play({ artist: 'Artist', title: 'Second' })).toEqual({ playing: true })
+    expect(mockWebContents.loadURL).toHaveBeenCalledTimes(2)
+    expect(mockWebContents.loadURL).toHaveBeenLastCalledWith('https://vk.ru/audios42?section=all')
+    player.close()
+  })
 })

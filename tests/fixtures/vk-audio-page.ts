@@ -130,3 +130,242 @@ export function modernVKAudioPage(
     render();
     </script>`
 }
+
+// Synthetic 2026 VKUI DOM without data-testid attributes, matching current VK Music structure.
+export function currentVKAudioPage(
+  options: {
+    total?: number
+    targetIndex?: number
+    missing?: boolean
+    blocked?: boolean
+    hideSearch?: boolean
+  } = {},
+): string {
+  const config = {
+    total: 800,
+    targetIndex: 705,
+    missing: false,
+    blocked: false,
+    hideSearch: false,
+    ...options,
+  }
+  return `<!doctype html><meta charset="utf-8"><style>
+    body { margin:0; font-family: sans-serif }
+    header { height: 48px; display: flex; align-items: center; gap: 12px }
+    .toolbar { padding: 8px; display: flex; gap: 8px }
+    .row { height: 48px; display: flex; align-items: center }
+    .host { display: flex; width: 100%; align-items: center; gap: 12px }
+    .bar { width: 820px; height: 72px; display: flex; align-items: center; gap: 12px }
+  </style>
+  <header>
+    <input type="search" placeholder="Поиск" oninput="window.__headerSearchTouched=true">
+    <ul><li>
+      <div role="button" aria-label="Аудиоплеер" id="mini-info"></div>
+      <button type="button" id="mini-toggle">Воспроизвести</button>
+    </li></ul>
+  </header>
+  <nav>
+    <a role="tab" aria-selected="true" href="https://vk.ru/audios42?section=all">Моя музыка</a>
+  </nav>
+  ${
+    config.hideSearch
+      ? ''
+      : `<div class="toolbar">
+    <input type="search" id="music-search" placeholder="Поиск музыки">
+    <button type="button" id="music-search-btn">Найти</button>
+    <button type="button" id="music-clear-btn">Очистить поиск</button>
+  </div>`
+  }
+  <div id="player-bar" class="bar">
+    <button type="button">Предыдущая аудиозапись</button>
+    <button type="button" id="bar-toggle">Слушать</button>
+    <button type="button">Следующая аудиозапись</button>
+    <a id="bar-title" href="/audio-42_0"></a>
+    <a id="bar-artist" href="/artist/0"></a>
+    <span id="bar-timer"></span>
+    <button type="button">Повторять</button>
+  </div>
+  <div id="search-results"></div>
+  <div id="library-view">
+    <section>
+      <div role="heading">Недавно прослушанные</div>
+      <div data-audio-id="99_1" data-testentitytag="audio" class="row">
+        <div role="button" tabindex="0" aria-label="Начать прослушивание" id="recent-tap"></div>
+        <div aria-disabled="false" class="host">
+          <div><img alt="" width="40" height="40"></div>
+          <div><div>
+            <div><div><span><span><a href="/audio-99_1">Original <span>(Live)</span></a></span></span></div><div><svg aria-hidden="true"></svg></div></div>
+            <div><span><a href="/artist/99">Synthetic Artist</a></span></div>
+          </div></div>
+          <div><div><div><span>3:43</span></div></div></div>
+        </div>
+      </div>
+    </section>
+    <div role="group"><div role="button" id="shuffle-btn"><span>Перемешать всё</span></div></div>
+    <div role="list" id="my-list"></div>
+  </div>
+  <script>
+    const config = ${JSON.stringify(config)};
+    window.__personalClicked = [];
+    window.__globalClicked = 0;
+    window.__recentClicked = 0;
+    window.__headerSearchTouched = false;
+    let activeKey = null, playing = false, elapsed = 0, timer = null, context = null;
+    let loadedLimit = 100, currentQuery = '';
+    const recentTap = document.querySelector('#recent-tap');
+    if (recentTap) recentTap.onclick = () => { window.__recentClicked++; };
+
+    function makeTrack(index, isTarget) {
+      return {
+        key: (isTarget ? 'personal:' : 'song:') + index,
+        id: '42_' + (index + 1),
+        titleMain: isTarget ? 'Original' : 'Song ' + index,
+        titleSub: isTarget ? '(Live)' : '',
+        artist: isTarget ? 'Synthetic Artist' : 'Fixture Artist',
+        duration: '3:43',
+        blocked: isTarget && config.blocked,
+      };
+    }
+
+    function stopAudio() {
+      playing = false;
+      clearInterval(timer);
+      if (context) context.suspend();
+      renderAll();
+    }
+
+    function toggleTrack(item, onGlobal) {
+      if (onGlobal) { window.__globalClicked++; return; }
+      if (activeKey === item.key && playing) { stopAudio(); return; }
+      activeKey = item.key;
+      playing = true;
+      elapsed = 0;
+      window.__personalClicked.push(item.id);
+      if (!context) {
+        context = new AudioContext();
+        const source = context.createBufferSource();
+        source.buffer = context.createBuffer(1, context.sampleRate * 60, context.sampleRate);
+        source.connect(context.destination);
+        source.start();
+      } else {
+        context.resume();
+      }
+      clearInterval(timer);
+      timer = setInterval(() => { elapsed++; renderAll(); }, 250);
+      renderAll();
+    }
+
+    function buildRow(item, onGlobal) {
+      const active = activeKey === item.key;
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.setAttribute('data-audio-id', item.id);
+      row.setAttribute('data-testentitytag', 'audio');
+      const tap = document.createElement('div');
+      tap.setAttribute('role', 'button');
+      tap.setAttribute('tabindex', '0');
+      tap.setAttribute('aria-label', active && playing ? 'Поставить на\\u00a0паузу' : 'Начать прослушивание');
+      tap.onclick = () => toggleTrack(item, onGlobal);
+      const host = document.createElement('div');
+      host.setAttribute('aria-disabled', item.blocked ? 'true' : 'false');
+      host.className = 'host';
+      host.innerHTML =
+        '<div><img alt="" width="40" height="40"></div>' +
+        '<div><div>' +
+          '<div><div><span><span><a href="/audio-' + item.id + '">' + item.titleMain + ' <span>' + item.titleSub + '</span></a></span></span></div><div><svg aria-hidden="true"></svg></div></div>' +
+          '<div><span><a href="/artist/1">' + item.artist + '</a></span></div>' +
+        '</div></div>' +
+        '<div><div><div><span>' + (active ? '0:' + String(elapsed).padStart(2, '0') : item.duration) + '</span></div></div>' +
+        (active ? '<div role="slider"></div>' : '') + '</div>';
+      row.append(tap, host);
+      return row;
+    }
+
+    function renderPlayer() {
+      const miniInfo = document.querySelector('#mini-info');
+      const miniToggle = document.querySelector('#mini-toggle');
+      const barToggle = document.querySelector('#bar-toggle');
+      const barTitle = document.querySelector('#bar-title');
+      const barArtist = document.querySelector('#bar-artist');
+      const barTimer = document.querySelector('#bar-timer');
+      if (activeKey) {
+        miniInfo.textContent = 'Synthetic Artist — Original (Live)';
+        barTitle.textContent = 'Original (Live)';
+        barArtist.textContent = 'Synthetic Artist';
+        barTimer.textContent = '0:' + String(elapsed).padStart(2, '0');
+      }
+      miniToggle.textContent = playing ? 'Приостановить' : 'Воспроизвести';
+      barToggle.textContent = playing ? 'Пауза' : 'Слушать';
+      miniToggle.onclick = () => { if (playing) stopAudio(); };
+      barToggle.onclick = () => { if (playing) stopAudio(); };
+    }
+
+    function renderList() {
+      const list = document.querySelector('#my-list');
+      list.replaceChildren();
+      const count = Math.min(config.total, loadedLimit);
+      for (let i = 0; i < count; i++) {
+        const isTarget = !config.missing && i === config.targetIndex;
+        list.append(buildRow(makeTrack(i, isTarget), false));
+      }
+    }
+
+    function renderSearch() {
+      const searchBox = document.querySelector('#search-results');
+      const lib = document.querySelector('#library-view');
+      if (!currentQuery) {
+        searchBox.replaceChildren();
+        lib.style.display = '';
+        renderList();
+        return;
+      }
+      lib.style.display = 'none';
+      searchBox.replaceChildren();
+      const q = currentQuery.toLowerCase();
+      const matchesTarget = !config.missing && ('synthetic artist original (live)'.includes(q) || q.includes('original'));
+      if (matchesTarget) {
+        const mySec = document.createElement('section');
+        mySec.innerHTML = '<div role="heading">Мои треки</div>';
+        mySec.append(buildRow(makeTrack(config.targetIndex, true), false));
+        searchBox.append(mySec);
+      }
+      const allSec = document.createElement('section');
+      allSec.innerHTML = '<div role="heading">Все треки <a href="https://vk.ru/audios42?section=all&block=all">Показать все</a></div>';
+      allSec.append(buildRow({ key: 'global', id: '999_1', titleMain: 'Original', titleSub: '(Live)', artist: 'Synthetic Artist', duration: '3:43', blocked: false }, true));
+      searchBox.append(allSec);
+    }
+
+    function renderAll() {
+      renderPlayer();
+      renderSearch();
+      if (!currentQuery) renderList();
+    }
+
+    window.addEventListener('scroll', () => {
+      if (!currentQuery && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 80 && loadedLimit < config.total) {
+        loadedLimit = Math.min(config.total, loadedLimit + 200);
+        renderList();
+      }
+    });
+
+    const input = document.querySelector('#music-search');
+    const searchBtn = document.querySelector('#music-search-btn');
+    const clearBtn = document.querySelector('#music-clear-btn');
+    if (searchBtn && input) {
+      searchBtn.onclick = () => {
+        currentQuery = input.value.trim();
+        history.replaceState(null, '', 'https://vk.ru/audios42?q=' + encodeURIComponent(currentQuery) + '&section=all');
+        renderAll();
+      };
+    }
+    if (clearBtn && input) {
+      clearBtn.onclick = () => {
+        input.value = '';
+        currentQuery = '';
+        history.replaceState(null, '', 'https://vk.ru/audios42?section=all');
+        renderAll();
+      };
+    }
+    renderAll();
+  </script>`
+}

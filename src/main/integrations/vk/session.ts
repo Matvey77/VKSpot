@@ -347,7 +347,17 @@ export class VKSessionManager {
 
       const myMusicProbe = contents.executeJavaScriptInIsolatedWorld(this.vkWorld, [
         {
-          code: `(() => { const tab = document.querySelector('[data-testid="AudioCatalog_Tabs_Tab_all"]'); return tab && tab.getAttribute('aria-selected') !== 'true' ? tab.href : null })()`,
+          code: `(() => {
+            const tab =
+              document.querySelector('[data-testid="AudioCatalog_Tabs_Tab_all"]') ||
+              [...document.querySelectorAll('a[href*="/audios"]')].find((link) =>
+                /^(?:моя музыка|мои аудиозаписи|my music|my audio)$/i.test((link.textContent || '').trim()),
+              ) ||
+              [...document.querySelectorAll('a[role="tab"][href*="/audios"]')].find(
+                (link) => /[?&]section=all(?:&|$)/.test(link.href) && !/[?&]block=/.test(link.href),
+              )
+            return tab && tab.getAttribute('aria-selected') !== 'true' ? tab.href : null
+          })()`,
         },
       ])
       myMusicProbe.catch(() => {})

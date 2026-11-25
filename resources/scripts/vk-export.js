@@ -33,7 +33,7 @@
   }
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
   const rowSelector =
-    '.audio_row[data-full-id], .audio_row[data-audio], .audio_item[data-audio], [data-audio-id], [data-testid="MusicTrackRow"]'
+    '.audio_row[data-full-id], .audio_row[data-audio], .audio_item[data-audio], [data-audio-id], [data-testid="MusicTrackRow"], [data-testentitytag="audio"]'
   const excluded =
     '.audioPlaylistSnippet, [data-testid*="PlaylistSnippet"], [data-testid*="Recommendation"], aside, [data-testid*="Recent"], [data-testid*="History"], [data-testid*="Friends"], [data-testid*="Curator"]'
 
@@ -80,7 +80,9 @@
     for (const candidate of scope.querySelectorAll(rowSelector)) {
       if (isExcludedRow(candidate)) continue
       const node =
-        candidate.closest('.audio_row, .audio_item, [data-testid="MusicTrackRow"]') || candidate
+        candidate.closest(
+          '.audio_row, .audio_item, [data-testid="MusicTrackRow"], [data-testentitytag="audio"]',
+        ) || candidate
       if (node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden')
         nodes.add(node)
     }
@@ -105,14 +107,81 @@
     }
     return ''
   }
+  function readSpacedText(root) {
+    if (!root) return ''
+    let out = ''
+    const append = (chunk) => {
+      if (!chunk) return
+      if (/^\s+$/.test(chunk)) {
+        if (out && !/\s$/.test(out)) out += ' '
+        return
+      }
+      if (out && !/\s$/.test(out) && !/^[\s,;]/.test(chunk)) out += ' '
+      out += chunk
+    }
+    const visit = (node) => {
+      if (node.nodeType === 3) {
+        append(node.textContent || '')
+        return
+      }
+      if (node.nodeType !== 1) return
+      if (node.tagName.toLowerCase() === 'svg' || node.getAttribute('aria-hidden') === 'true')
+        return
+      for (const child of node.childNodes) visit(child)
+    }
+    visit(root)
+    return out.replace(/\s+/g, ' ').trim()
+  }
+  const durationPattern = /^\d+(?::\d{2}){1,2}$/
+  function rowStructure(node) {
+    const disabledHost = node.matches('[aria-disabled]')
+      ? node
+      : [...node.querySelectorAll('[aria-disabled]')].find((el) => el.children.length >= 2) || null
+    let titleBlock = null
+    let artistBlock = null
+    let durationCol = null
+    if (disabledHost && disabledHost.children.length >= 2) {
+      const cols = [...disabledHost.children]
+      const hasOnlyDuration = (col) => durationPattern.test((col.textContent || '').trim())
+      const hasOnlyMedia = (col) =>
+        Boolean(col.querySelector('img')) && !(col.textContent || '').trim()
+      const metaCol =
+        cols.find(
+          (col) => !hasOnlyMedia(col) && !hasOnlyDuration(col) && (col.textContent || '').trim(),
+        ) || cols[1]
+      durationCol =
+        cols.find((col) => col !== metaCol && hasOnlyDuration(col)) ||
+        (cols.length >= 3 ? cols[cols.length - 1] : null)
+      if (metaCol) {
+        let inner = metaCol
+        while (inner.children.length === 1 && inner.firstElementChild?.tagName === 'DIV') {
+          inner = inner.firstElementChild
+        }
+        if (inner.children.length >= 2) {
+          titleBlock = inner.children[0]
+          const second = inner.children[1]
+          if (readSpacedText(second) || !second.querySelector('svg')) {
+            artistBlock = second
+          }
+        } else {
+          titleBlock = inner
+        }
+      }
+    }
+    return { disabledHost, titleBlock, artistBlock, durationCol }
+  }
   function read(node) {
     const rawText = node.textContent || ''
+    const disabledState =
+      node.getAttribute('aria-disabled') ||
+      node.querySelector('[aria-disabled]')?.getAttribute('aria-disabled') ||
+      null
     const stamp = JSON.stringify([
       node.getAttribute('data-audio'),
       node.getAttribute('data-full-id'),
       node.getAttribute('data-audio-id'),
       node.className,
-      node.getAttribute('aria-disabled'),
+      disabledState,
       rawText,
     ])
     const cached = rowCache.get(node)
@@ -155,7 +224,7 @@
           ? authorGroup.textContent.trim()
           : authors.map((author) => author.textContent.trim()).join(', ')
         : authors[0]?.textContent.trim()
-    const artist =
+    let artist =
       modernArtist ||
       text(node, [
         '.audio_row__performers',
@@ -164,18 +233,98 @@
         '[class*="MusicTrackRow__authors"]',
       ]) ||
       plain(payloadArtist)
-    const time = text(node, [
+    let time = text(node, [
       '[data-testid="MusicTrackRow_Duration"]',
       '.audio_row__duration',
       '.audio_item__duration',
     ])
+    const parts = rowStructure(node)
+    if (!title) {
+      const titleScope = parts.titleBlock || node
+      const titleLink = [...titleScope.querySelectorAll('a[href]')].find((a) => {
+        const href = a.getAttribute('href') || ''
+        return /^\/audio(?:-?\d+|[a-f0-9]+)/i.test(href) && !/[?&]performer=/.test(href)
+      })
+      if (titleLink) {
+        title = readSpacedText(titleLink)
+      } else if (parts.titleBlock) {
+        const candidate = readSpacedText(parts.titleBlock)
+        if (candidate && !durationPattern.test(candidate)) title = candidate
+      }
+    }
+    if (!artist) {
+      if (parts.artistBlock) {
+        const candidate = readSpacedText(parts.artistBlock)
+        if (candidate && !durationPattern.test(candidate)) artist = candidate
+      }
+      if (!artist) {
+        const artistLinks = [...(parts.artistBlock || node).querySelectorAll('a[href]')].filter(
+          (a) => {
+            const href = a.getAttribute('href') || ''
+            return href.startsWith('/artist/') || /[?&]performer=/.test(href)
+          },
+        )
+        if (artistLinks.length) {
+          const parent = artistLinks[0].parentElement
+          const parentHasTitle =
+            parent &&
+            [...parent.querySelectorAll('a[href]')].some((a) => {
+              const href = a.getAttribute('href') || ''
+              return /^\/audio(?:-?\d+|[a-f0-9]+)/i.test(href) && !/[?&]performer=/.test(href)
+            })
+          if (
+            artistLinks.length > 1 &&
+            parent &&
+            artistLinks.every((a) => a.parentElement === parent) &&
+            !parentHasTitle
+          ) {
+            artist = readSpacedText(parent)
+          } else {
+            artist = artistLinks
+              .map((a) => readSpacedText(a))
+              .filter(Boolean)
+              .join(', ')
+          }
+        }
+      }
+    }
+    const containsNode = (root, target) => {
+      if (!root || !target) return false
+      for (let cur = target; cur; cur = cur.parentElement) {
+        if (cur === root) return true
+      }
+      return false
+    }
+    if (!durationPattern.test(time)) {
+      if (parts.durationCol) {
+        if (parts.durationCol.children.length === 0) {
+          const direct = (parts.durationCol.textContent || '').trim()
+          if (durationPattern.test(direct)) time = direct
+        } else {
+          const inCol = [...parts.durationCol.querySelectorAll('span, div')].find(
+            (el) => el.children.length === 0 && durationPattern.test((el.textContent || '').trim()),
+          )
+          if (inCol) time = (inCol.textContent || '').trim()
+        }
+      }
+      if (!durationPattern.test(time)) {
+        const leaves = [...node.querySelectorAll('span, div')].filter((el) => {
+          if (el.children.length !== 0) return false
+          if (el.closest('a')) return false
+          if (containsNode(parts.titleBlock, el) || containsNode(parts.artistBlock, el))
+            return false
+          return durationPattern.test((el.textContent || '').trim())
+        })
+        if (leaves.length) time = (leaves[leaves.length - 1].textContent || '').trim()
+      }
+    }
     const seconds = tuple ? payload[5] : object.duration
     const hasSeconds =
       seconds !== '' &&
       seconds !== null &&
       seconds !== undefined &&
       (typeof seconds !== 'string' || seconds.trim() !== '')
-    const duration = /^\d+(?::\d{2}){1,2}$/.test(time)
+    const duration = durationPattern.test(time)
       ? time.split(':').reduce((sum, n) => sum * 60 + Number(n), 0)
       : hasSeconds && Number.isFinite(Number(seconds))
         ? Math.max(0, Number(seconds))
@@ -195,6 +344,7 @@
         node.className,
       ) ||
       node.getAttribute('aria-disabled') === 'true' ||
+      parts.disabledHost?.getAttribute('aria-disabled') === 'true' ||
       object.is_restricted === true ||
       object.is_deleted === true ||
       node.matches(claimedSelector) ||

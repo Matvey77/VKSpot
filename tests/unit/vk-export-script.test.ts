@@ -10,9 +10,10 @@ type AttrMap = Record<string, string>
 
 class MockElement {
   children: MockElement[] = []
+  nodes: Array<MockElement | { nodeType: number; textContent: string }> = []
   parentElement: MockElement | null = null
   attrs = new Map<string, string>()
-  textContent = ''
+  private _text = ''
   scrollTop = 0
   scrollHeight = 500
   clientHeight = 500
@@ -22,6 +23,7 @@ class MockElement {
   connected = true
   doc: MockDocument
   tagName: string
+  readonly nodeType = 1
 
   constructor(doc: MockDocument, tagName: string, attrs: AttrMap = {}, textContent = '') {
     this.doc = doc
@@ -29,7 +31,36 @@ class MockElement {
     for (const [key, value] of Object.entries(attrs)) {
       this.attrs.set(key, value)
     }
-    this.textContent = textContent
+    if (textContent) {
+      this._text = textContent
+      this.nodes.push({ nodeType: 3, textContent })
+    }
+  }
+
+  get textContent(): string {
+    if (this.children.length === 0) return this._text
+    return this.nodes.map((node) => node.textContent).join('')
+  }
+
+  set textContent(value: string) {
+    this._text = value
+    this.children = []
+    this.nodes = value ? [{ nodeType: 3, textContent: value }] : []
+  }
+
+  get childNodes() {
+    return this.nodes
+  }
+
+  get firstElementChild(): MockElement | null {
+    return this.children[0] ?? null
+  }
+
+  contains(other: MockElement | null): boolean {
+    for (let cur = other; cur; cur = cur.parentElement) {
+      if (cur === this) return true
+    }
+    return false
   }
 
   get isConnected(): boolean {
@@ -56,10 +87,15 @@ class MockElement {
     return this.attrs.has(name)
   }
 
-  append(...nodes: MockElement[]): void {
+  append(...nodes: Array<MockElement | string>): void {
     for (const node of nodes) {
+      if (typeof node === 'string') {
+        this.nodes.push({ nodeType: 3, textContent: node })
+        continue
+      }
       node.parentElement = this
       this.children.push(node)
+      this.nodes.push(node)
     }
   }
 
@@ -101,6 +137,10 @@ class MockElement {
         if (rawKey.endsWith('*')) {
           const attr = this.attrs.get(rawKey.slice(0, -1))
           return attr !== undefined && attr.includes(val)
+        }
+        if (rawKey.endsWith('^')) {
+          const attr = this.attrs.get(rawKey.slice(0, -1))
+          return attr !== undefined && attr.startsWith(val)
         }
         return this.attrs.get(rawKey) === val
       }
@@ -373,5 +413,111 @@ describe('vk-export.js script execution', () => {
     const output = await runExportScript(doc)
     expect(output.ok).toBe(false)
     expect(output.error).toContain(`VK показал ${expected},`)
+  })
+
+  it('extracts 2026 VKUI rows without data-testid or data-audio, reads blocked aria-disabled, and skips rows above shuffle', async () => {
+    const doc = new MockDocument()
+    const page = new MockElement(doc, 'div', { id: 'page' })
+
+    const makeModernRow = (opts: {
+      id: string
+      titleMain: string
+      subtitle?: string
+      artists: string[]
+      duration: string
+      blocked?: boolean
+      plainArtist?: boolean
+      top: number
+    }) => {
+      const row = new MockElement(doc, 'div', {
+        'data-audio-id': opts.id,
+        'data-testentitytag': 'audio',
+      })
+      row.top = opts.top
+      const host = new MockElement(doc, 'div', {
+        'aria-disabled': opts.blocked ? 'true' : 'false',
+      })
+      const cover = new MockElement(doc, 'div')
+      cover.append(new MockElement(doc, 'img', { alt: '' }))
+
+      const metaCol = new MockElement(doc, 'div')
+      const inner = new MockElement(doc, 'div')
+      const titleBox = new MockElement(doc, 'div')
+      const titleLink = new MockElement(doc, 'a', { href: `/audio-${opts.id}` }, opts.titleMain)
+      if (opts.subtitle) {
+        titleLink.append(new MockElement(doc, 'span', {}, opts.subtitle))
+      }
+      titleBox.append(titleLink)
+
+      const artistBox = new MockElement(doc, 'div')
+      if (opts.plainArtist) {
+        artistBox.append(new MockElement(doc, 'div', {}, opts.artists[0]))
+      } else {
+        opts.artists.forEach((name, idx) => {
+          if (idx > 0) artistBox.append(', ')
+          artistBox.append(new MockElement(doc, 'a', { href: `/artist/${idx + 1}` }, name))
+        })
+      }
+
+      inner.append(titleBox, artistBox)
+      metaCol.append(inner)
+
+      const durCol = new MockElement(doc, 'div')
+      durCol.append(new MockElement(doc, 'span', {}, opts.duration))
+
+      host.append(cover, metaCol, durCol)
+      row.append(host)
+      return row
+    }
+
+    const recentRow = makeModernRow({
+      id: '99_1',
+      titleMain: 'Recent Ignore',
+      artists: ['Recent Artist'],
+      duration: '1:10',
+      top: 10,
+    })
+    const shuffleBtn = new MockElement(doc, 'div', { role: 'button' }, 'Перемешать всё')
+    const list = new MockElement(doc, 'div', { role: 'list' })
+    const track1 = makeModernRow({
+      id: '42_1',
+      titleMain: 'Synth Track',
+      subtitle: '(Club Mix)',
+      artists: ['Artist One', 'Artist Two'],
+      duration: '2:10',
+      top: 80,
+    })
+    const track2 = makeModernRow({
+      id: '42_2',
+      titleMain: 'Restricted Song',
+      artists: ['Plain Artist'],
+      duration: '4:05',
+      blocked: true,
+      plainArtist: true,
+      top: 120,
+    })
+
+    list.append(track1, track2)
+    page.append(recentRow, shuffleBtn, list)
+    doc.body.append(page)
+
+    const output = await runExportScript(doc)
+    expect(output.ok).toBe(true)
+    expect(output.result?.tracks).toEqual([
+      expect.objectContaining({
+        id: '42_1',
+        title: 'Synth Track (Club Mix)',
+        artist: 'Artist One, Artist Two',
+        duration: 130,
+        availability: 'unknown',
+      }),
+      expect.objectContaining({
+        id: '42_2',
+        title: 'Restricted Song',
+        artist: 'Plain Artist',
+        duration: 245,
+        availability: 'blocked',
+      }),
+    ])
   })
 })

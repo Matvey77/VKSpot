@@ -1,5 +1,10 @@
 import { test, expect, type ElectronApplication } from '@playwright/test'
-import { vkAudioPage, modernVKAudioPage, silentWav } from '../fixtures/vk-audio-page'
+import {
+  vkAudioPage,
+  modernVKAudioPage,
+  currentVKAudioPage,
+  silentWav,
+} from '../fixtures/vk-audio-page'
 import { openLibrary } from './navigation'
 import { cleanupTestProfile, createTestProfile, launchTestApp } from './support'
 
@@ -18,24 +23,24 @@ test.afterEach(async () => {
 async function fixture(
   options: Parameters<typeof vkAudioPage>[0] = {},
   html = vkAudioPage(options),
+  landingHtml = '<a data-testid="AudioCatalog_Tabs_Tab_all" href="https://vk.ru/audios42?section=all">Моя музыка</a><aside>Recommendations</aside>',
 ) {
   await app.evaluate(
-    async ({ session }, { html, wav }) => {
+    async ({ session }, { html, wav, landingHtml }) => {
       Reflect.set(globalThis, '__vkAudioRequests', [])
-      await session.fromPartition('persist:vkspot-vk').protocol.handle('https', (request) => {
+      const vkSession = session.fromPartition('persist:vkspot-vk')
+      if (vkSession.protocol.isProtocolHandled('https')) vkSession.protocol.unhandle('https')
+      await vkSession.protocol.handle('https', (request) => {
         const url = new URL(request.url)
         Reflect.get(globalThis, '__vkAudioRequests').push(request.url)
         if (url.pathname === '/vkspot-fixture.wav')
           return new Response(new Uint8Array(wav), { headers: { 'content-type': 'audio/wav' } })
-        return new Response(
-          url.pathname === '/audio'
-            ? '<a data-testid="AudioCatalog_Tabs_Tab_all" href="https://vk.ru/audios42?section=all">Моя музыка</a><aside>Recommendations</aside>'
-            : html,
-          { headers: { 'content-type': 'text/html; charset=utf-8' } },
-        )
+        return new Response(url.pathname === '/audio' ? landingHtml : html, {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
       })
     },
-    { html, wav: Array.from(silentWav()) },
+    { html, wav: Array.from(silentWav()), landingHtml },
   )
 }
 
@@ -368,6 +373,146 @@ test('the identified full player confirms playback after virtual rows disappear'
         title: 'Original (Live)',
         duration: 223,
         position: 2,
+      }),
+    ),
+  ).toMatchObject({ ok: true, value: { playing: true } })
+  await page.evaluate(() => window.vkspot.pauseVKTrack())
+})
+
+test('2026 data-testid-less VK plays a deep track without ID via "Мои треки" search without touching "Все треки"', async () => {
+  const html = currentVKAudioPage({ total: 800, targetIndex: 705 })
+  const landing = '<a role="tab" href="https://vk.ru/audios42?section=all">Моя музыка</a>'
+  await fixture({}, html, landing)
+  const page = await app.firstWindow()
+  const play = () =>
+    page.evaluate(() =>
+      window.vkspot.playVKTrack({
+        artist: 'Synthetic Artist',
+        title: 'Original (Live)',
+        duration: 223,
+        position: 706,
+      }),
+    )
+  expect(await play()).toMatchObject({ ok: true, value: { playing: true } })
+
+  const inspectView = () =>
+    app.evaluate(async ({ webContents }) => {
+      const view = webContents
+        .getAllWebContents()
+        .find((item) => item.getURL().startsWith('https://vk.ru/audios42'))!
+      return view.executeJavaScript(
+        '({ personal: window.__personalClicked, global: window.__globalClicked, recent: window.__recentClicked, headerSearch: window.__headerSearchTouched, miniBtn: document.querySelector("#mini-toggle")?.textContent, barBtn: document.querySelector("#bar-toggle")?.textContent })',
+      )
+    })
+
+  expect(await inspectView()).toMatchObject({
+    personal: ['42_706'],
+    global: 0,
+    recent: 0,
+    headerSearch: false,
+    miniBtn: 'Приостановить',
+    barBtn: 'Пауза',
+  })
+
+  await page.evaluate(() => window.vkspot.pauseVKTrack())
+  expect(await inspectView()).toMatchObject({
+    personal: ['42_706'],
+    global: 0,
+    miniBtn: 'Воспроизвести',
+    barBtn: 'Слушать',
+  })
+
+  expect(await play()).toMatchObject({ ok: true, value: { playing: true } })
+  // Second play() sees ?q= in the view URL and reloads clean ?section=all first, resetting page globals.
+  expect(await inspectView()).toMatchObject({
+    personal: ['42_706'],
+    global: 0,
+    recent: 0,
+    headerSearch: false,
+    miniBtn: 'Приостановить',
+    barBtn: 'Пауза',
+  })
+  await page.evaluate(() => window.vkspot.pauseVKTrack())
+})
+
+test('2026 data-testid-less VK never falls back to "Все треки" when the track is missing from personal library', async () => {
+  const html = currentVKAudioPage({ total: 120, missing: true })
+  const landing = '<a role="tab" href="https://vk.ru/audios42?section=all">Моя музыка</a>'
+  await fixture({}, html, landing)
+  const page = await app.firstWindow()
+  const result = await page.evaluate(() =>
+    window.vkspot.playVKTrack({
+      artist: 'Synthetic Artist',
+      title: 'Original (Live)',
+      duration: 223,
+    }),
+  )
+  const state = await app.evaluate(async ({ webContents }) => {
+    const view = webContents
+      .getAllWebContents()
+      .find((item) => item.getURL().startsWith('https://vk.ru/audios42'))!
+    return view.executeJavaScript(
+      '({ personal: window.__personalClicked, global: window.__globalClicked, recent: window.__recentClicked })',
+    )
+  })
+  expect(state).toEqual({ personal: [], global: 0, recent: 0 })
+  expect(result).toMatchObject({
+    ok: true,
+    value: { playing: false, error: expect.stringContaining('не найдена в личной медиатеке') },
+  })
+})
+
+test('2026 data-testid-less scroll fallback skips rows above shuffle and detects aria-disabled blocked tracks', async () => {
+  const blockedHtml = currentVKAudioPage({
+    total: 160,
+    targetIndex: 112,
+    blocked: true,
+    hideSearch: true,
+  })
+  await fixture({}, blockedHtml)
+  const page = await app.firstWindow()
+  const blockedResult = await page.evaluate(() =>
+    window.vkspot.playVKTrack({
+      artist: 'Synthetic Artist',
+      title: 'Original (Live)',
+      duration: 223,
+      position: 113,
+    }),
+  )
+  expect(blockedResult).toMatchObject({
+    ok: true,
+    value: { playing: false, error: expect.stringContaining('недоступную') },
+  })
+  const state = await app.evaluate(async ({ webContents }) => {
+    const view = webContents
+      .getAllWebContents()
+      .find((item) => item.getURL().startsWith('https://vk.ru/audios42'))!
+    return view.executeJavaScript(
+      '({ personal: window.__personalClicked, recent: window.__recentClicked })',
+    )
+  })
+  expect(state).toEqual({ personal: [], recent: 0 })
+
+  const playableHtml = currentVKAudioPage({
+    total: 160,
+    targetIndex: 112,
+    blocked: false,
+    hideSearch: true,
+  })
+  await fixture({}, playableHtml)
+  await app.evaluate(async ({ webContents }) => {
+    const view = webContents
+      .getAllWebContents()
+      .find((item) => item.getURL().startsWith('https://vk.ru/audios42'))!
+    await view.loadURL('https://vk.ru/audios42?section=all')
+  })
+  expect(
+    await page.evaluate(() =>
+      window.vkspot.playVKTrack({
+        artist: 'Synthetic Artist',
+        title: 'Original (Live)',
+        duration: 223,
+        position: 113,
       }),
     ),
   ).toMatchObject({ ok: true, value: { playing: true } })

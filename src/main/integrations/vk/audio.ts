@@ -278,8 +278,15 @@ export class VKAudioPlayer {
         this.progress('Открываем личную медиатеку VK…')
         const personal = vkLibraryURL(this.personalLibrary())
         const current = vkLibraryURL(view.webContents.getURL())
-        if (!current || (personal && personal !== current))
-          await this.load(view, personal ?? 'https://vk.com/audio', cancellation.signal)
+        const hasSearchQuery = (() => {
+          try {
+            return new URL(view.webContents.getURL()).searchParams.has('q')
+          } catch {
+            return false
+          }
+        })()
+        if (!current || hasSearchQuery || (personal && personal !== current))
+          await this.load(view, personal ?? current ?? 'https://vk.com/audio', cancellation.signal)
         if (cancelled()) return { playing: false }
         // Catalogue home is not the user's list. Follow the same public tab as
         // the export adapter, including vk.com -> vk.ru redirects and hydration.
