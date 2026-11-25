@@ -75,6 +75,96 @@ export function stopVKAudioPage(): void {
   document.querySelectorAll<HTMLMediaElement>('audio, video').forEach((media) => media.pause())
 }
 
+/** Public DOM only. Executed in an isolated world; sets VK player and media volume (0-100). */
+export function setVKAudioVolume(volume: number): boolean {
+  const pct = Math.max(0, Math.min(100, Math.round(Number(volume))))
+  const ratio = pct / 100
+  let updated = false
+  for (const media of document.querySelectorAll<HTMLMediaElement>('audio, video')) {
+    media.volume = ratio
+    media.muted = pct === 0
+    updated = true
+  }
+  const visible = (node: Element) => {
+    const style = getComputedStyle(node)
+    return (
+      node.getClientRects().length > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    )
+  }
+  const muteBtn =
+    [...document.querySelectorAll<HTMLElement>('button, [role="button"]')].find((el) => {
+      if (!visible(el)) return false
+      const label = `${el.textContent ?? ''} ${el.getAttribute('aria-label') ?? ''}`.trim()
+      return /выключить звук|включить звук|mute|unmute/i.test(label)
+    }) ?? null
+  let slider: HTMLElement | null = null
+  let wrap = muteBtn?.parentElement ?? null
+  for (let depth = 0; depth < 3 && wrap; depth++) {
+    const candidate = [
+      ...wrap.querySelectorAll<HTMLElement>('[role="slider"], input[type="range"]'),
+    ].find(visible)
+    if (candidate) {
+      slider = candidate
+      break
+    }
+    wrap = wrap.parentElement
+  }
+  if (!slider) {
+    slider =
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-testid*="Volume" i] [role="slider"], [data-testid*="Volume" i] input[type="range"], .audio_page_player_volume_slider, .top_audio_player_volume_slider',
+        ),
+      ].find(visible) ?? null
+  }
+  if (slider) {
+    if (muteBtn && pct > 0) {
+      const label =
+        `${muteBtn.textContent ?? ''} ${muteBtn.getAttribute('aria-label') ?? ''}`.trim()
+      if (/включить звук|unmute/i.test(label)) muteBtn.click()
+    }
+    if (slider.tagName === 'INPUT' && (slider as HTMLInputElement).type === 'range') {
+      const input = slider as HTMLInputElement
+      const min = Number.isFinite(Number(input.min)) && input.min !== '' ? Number(input.min) : 0
+      const max = Number.isFinite(Number(input.max)) && input.max !== '' ? Number(input.max) : 1
+      const target = min + (max - min) * ratio
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      if (setter) setter.call(input, String(target))
+      else input.value = String(target)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+      updated = true
+    } else {
+      const rect = slider.getBoundingClientRect()
+      if (rect.width > 0) {
+        const x = rect.left + rect.width * ratio
+        const y = rect.top + rect.height / 2
+        const downOpts = {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          button: 0,
+          buttons: 1,
+          pointerId: 1,
+          pointerType: 'mouse',
+          isPrimary: true,
+        }
+        const upOpts = { ...downOpts, buttons: 0 }
+        slider.dispatchEvent(new PointerEvent('pointerdown', downOpts))
+        slider.dispatchEvent(new MouseEvent('mousedown', downOpts))
+        slider.dispatchEvent(new PointerEvent('pointermove', downOpts))
+        slider.dispatchEvent(new MouseEvent('mousemove', downOpts))
+        slider.dispatchEvent(new PointerEvent('pointerup', upOpts))
+        slider.dispatchEvent(new MouseEvent('mouseup', upOpts))
+        slider.dispatchEvent(new MouseEvent('click', upOpts))
+        updated = true
+      }
+    }
+  }
+  return updated
+}
+
 export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioResult> {
   const world = globalThis as typeof globalThis & {
     __VKSPOT_AUDIO__?: { cancelled: boolean; message?: string }
@@ -105,6 +195,88 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
     )
   }
   const firstVisible = (sel: string) => [...document.querySelectorAll(sel)].find(visible)
+  const applyInitialVolume = (volume: number): boolean => {
+    const pct = Math.max(0, Math.min(100, Math.round(Number(volume))))
+    const ratio = pct / 100
+    let updated = false
+    for (const media of document.querySelectorAll<HTMLMediaElement>('audio, video')) {
+      media.volume = ratio
+      media.muted = pct === 0
+      updated = true
+    }
+    const muteBtn =
+      [...document.querySelectorAll<HTMLElement>('button, [role="button"]')].find((el) => {
+        if (!visible(el)) return false
+        const label = `${el.textContent ?? ''} ${el.getAttribute('aria-label') ?? ''}`.trim()
+        return /выключить звук|включить звук|mute|unmute/i.test(label)
+      }) ?? null
+    let slider: HTMLElement | null = null
+    let wrap = muteBtn?.parentElement ?? null
+    for (let depth = 0; depth < 3 && wrap; depth++) {
+      const candidate = [
+        ...wrap.querySelectorAll<HTMLElement>('[role="slider"], input[type="range"]'),
+      ].find(visible)
+      if (candidate) {
+        slider = candidate
+        break
+      }
+      wrap = wrap.parentElement
+    }
+    if (!slider) {
+      slider =
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '[data-testid*="Volume" i] [role="slider"], [data-testid*="Volume" i] input[type="range"], .audio_page_player_volume_slider, .top_audio_player_volume_slider',
+          ),
+        ].find(visible) ?? null
+    }
+    if (slider) {
+      if (muteBtn && pct > 0) {
+        const label =
+          `${muteBtn.textContent ?? ''} ${muteBtn.getAttribute('aria-label') ?? ''}`.trim()
+        if (/включить звук|unmute/i.test(label)) muteBtn.click()
+      }
+      if (slider.tagName === 'INPUT' && (slider as HTMLInputElement).type === 'range') {
+        const input = slider as HTMLInputElement
+        const min = Number.isFinite(Number(input.min)) && input.min !== '' ? Number(input.min) : 0
+        const max = Number.isFinite(Number(input.max)) && input.max !== '' ? Number(input.max) : 1
+        const target = min + (max - min) * ratio
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        if (setter) setter.call(input, String(target))
+        else input.value = String(target)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        updated = true
+      } else {
+        const rect = slider.getBoundingClientRect()
+        if (rect.width > 0) {
+          const x = rect.left + rect.width * ratio
+          const y = rect.top + rect.height / 2
+          const downOpts = {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            button: 0,
+            buttons: 1,
+            pointerId: 1,
+            pointerType: 'mouse',
+            isPrimary: true,
+          }
+          const upOpts = { ...downOpts, buttons: 0 }
+          slider.dispatchEvent(new PointerEvent('pointerdown', downOpts))
+          slider.dispatchEvent(new MouseEvent('mousedown', downOpts))
+          slider.dispatchEvent(new PointerEvent('pointermove', downOpts))
+          slider.dispatchEvent(new MouseEvent('mousemove', downOpts))
+          slider.dispatchEvent(new PointerEvent('pointerup', upOpts))
+          slider.dispatchEvent(new MouseEvent('mouseup', upOpts))
+          slider.dispatchEvent(new MouseEvent('click', upOpts))
+          updated = true
+        }
+      }
+    }
+    return updated
+  }
   const readSpacedText = (root: Element | null | undefined): string => {
     if (!root) return ''
     let out = ''
@@ -735,6 +907,8 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
         '.audio_row__play_btn, .audio_row__cover_back, [data-testid="MusicTrackRow_Play"], [role="button"][aria-label*="прослушивание" i], [role="button"][aria-label*="Воспроизвести" i], [role="button"][aria-label*="Продолжить" i], [role="button"][aria-label*="Слушать" i], [role="button"][aria-label*="Play" i], .audio_play',
       )
     document.querySelectorAll<HTMLMediaElement>('audio, video').forEach((media) => media.pause())
+    const hasInitialVolume = typeof track.volume === 'number' && Number.isFinite(track.volume)
+    let volumeApplied = hasInitialVolume ? applyInitialVolume(track.volume!) : true
     const baseline = new Map<HTMLMediaElement, number>()
     ;(button ?? current.node).click()
     let until = Date.now() + 15000
@@ -744,6 +918,9 @@ export async function playVKLibraryTrack(track: VKAudioTrack): Promise<VKAudioRe
     let advertising = false
     while (Date.now() < until && Date.now() < absoluteDeadline) {
       if (cancelled()) return fail('Поиск оригинала VK отменён.')
+      if (hasInitialVolume && !volumeApplied && applyInitialVolume(track.volume!)) {
+        volumeApplied = true
+      }
       const playerState = readPlayerState(current)
       advertising = playerState.advertising
       if (advertising) {

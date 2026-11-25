@@ -1,4 +1,5 @@
 import { test, expect, type ElectronApplication } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
 import {
   vkAudioPage,
   modernVKAudioPage,
@@ -517,4 +518,91 @@ test('2026 data-testid-less scroll fallback skips rows above shuffle and detects
     ),
   ).toMatchObject({ ok: true, value: { playing: true } })
   await page.evaluate(() => window.vkspot.pauseVKTrack())
+})
+
+test('inspector VK volume slider persists across tracks, updates VK DOM volume, and mutes cleanly', async () => {
+  await mkdir('.local/evidence/e2e', { recursive: true })
+  const html = currentVKAudioPage({ total: 20, targetIndex: 5 })
+  const landing = '<a role="tab" href="https://vk.ru/audios42?section=all">Моя музыка</a>'
+  await fixture({}, html, landing)
+  const page = await app.firstWindow()
+  await page.evaluate(() =>
+    window.vkspot.importCollection({
+      name: 'VK volume fixture',
+      origin: 'Synthetic',
+      completeness: { expected: 2, status: 'verified-count', message: 'Test only' },
+      tracks: [
+        { artist: 'Synthetic Artist', title: 'Original (Live)', duration: 223 },
+        { artist: 'Fixture Artist', title: 'Song 1', duration: 223 },
+      ],
+    } as never),
+  )
+  await openLibrary(page)
+  await page.getByRole('row', { name: 'Запись 1: Original (Live)', exact: true }).click()
+
+  const inspector = page.locator('.inspector')
+  const slider = inspector.getByLabel('Громкость VK', { exact: true })
+  const muteBtn = inspector.getByRole('button', { name: 'Выключить звук VK', exact: true })
+  await expect(slider).toBeVisible()
+  await expect(slider).toHaveValue('80')
+  await expect(muteBtn).toBeVisible()
+
+  await slider.fill('35')
+  await expect(slider).toHaveValue('35')
+  await expect(inspector.locator('.audio-volume-value')).toHaveText('35%')
+
+  await inspector.getByRole('button', { name: 'Слушать оригинал VK', exact: true }).click()
+  await expect(inspector.getByRole('button', { name: 'Пауза VK', exact: true })).toBeVisible({
+    timeout: 20000,
+  })
+
+  const viewState = () =>
+    app.evaluate(async ({ webContents }) => {
+      const view = webContents
+        .getAllWebContents()
+        .find((item) => item.getURL().startsWith('https://vk.ru/audios42'))!
+      return {
+        muted: view.isAudioMuted(),
+        vkVolume: await view.executeJavaScript('window.__vkVolume'),
+      }
+    })
+
+  await expect
+    .poll(async () => {
+      const state = await viewState()
+      return state.muted === false && Math.abs(state.vkVolume - 35) <= 1
+    })
+    .toBe(true)
+
+  await muteBtn.click()
+  await expect(slider).toHaveValue('0')
+  await expect(inspector.locator('.audio-volume-value')).toHaveText('0%')
+  const unmuteBtn = inspector.getByRole('button', { name: 'Включить звук VK', exact: true })
+  await expect(unmuteBtn).toBeVisible()
+  await expect.poll(viewState).toEqual({ muted: true, vkVolume: 0 })
+
+  await unmuteBtn.click()
+  await expect(slider).toHaveValue('35')
+  await expect(inspector.locator('.audio-volume-value')).toHaveText('35%')
+  await expect
+    .poll(async () => {
+      const state = await viewState()
+      return state.muted === false && Math.abs(state.vkVolume - 35) <= 1
+    })
+    .toBe(true)
+
+  await inspector.screenshot({ path: '.local/evidence/e2e/vk-volume-light.png' })
+  await page.evaluate(async () => {
+    const res = await window.vkspot.state()
+    if (res.ok) await window.vkspot.saveSettings({ ...res.value.settings, theme: 'dark' })
+  })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await inspector.screenshot({
+    path: '.local/evidence/e2e/vk-volume-dark.png',
+    animations: 'disabled',
+  })
+
+  await page.getByRole('row', { name: 'Запись 2: Song 1', exact: true }).click()
+  await expect(slider).toHaveValue('35')
+  await expect(inspector.locator('.audio-volume-value')).toHaveText('35%')
 })

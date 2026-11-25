@@ -58,6 +58,7 @@ export type IpcInvokeMap = {
   playVKTrack: { args: [track: VKPlayTrackRequest]; result: { playing: boolean; error?: string } }
   pauseVKTrack: { args: []; result: { playing: boolean } }
   resumeVKTrack: { args: []; result: { playing: boolean } }
+  setVKVolume: { args: [volume: number]; result: { volume: number } }
   testProxy: { args: [proxyUrl: string, target?: 'spotify' | 'vk']; result: ProxyTestResult }
 }
 

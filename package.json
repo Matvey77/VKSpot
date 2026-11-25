@@ -1,6 +1,6 @@
 {
   "name": "vkspot",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Local VK Music archive and reviewed Spotify migration",
   "homepage": "https://github.com/Matvey77/VKSpot",
   "desktopName": "org.vkspot.desktop.desktop",

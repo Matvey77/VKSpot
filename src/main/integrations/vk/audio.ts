@@ -4,6 +4,7 @@ import {
   isVKSignInPage,
   playVKLibraryTrack,
   readVKLibraryLink,
+  setVKAudioVolume,
   stopVKAudioPage,
 } from './audio-page'
 import { ensureVKSessionPolicy } from './vk-session-policy'
@@ -14,6 +15,7 @@ export type VKAudioTrack = {
   title: string
   duration?: number | null
   position?: number
+  volume?: number
 }
 export type VKAudioResult = { playing: boolean; error?: string }
 
@@ -44,6 +46,7 @@ export class VKAudioPlayer {
   private lastTrack: VKAudioTrack | undefined
   private startingRevision: number | undefined
   private cancellation: AbortController | undefined
+  private volume = 80
   private readonly viewAbort = new WeakMap<BrowserWindow, AbortController>()
   private readonly world = 1003
 
@@ -77,7 +80,7 @@ export class VKAudioPlayer {
     view.webContents.setUserAgent(
       view.webContents.getUserAgent().replace(/\s(?:Electron|VKSpot|vkspot)\/\S+/g, ''),
     )
-    view.webContents.setAudioMuted(false)
+    view.webContents.setAudioMuted(this.volume === 0)
     const allowed = (address: string) => {
       try {
         const url = new URL(address)
@@ -246,7 +249,33 @@ export class VKAudioPlayer {
     }
   }
 
+  private async applyVolume(view: BrowserWindow, signal?: AbortSignal): Promise<void> {
+    if (view.webContents.isDestroyed()) return
+    try {
+      await this.execute(view, `(${setVKAudioVolume.toString()})(${this.volume})`, {
+        signal,
+        timeoutMs: 2000,
+      })
+    } catch {
+      /* Page navigation, cancellation, or closing can reject isolated execution. */
+    }
+  }
+
+  async setVolume(volume: number): Promise<{ volume: number }> {
+    const next = Math.max(0, Math.min(100, Math.round(volume)))
+    this.volume = next
+    const view = this.view
+    if (view && !view.webContents.isDestroyed()) {
+      if (this.playing) view.webContents.setAudioMuted(next === 0)
+      await this.applyVolume(view)
+    }
+    return { volume: next }
+  }
+
   async play(track: VKAudioTrack): Promise<VKAudioResult> {
+    if (typeof track.volume === 'number' && Number.isFinite(track.volume)) {
+      this.volume = Math.max(0, Math.min(100, Math.round(track.volume)))
+    }
     const key = JSON.stringify([
       track.id,
       track.artist,
@@ -322,7 +351,9 @@ export class VKAudioPlayer {
           }
         await this.stopPage(view, cancellation.signal)
         if (cancelled()) return { playing: false }
-        view.webContents.setAudioMuted(false)
+        view.webContents.setAudioMuted(this.volume === 0)
+        await this.applyVolume(view, cancellation.signal)
+        if (cancelled()) return { playing: false }
         let polling = false,
           lastProgress = ''
         watch = setInterval(async () => {
@@ -344,9 +375,10 @@ export class VKAudioPlayer {
             polling = false
           }
         }, 350)
+        const trackWithVolume: VKAudioTrack = { ...track, volume: this.volume }
         const result = await this.execute<VKAudioResult>(
           view,
-          `(${playVKLibraryTrack.toString()})(${JSON.stringify(track)})`,
+          `(${playVKLibraryTrack.toString()})(${JSON.stringify(trackWithVolume)})`,
           { signal: cancellation.signal },
         )
         if (cancelled()) return { playing: false }
@@ -354,6 +386,8 @@ export class VKAudioPlayer {
           this.playing = true
           this.currentKey = key
           this.lastTrack = track
+          if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(this.volume === 0)
+          await this.applyVolume(view, cancellation.signal)
         } else {
           await this.stopPage(view, cancellation.signal)
           if (!view.webContents.isDestroyed()) view.webContents.setAudioMuted(true)
@@ -394,7 +428,9 @@ export class VKAudioPlayer {
   }
 
   async resume(): Promise<VKAudioResult> {
-    return this.lastTrack ? this.play(this.lastTrack) : { playing: false }
+    return this.lastTrack
+      ? this.play({ ...this.lastTrack, volume: this.volume })
+      : { playing: false }
   }
 
   stop(): void {

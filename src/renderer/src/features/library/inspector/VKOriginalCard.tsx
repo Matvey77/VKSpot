@@ -1,4 +1,5 @@
-import { Loader2, Pause, Play, ShieldCheck } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { Loader2, Pause, Play, ShieldCheck, Volume1, Volume2, VolumeX } from 'lucide-react'
 import { formatDuration as duration } from '../../../../../core/library'
 import type { TrackRow } from '../../../../../shared/types'
 
@@ -9,6 +10,9 @@ export function VKOriginalCard({
   loading,
   progress,
   error,
+  volume,
+  onVolumeChange,
+  onToggleMute,
   onTogglePlay,
 }: {
   row: TrackRow
@@ -17,6 +21,9 @@ export function VKOriginalCard({
   loading: boolean
   progress: string
   error: string | null
+  volume: number
+  onVolumeChange: (volume: number) => void
+  onToggleMute: () => void
   onTogglePlay: () => void
 }) {
   return (
@@ -62,6 +69,39 @@ export function VKOriginalCard({
             {loading ? 'Отменить запуск VK' : playing ? 'Пауза VK' : 'Слушать оригинал VK'}
           </span>
         </button>
+        <div className="audio-volume-control" role="group" aria-label="Громкость оригинала VK">
+          <button
+            type="button"
+            className="audio-volume-mute"
+            aria-label={volume === 0 ? 'Включить звук VK' : 'Выключить звук VK'}
+            aria-pressed={volume === 0}
+            title={volume === 0 ? 'Включить звук VK' : 'Выключить звук VK'}
+            onClick={onToggleMute}
+          >
+            {volume === 0 ? (
+              <VolumeX size={14} aria-hidden="true" />
+            ) : volume < 50 ? (
+              <Volume1 size={14} aria-hidden="true" />
+            ) : (
+              <Volume2 size={14} aria-hidden="true" />
+            )}
+          </button>
+          <input
+            type="range"
+            className="audio-volume-slider"
+            min={0}
+            max={100}
+            step={1}
+            value={volume}
+            aria-label="Громкость VK"
+            aria-valuetext={`${volume}%`}
+            style={{ '--volume-percent': `${volume}%` } as CSSProperties}
+            onChange={(event) => onVolumeChange(Number(event.target.value))}
+          />
+          <span className="audio-volume-value" aria-hidden="true">
+            {volume}%
+          </span>
+        </div>
         {loading && (
           <span className="helper-text" role="status">
             {progress}

@@ -183,6 +183,10 @@ export function currentVKAudioPage(
     <a id="bar-title" href="/audio-42_0"></a>
     <a id="bar-artist" href="/artist/0"></a>
     <span id="bar-timer"></span>
+    <div role="presentation" style="display:flex;align-items:center;gap:6px">
+      <button type="button" id="vk-mute-btn">Выключить звук</button>
+      <div role="slider" id="vk-volume-slider" aria-valuemin="0" aria-valuemax="1" aria-valuenow="75" style="width:100px;height:16px"></div>
+    </div>
     <button type="button">Повторять</button>
   </div>
   <div id="search-results"></div>
@@ -210,8 +214,29 @@ export function currentVKAudioPage(
     window.__globalClicked = 0;
     window.__recentClicked = 0;
     window.__headerSearchTouched = false;
+    window.__vkVolume = 75;
+    window.__vkMuted = false;
     let activeKey = null, playing = false, elapsed = 0, timer = null, context = null;
     let loadedLimit = 100, currentQuery = '';
+    const vkMuteBtn = document.querySelector('#vk-mute-btn');
+    const vkVolSlider = document.querySelector('#vk-volume-slider');
+    if (vkMuteBtn) {
+      vkMuteBtn.onclick = () => {
+        window.__vkMuted = !window.__vkMuted;
+        vkMuteBtn.textContent = window.__vkMuted ? 'Включить звук' : 'Выключить звук';
+      };
+    }
+    if (vkVolSlider) {
+      const updateVol = (event) => {
+        const r = vkVolSlider.getBoundingClientRect();
+        if (!r.width) return;
+        const pct = Math.max(0, Math.min(100, Math.round(((event.clientX - r.left) / r.width) * 100)));
+        window.__vkVolume = pct;
+        vkVolSlider.setAttribute('aria-valuenow', String(pct));
+      };
+      vkVolSlider.addEventListener('pointerdown', updateVol);
+      vkVolSlider.addEventListener('mousedown', updateVol);
+    }
     const recentTap = document.querySelector('#recent-tap');
     if (recentTap) recentTap.onclick = () => { window.__recentClicked++; };
 

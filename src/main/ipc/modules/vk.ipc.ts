@@ -11,6 +11,7 @@ export function registerVkIpc(handler: IpcHandler, services: IpcServices): void 
       title: z.string(),
       duration: z.number().nonnegative().nullable().optional(),
       position: z.number().int().positive().optional(),
+      volume: z.number().finite().min(0).max(100).optional(),
     })
     const parsed = schema.parse(track)
     return await vkAudio.play(parsed)
@@ -18,6 +19,10 @@ export function registerVkIpc(handler: IpcHandler, services: IpcServices): void 
 
   handler('pauseVKTrack', async () => await vkAudio.pause())
   handler('resumeVKTrack', async () => await vkAudio.resume())
+  handler(
+    'setVKVolume',
+    async (volume) => await vkAudio.setVolume(z.number().finite().min(0).max(100).parse(volume)),
+  )
 
   handler('openVK', () => vkSession.openVK())
   handler('extractVK', (options) => vkSession.extractVK(options))

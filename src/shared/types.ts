@@ -197,6 +197,7 @@ export type VKPlayTrackRequest = {
   title: string
   duration?: number | null
   position?: number
+  volume?: number
 }
 
 export type ProxyTestResult =

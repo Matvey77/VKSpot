@@ -60,6 +60,7 @@ const bridge: Bridge = {
   playVKTrack: (track) => invoke('playVKTrack', track),
   pauseVKTrack: () => invoke('pauseVKTrack'),
   resumeVKTrack: () => invoke('resumeVKTrack'),
+  setVKVolume: (volume) => invoke('setVKVolume', volume),
   testProxy: (url, target) => invoke('testProxy', url, target),
   onChange: (callback) => subscribe('change', callback),
   onVKProgress: (callback) => subscribe('vk-progress', callback),

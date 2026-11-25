@@ -313,4 +313,34 @@ describe('VK audio personal-library navigation', () => {
     expect(mockWebContents.loadURL).toHaveBeenLastCalledWith('https://vk.ru/audios42?section=all')
     player.close()
   })
+
+  it('clamps volume, applies DOM volume in isolated world 1003, and respects mute and pause state', async () => {
+    const player = new VKAudioPlayer(host)
+    expect(await player.setVolume(140)).toEqual({ volume: 100 })
+    expect(mockWebContents.setAudioMuted).not.toHaveBeenCalled()
+
+    expect(await player.play({ artist: 'Artist', title: 'Track', volume: 0 })).toEqual({
+      playing: true,
+    })
+    expect(mockWebContents.setAudioMuted).toHaveBeenCalledWith(true)
+    expect(mockWebContents.setAudioMuted).not.toHaveBeenCalledWith(false)
+
+    expect(await player.setVolume(42)).toEqual({ volume: 42 })
+    expect(mockWebContents.setAudioMuted).toHaveBeenLastCalledWith(false)
+    const volumeScripts = mockWebContents.executeJavaScriptInIsolatedWorld.mock.calls.filter(
+      ([world, scripts]) => world === 1003 && scripts[0].code.includes('function setVKAudioVolume'),
+    )
+    expect(volumeScripts.length).toBeGreaterThanOrEqual(2)
+    expect(volumeScripts[volumeScripts.length - 1][1][0].code).toContain('(42)')
+
+    expect(await player.pause()).toEqual({ playing: false })
+    mockWebContents.setAudioMuted.mockClear()
+    expect(await player.setVolume(65)).toEqual({ volume: 65 })
+    expect(mockWebContents.setAudioMuted).not.toHaveBeenCalled()
+
+    expect(await player.setVolume(-10)).toEqual({ volume: 0 })
+    expect(await player.resume()).toEqual({ playing: true })
+    expect(mockWebContents.setAudioMuted).toHaveBeenLastCalledWith(true)
+    player.close()
+  })
 })

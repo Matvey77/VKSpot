@@ -65,6 +65,128 @@
   color: var(--error-ink);
   margin-left: var(--space-xs);
 }
+.audio-volume-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--control);
+  min-width: 0;
+  max-width: 100%;
+}
+.audio-volume-mute {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-tag);
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.audio-volume-mute:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.audio-volume-mute[aria-pressed='true'] {
+  color: var(--error-ink);
+}
+.audio-volume-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 84px;
+  height: 20px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  flex: none;
+}
+.audio-volume-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-tag);
+}
+.audio-volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-tag);
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--volume-percent, 80%),
+    var(--line) var(--volume-percent, 80%),
+    var(--line) 100%
+  );
+}
+.audio-volume-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform 0.12s ease,
+    background-color 0.12s ease;
+}
+.audio-volume-slider:hover::-webkit-slider-thumb,
+.audio-volume-slider:active::-webkit-slider-thumb {
+  background: var(--accent-hover);
+  transform: scale(1.14);
+}
+.audio-volume-slider::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-tag);
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--volume-percent, 80%),
+    var(--line) var(--volume-percent, 80%),
+    var(--line) 100%
+  );
+}
+.audio-volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform 0.12s ease,
+    background-color 0.12s ease;
+}
+.audio-volume-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 30px;
+  text-align: right;
+  user-select: none;
+  flex: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .audio-volume-mute,
+  .audio-volume-slider::-webkit-slider-thumb,
+  .audio-volume-slider::-moz-range-thumb {
+    transition: none;
+  }
+}
 .spotify-embed-card {
   margin: var(--space-sm) 0 10px;
   border-radius: var(--radius-navigation);

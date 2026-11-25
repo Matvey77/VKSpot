@@ -154,6 +154,9 @@ export function Inspector({
       loading={vkAudio.loading}
       progress={vkAudio.progress}
       error={vkAudio.error}
+      volume={vkAudio.volume}
+      onVolumeChange={vkAudio.setVolume}
+      onToggleMute={vkAudio.toggleMute}
       onTogglePlay={() => void vkAudio.toggle()}
     />
   )
