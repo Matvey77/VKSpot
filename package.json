@@ -41,7 +41,7 @@
     "@playwright/test": "^1.56.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@tanstack/react-virtual": "^3.13.12",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
